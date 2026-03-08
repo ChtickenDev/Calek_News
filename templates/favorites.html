@@ -1,7 +1,84 @@
 {% extends "layout.html" %}
 {% block content %}
 
-<h3 class="mb-3">Mes favoris</h3>
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <h3 class="mb-0">Mes favoris</h3>
+  <a href="{{ url_for('favorites') }}" class="btn btn-sm btn-outline-secondary">Tous les favoris</a>
+</div>
+
+<!-- Barre dossiers -->
+<div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
+  {% for f in folders %}
+    <a href="{{ url_for('folder_view', folder_id=f.id) }}"
+       class="btn btn-sm {{ 'btn-primary' if active_folder and active_folder.id == f.id else 'btn-outline-primary' }}">
+      📁 {{ f.name }}
+    </a>
+  {% endfor %}
+
+  <!-- Bouton créer dossier -->
+  <button class="btn btn-sm btn-outline-success" onclick="showCreateFolder()">+ Nouveau dossier</button>
+
+  <!-- Formulaire inline création -->
+  <div id="create-folder-form" style="display:none;" class="d-flex gap-2">
+    <input type="text" id="new-folder-name" class="form-control form-control-sm" placeholder="Nom du dossier" style="width:180px;">
+    <button class="btn btn-sm btn-success" onclick="createFolder()">Créer</button>
+    <button class="btn btn-sm btn-outline-secondary" onclick="hideCreateFolder()">Annuler</button>
+  </div>
+</div>
+
+{% if active_folder %}
+<!-- Vue dossier -->
+<div class="d-flex align-items-center gap-2 mb-3">
+  <h5 class="mb-0">📁 {{ active_folder.name }}</h5>
+  <form method="post" action="{{ url_for('folder_delete', folder_id=active_folder.id) }}"
+        onsubmit="return confirm('Supprimer ce dossier ?')">
+    <button class="btn btn-sm btn-outline-danger">Supprimer le dossier</button>
+  </form>
+</div>
+
+{% if folder_articles %}
+<div class="row gy-3">
+  {% for a in folder_articles %}
+    {% set sc = (reliability_score(a)[0]) if reliability_score is defined else None %}
+    {% set ifs_cls = 'badge-ifs-success' if sc is not none and sc>=80
+                      else ('badge-ifs-primary' if sc is not none and sc>=60
+                      else ('badge-ifs-warning' if sc is not none and sc>=40 else 'badge-ifs-danger')) %}
+    <div class="col-md-6 col-lg-4">
+      <div class="card h-100 article-card p-3" data-article-id="{{ a.id }}" role="button" tabindex="0">
+        <div class="d-flex flex-wrap gap-2 mb-2 align-items-center">
+          {% if sc is not none %}<span class="badge badge-ifs {{ ifs_cls }}">IFS: {{ sc }}</span>{% endif %}
+          {% if a.domain %}<span class="badge badge-soft">{{ a.domain }}</span>{% endif %}
+          {% if a.study_type %}<span class="badge badge-soft">{{ a.study_type }}</span>{% endif %}
+        </div>
+        <h6 class="fw-bold line-clamp-2 mb-1">{{ a.title }}</h6>
+        {% if a.authors %}<p class="text-muted small mb-1">{{ a.authors }}</p>{% endif %}
+        <div class="small text-muted mb-2">
+          {% if a.journal %}<span class="badge badge-soft badge-journal">{{ a.journal }}</span>{% endif %}
+          {% if a.published_date %}<span>Paru le {{ a.published_date.strftime('%d %b %Y') }}</span>{% endif %}
+        </div>
+        {% if a.abstract %}
+          <p class="small line-clamp-3 mb-3">{{ (a.abstract|striptags)[:320] }}{% if a.abstract|length > 320 %}…{% endif %}</p>
+        {% else %}
+          <p class="small text-muted mb-3 fst-italic">Résumé non disponible.</p>
+        {% endif %}
+        <div class="mt-auto d-flex align-items-center gap-2">
+          {% if a.url %}<a class="btn btn-sm btn-primary" href="{{ a.url }}" target="_blank" onclick="event.stopPropagation()">Ouvrir</a>{% endif %}
+          {% if a.doi %}<a class="btn btn-sm btn-outline-primary" href="https://doi.org/{{ a.doi }}" target="_blank" onclick="event.stopPropagation()">DOI</a>{% endif %}
+          <form method="post" action="{{ url_for('folder_remove_article', folder_id=active_folder.id, article_id=a.id) }}"
+                class="ms-auto" onclick="event.stopPropagation()">
+            <button class="btn btn-sm btn-outline-danger">Retirer</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  {% endfor %}
+</div>
+{% else %}
+  <p class="text-muted">Ce dossier est vide.</p>
+{% endif %}
+
+{% else %}
+<!-- Vue tous les favoris -->
 <p class="text-muted">Vous avez {{ favorites|length }} favori{{ '' if favorites|length==1 else 's' }}.</p>
 
 <div class="row gy-3">
@@ -13,32 +90,21 @@
                       else ('badge-ifs-primary' if sc is not none and sc>=60
                       else ('badge-ifs-warning' if sc is not none and sc>=40 else 'badge-ifs-danger')) %}
     <div class="col-md-6 col-lg-4">
-      <div class="card h-100 article-card p-3"
-           data-article-id="{{ a.id }}"
-           role="button" tabindex="0">
+      <div class="card h-100 article-card p-3" data-article-id="{{ a.id }}" role="button" tabindex="0">
 
         <div class="d-flex flex-wrap gap-2 mb-2 align-items-center">
-          {% if sc is not none %}
-            <span class="badge badge-ifs {{ ifs_cls }}" title="Indice de fiabilité">IFS: {{ sc }}</span>
-          {% endif %}
+          {% if sc is not none %}<span class="badge badge-ifs {{ ifs_cls }}">IFS: {{ sc }}</span>{% endif %}
           {% if a.domain %}<span class="badge badge-soft">{{ a.domain }}</span>{% endif %}
           {% if a.pathology %}<span class="badge badge-soft">{{ a.pathology }}</span>{% endif %}
           {% if a.study_type %}<span class="badge badge-soft">{{ a.study_type }}</span>{% endif %}
         </div>
 
         <h6 class="fw-bold line-clamp-2 mb-1">{{ a.title }}</h6>
-
-        {% if a.authors %}
-          <p class="text-muted small mb-1">{{ a.authors }}</p>
-        {% endif %}
+        {% if a.authors %}<p class="text-muted small mb-1">{{ a.authors }}</p>{% endif %}
 
         <div class="small text-muted mb-2 d-flex flex-wrap gap-2">
-          {% if a.journal %}
-            <span class="badge badge-soft badge-journal">{{ a.journal }}</span>
-          {% endif %}
-          {% if a.published_date %}
-            <span>Paru le {{ a.published_date.strftime('%d %b %Y') }}</span>
-          {% endif %}
+          {% if a.journal %}<span class="badge badge-soft badge-journal">{{ a.journal }}</span>{% endif %}
+          {% if a.published_date %}<span>Paru le {{ a.published_date.strftime('%d %b %Y') }}</span>{% endif %}
         </div>
 
         {% if a.abstract %}
@@ -47,17 +113,41 @@
           <p class="small text-muted mb-3 fst-italic">Résumé non disponible.</p>
         {% endif %}
 
-        <div class="mt-auto d-flex align-items-center gap-2">
-          {% if a.url %}
-            <a class="btn btn-sm btn-primary" href="{{ a.url }}" target="_blank" rel="noopener"
-               onclick="event.stopPropagation()">Ouvrir</a>
-          {% endif %}
-          {% if a.doi %}
-            <a class="btn btn-sm btn-outline-primary" href="https://doi.org/{{ a.doi }}" target="_blank" rel="noopener"
-               onclick="event.stopPropagation()">DOI</a>
-          {% endif %}
+        <!-- Dossiers de cet article -->
+        {% set art_folders = folders_by_article.get(a.id, []) %}
+        <div class="d-flex flex-wrap gap-1 mb-2" id="folders-of-{{ a.id }}">
+          {% for fd in art_folders %}
+            <span class="badge bg-secondary">📁 {{ fd.name }}</span>
+          {% endfor %}
+        </div>
 
-          <!-- Supprimer des favoris -->
+        <div class="mt-auto d-flex align-items-center gap-2 flex-wrap">
+          {% if a.url %}<a class="btn btn-sm btn-primary" href="{{ a.url }}" target="_blank" onclick="event.stopPropagation()">Ouvrir</a>{% endif %}
+          {% if a.doi %}<a class="btn btn-sm btn-outline-primary" href="https://doi.org/{{ a.doi }}" target="_blank" onclick="event.stopPropagation()">DOI</a>{% endif %}
+
+          <!-- Ajouter à un dossier -->
+          <div class="dropdown" onclick="event.stopPropagation()">
+            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+              📁
+            </button>
+            <ul class="dropdown-menu">
+              {% if folders %}
+                {% for fd in folders %}
+                  <li>
+                    <button class="dropdown-item" onclick="addToFolder({{ fd.id }}, {{ a.id }}, this)">
+                      {{ fd.name }}
+                    </button>
+                  </li>
+                {% endfor %}
+              {% else %}
+                <li><span class="dropdown-item text-muted">Aucun dossier</span></li>
+              {% endif %}
+              <li><hr class="dropdown-divider"></li>
+              <li><button class="dropdown-item text-success" onclick="showCreateFolder()">+ Nouveau dossier</button></li>
+            </ul>
+          </div>
+
+          <!-- Retirer des favoris -->
           <form method="post" action="{{ url_for('unfavorite', article_id=a.id) }}"
                 class="ms-auto" onclick="event.stopPropagation()">
             <button class="btn btn-sm btn-outline-danger">Retirer</button>
@@ -71,14 +161,15 @@
     <div class="col-12"><p class="text-muted">Aucun favori pour le moment.</p></div>
   {% endfor %}
 </div>
+{% endif %}
 
-<!-- Le même modal réutilisé -->
+<!-- Modal article -->
 <div class="modal fade" id="articleModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-xl modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
         <h5 id="am-title" class="modal-title"></h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
         <div class="d-flex flex-wrap gap-2 mb-2">
@@ -100,8 +191,7 @@
             <span id="am-rel-score" class="small text-muted"></span>
           </div>
           <div class="progress mt-2" style="height:10px;">
-            <div id="am-rel-bar" class="progress-bar" role="progressbar"
-                 style="width:0%;" aria-valuemin="0" aria-valuemax="100"></div>
+            <div id="am-rel-bar" class="progress-bar" role="progressbar" style="width:0%;"></div>
           </div>
           <ul id="am-rel-reasons" class="small mt-2 mb-0"></ul>
         </div>
@@ -119,13 +209,45 @@
 
 {% endblock %}
 
-
 {% block scripts %}
 <style>
-  .badge-ifs{ background: var(--bs-warning-bg-subtle,#fff3cd); color:#6c4b00; border:1px solid rgba(0,0,0,.08); }
+  .badge-ifs { background: var(--bs-warning-bg-subtle,#fff3cd); color:#6c4b00; border:1px solid rgba(0,0,0,.08); }
 </style>
 <script>
-/* Reset modal */
+// --- Dossiers ---
+function showCreateFolder() {
+  document.getElementById('create-folder-form').style.display = 'flex';
+  document.getElementById('new-folder-name').focus();
+}
+function hideCreateFolder() {
+  document.getElementById('create-folder-form').style.display = 'none';
+  document.getElementById('new-folder-name').value = '';
+}
+async function createFolder() {
+  const name = document.getElementById('new-folder-name').value.trim();
+  if (!name) return;
+  const res = await fetch('/folders/create', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({name})
+  });
+  const data = await res.json();
+  if (data.ok) {
+    location.reload();
+  } else {
+    alert(data.error || 'Erreur');
+  }
+}
+async function addToFolder(folderId, articleId, btn) {
+  const res = await fetch(`/folders/${folderId}/add/${articleId}`, {method: 'POST'});
+  const data = await res.json();
+  if (data.ok) {
+    btn.classList.add('text-success');
+    btn.textContent = '✓ ' + btn.textContent;
+  }
+}
+
+// --- Modal ---
 document.getElementById('articleModal').addEventListener('hidden.bs.modal', () => {
   ['am-journal','am-ifs','am-source','am-domain','am-pathology','am-studytype','am-authors','am-pubdate','am-sitedate','am-rel-score','am-rel-level']
     .forEach(id => { const el=document.getElementById(id); if(el) el.textContent=''; });
@@ -175,7 +297,6 @@ function formatAbstract(raw) {
 let articleModalInstance = null;
 async function openArticleModal(id) {
   try {
-    // Nettoie les backdrops Bootstrap orphelins
     document.querySelectorAll('.modal-backdrop').forEach(bd => bd.remove());
     const res = await fetch(`/api/article/${id}`);
     const data = await res.json();
@@ -193,22 +314,19 @@ async function openArticleModal(id) {
     const ifs = document.getElementById('am-ifs');
     if (sc!==null){ ifs.textContent=`IFS: ${sc}`; ifs.style.display=''; } else { ifs.style.display='none'; }
     const fmt = iso => { if(!iso) return null; try{ const d=new Date(iso); return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'});}catch{return null;} };
-    const pub = fmt(data.published_date);
-    const add = fmt(data.published_at);
-    document.getElementById('am-pubdate').textContent = pub ? `Paru le ${pub}` : "";
-    document.getElementById('am-sitedate').textContent = add ? `Ajouté le ${add}` : "";
+    document.getElementById('am-pubdate').textContent = fmt(data.published_date) ? `Paru le ${fmt(data.published_date)}` : "";
+    document.getElementById('am-sitedate').textContent = fmt(data.published_at) ? `Ajouté le ${fmt(data.published_at)}` : "";
     document.getElementById('am-abstract').innerHTML = formatAbstract(data.abstract);
     const urlBtn = document.getElementById('am-url'); if (data.url) { urlBtn.href = data.url; urlBtn.style.display=""; } else urlBtn.style.display="none";
     const doiBtn = document.getElementById('am-doi'); if (data.doi) { doiBtn.href = `https://doi.org/${data.doi}`; doiBtn.style.display=""; } else doiBtn.style.display="none";
-    const bar = document.getElementById('am-rel-bar'); const level = document.getElementById('am-rel-level'); const score = document.getElementById('am-rel-score'); const reasons = document.getElementById('am-rel-reasons');
+    const bar = document.getElementById('am-rel-bar');
     bar.style.width = `${sc||0}%`; bar.className='progress-bar';
     if (sc>=80) bar.classList.add('bg-success'); else if (sc>=60) bar.classList.add('bg-primary'); else if (sc>=40) bar.classList.add('bg-warning'); else bar.classList.add('bg-danger');
-    level.textContent = lv; score.textContent = `${sc||0}/100`;
-    reasons.innerHTML = rs.map(r => `<li>${r}</li>`).join('') || '<li>Aucune raison listée</li>';
+    document.getElementById('am-rel-level').textContent = lv;
+    document.getElementById('am-rel-score').textContent = `${sc||0}/100`;
+    document.getElementById('am-rel-reasons').innerHTML = rs.map(r => `<li>${r}</li>`).join('') || '<li>Aucune raison listée</li>';
     const modalEl = document.getElementById('articleModal');
-    if (!articleModalInstance) {
-      articleModalInstance = new bootstrap.Modal(modalEl);
-    }
+    if (!articleModalInstance) articleModalInstance = new bootstrap.Modal(modalEl);
     articleModalInstance.show();
   } catch(e){ console.error(e); }
 }

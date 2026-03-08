@@ -207,6 +207,33 @@ class UserDraft(db.Model):
         db.UniqueConstraint("user_id", "article_id", name="uq_user_draft_user_article"),
     )
 
+class Folder(db.Model):
+    __tablename__ = "folder"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    name = db.Column(db.String(100), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship("User", backref=db.backref("folders", lazy="dynamic"))
+    articles = db.relationship("Article", secondary="folder_article", backref=db.backref("folders", lazy="dynamic"))
+
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "name", name="uq_folder_user_name"),
+    )
+
+
+class FolderArticle(db.Model):
+    __tablename__ = "folder_article"
+
+    id = db.Column(db.Integer, primary_key=True)
+    folder_id = db.Column(db.Integer, db.ForeignKey("folder.id"), nullable=False, index=True)
+    article_id = db.Column(db.Integer, db.ForeignKey("article.id"), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint("folder_id", "article_id", name="uq_folder_article"),
+    )
 # -----------------------------------------------------------------------------
 # Helpers & schema upgrade (SQLite)
 # -----------------------------------------------------------------------------
@@ -587,6 +614,10 @@ def ensure_userdraft_schema():
         ON user_draft(search_query, pubmed_rank)
     """))
     db.session.commit()
+
+def ensure_folder_schema():
+    """Crée les tables folder et folder_article si absentes."""
+    db.create_all()
 
 # -----------------------------------------------------------------------------
 # Filtrage kiné (utilisé par fetch par défaut, mais pas sur la recherche libre)
@@ -1684,25 +1715,39 @@ from sqlalchemy.orm import joinedload
 def favorites_view():
     favs = (
         Favorite.query
-        .options(joinedload(Favorite.article))  # évite N+1
+        .options(joinedload(Favorite.article))
         .filter(Favorite.user_id == current_user.id)
-        .order_by(Favorite.created_at.desc())   # ou .order_by(Favorite.id.desc()) si besoin
+        .order_by(Favorite.created_at.desc())
         .all()
     )
-
-    # Ne garder que les favoris dont l'article existe encore
     favs = [f for f in favs if f.article is not None]
-
-    # Pour un accès facile à la note par article_id, si ton template en a besoin
     notes_by_article = {f.article_id: (f.note or "") for f in favs}
+    folders = Folder.query.filter_by(user_id=current_user.id).order_by(Folder.name.asc()).all()
+
+    # dossiers de chaque article favori
+    fav_ids = [f.article_id for f in favs]
+    folders_by_article = {}
+    if fav_ids:
+        fas = (FolderArticle.query
+               .join(Folder, Folder.id == FolderArticle.folder_id)
+               .filter(Folder.user_id == current_user.id)
+               .filter(FolderArticle.article_id.in_(fav_ids))
+               .all())
+        for fa in fas:
+            folder = Folder.query.get(fa.folder_id)
+            if folder:
+                folders_by_article.setdefault(fa.article_id, []).append(folder)
 
     return render_template(
         'favorites.html',
         favorites=favs,
         notes_by_article=notes_by_article,
+        folders=folders,
+        active_folder=None,
+        folder_articles=None,
+        folders_by_article=folders_by_article,
+        favs={f.article_id for f in favs},
     )
-
-
 
 @app.route('/favorite/<int:article_id>', methods=['POST'], endpoint='favorite')
 @login_required
@@ -1782,6 +1827,85 @@ def export_favorites_csv():
         mimetype="text/csv",
         headers={"Content-Disposition": "attachment; filename=favorites.csv"},
     )
+
+# -----------------------------------------------------------------------------
+# Dossiers de favoris
+# -----------------------------------------------------------------------------
+
+@app.route('/folders', methods=['GET'])
+@login_required
+def folders_list():
+    folders = Folder.query.filter_by(user_id=current_user.id).order_by(Folder.name.asc()).all()
+    return jsonify([{"id": f.id, "name": f.name} for f in folders])
+
+
+@app.route('/folders/create', methods=['POST'])
+@login_required
+def folder_create():
+    name = (request.json.get('name') or request.form.get('name') or '').strip()
+    if not name:
+        return jsonify({"ok": False, "error": "Nom vide"}), 400
+    if Folder.query.filter_by(user_id=current_user.id, name=name).first():
+        return jsonify({"ok": False, "error": "Dossier déjà existant"}), 409
+    f = Folder(user_id=current_user.id, name=name)
+    db.session.add(f)
+    db.session.commit()
+    return jsonify({"ok": True, "id": f.id, "name": f.name})
+
+
+@app.route('/folders/delete/<int:folder_id>', methods=['POST'])
+@login_required
+def folder_delete(folder_id):
+    f = Folder.query.filter_by(id=folder_id, user_id=current_user.id).first_or_404()
+    FolderArticle.query.filter_by(folder_id=f.id).delete(synchronize_session=False)
+    db.session.delete(f)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route('/folders/<int:folder_id>/add/<int:article_id>', methods=['POST'])
+@login_required
+def folder_add_article(folder_id, article_id):
+    f = Folder.query.filter_by(id=folder_id, user_id=current_user.id).first_or_404()
+    Article.query.get_or_404(article_id)
+    existing = FolderArticle.query.filter_by(folder_id=f.id, article_id=article_id).first()
+    if not existing:
+        db.session.add(FolderArticle(folder_id=f.id, article_id=article_id))
+        db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route('/folders/<int:folder_id>/remove/<int:article_id>', methods=['POST'])
+@login_required
+def folder_remove_article(folder_id, article_id):
+    fa = FolderArticle.query.filter_by(folder_id=folder_id, article_id=article_id).first()
+    if fa:
+        f = Folder.query.get(folder_id)
+        if f and f.user_id != current_user.id:
+            return jsonify({"ok": False, "error": "Non autorisé"}), 403
+        db.session.delete(fa)
+        db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route('/folders/<int:folder_id>')
+@login_required
+def folder_view(folder_id):
+    f = Folder.query.filter_by(id=folder_id, user_id=current_user.id).first_or_404()
+    folders = Folder.query.filter_by(user_id=current_user.id).order_by(Folder.name.asc()).all()
+    articles = (Article.query
+                .join(FolderArticle, FolderArticle.article_id == Article.id)
+                .filter(FolderArticle.folder_id == f.id)
+                .order_by(FolderArticle.created_at.desc())
+                .all())
+    favs = {fav.article_id for fav in Favorite.query.filter_by(user_id=current_user.id).all()}
+    return render_template('favorites.html',
+                           favorites=[],
+                           notes_by_article={},
+                           folders=folders,
+                           active_folder=f,
+                           folder_articles=articles,
+                           favs=favs)
 
 
 # --------- DRAFTS: suppression par l'utilisateur ---------
@@ -2581,6 +2705,7 @@ if __name__ == "__main__":
         ensure_proposal_schema()
         ensure_favorite_columns()
         ensure_userdraft_schema()
+        ensure_folder_schema()
         db.session.execute(text("UPDATE article SET featured=0 WHERE featured IS NULL"))
         db.session.commit()
     app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)
