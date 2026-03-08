@@ -10,6 +10,15 @@ from flask import session
 import requests
 from dotenv import load_dotenv
 load_dotenv()
+NCBI_API_KEY = os.environ.get("NCBI_API_KEY", "")
+
+def ncbi_params(**kwargs):
+    """Ajoute automatiquement la clé API NCBI si disponible."""
+    p = dict(**kwargs)
+    if NCBI_API_KEY:
+        p["api_key"] = NCBI_API_KEY
+    return p
+
 from flask import (
     Flask, render_template, request, redirect, url_for,
     flash, jsonify, Response
@@ -960,13 +969,13 @@ def fetch_pubmed(query: str = "", days: int = 90, max_results: int = 200):
         term = f"({query})"
 
     date_filter = f'("{date_from}"[Date - Publication] : "{date_to}"[Date - Publication])'
-    params = {
-        "db": "pubmed",
-        "retmode": "json",
-        "retmax": str(max_results),
-        "sort": "pub+date",
-        "term": f"{term} AND {date_filter}"
-    }
+    params = ncbi_params(
+        db="pubmed",
+        retmode="json",
+        retmax=str(max_results),
+        sort="pub+date",
+        term=f"{term} AND {date_filter}"
+    )
 
     try:
         esearch = requests.get(base + "esearch.fcgi", params=params, timeout=30).json()
@@ -974,7 +983,7 @@ def fetch_pubmed(query: str = "", days: int = 90, max_results: int = 200):
         if not ids:
             return []
         esum = requests.get(base + "esummary.fcgi",
-                            params={"db": "pubmed", "retmode": "json", "id": ",".join(ids)},
+                            params=ncbi_params(db="pubmed", retmode="json", id=",".join(ids)),
                             timeout=30).json().get("result", {})
     except Exception as e:
         print("[PubMed] Erreur:", e)
@@ -1030,7 +1039,7 @@ def efetch_pubmed_batch(pmids: list[str]) -> dict[str, dict]:
     try:
         r = requests.get(
             base + "efetch.fcgi",
-            params={"db": "pubmed", "id": ",".join(pmids), "retmode": "xml"},
+            params=ncbi_params(db="pubmed", id=",".join(pmids), retmode="xml"),
             timeout=30
         )
         xml_text = r.text or ""
@@ -1060,14 +1069,11 @@ def efetch_pubmed_batch(pmids: list[str]) -> dict[str, dict]:
         if not pmid:
             continue
 
-        # --- Title
         t = art.find(".//Article/ArticleTitle")
         title = "".join(t.itertext()).strip().rstrip(".") if t is not None else ""
 
-        # --- Journal
         journal = _txt(art, ".//Article/Journal/Title", "")
 
-        # --- Authors
         authors = []
         for au in art.findall(".//Article/AuthorList/Author"):
             last = _txt(au, "LastName", "")
@@ -1078,14 +1084,12 @@ def efetch_pubmed_batch(pmids: list[str]) -> dict[str, dict]:
                 authors.append(last)
         authors_str = ", ".join(authors)
 
-        # --- DOI
         doi = None
         for aid in art.findall(".//PubmedData/ArticleIdList/ArticleId"):
             if (aid.attrib.get("IdType") or "").lower() == "doi":
                 doi = (aid.text or "").strip()
                 break
 
-        # --- Abstract
         abs_parts = []
         for at in art.findall(".//Article/Abstract/AbstractText"):
             label = (at.attrib.get("Label") or "").strip()
@@ -1094,7 +1098,6 @@ def efetch_pubmed_batch(pmids: list[str]) -> dict[str, dict]:
                 abs_parts.append(f"{label}. {txt}" if label else txt)
         abstract = " ".join(abs_parts).strip() or None
 
-        # --- Date
         pub_dt = None
 
         ad = art.find(".//Article/ArticleDate")
@@ -1133,6 +1136,7 @@ def efetch_pubmed_batch(pmids: list[str]) -> dict[str, dict]:
 
     return out
 
+
 def fetch_pubmed_query_paged(query: str, page: int = 1, per_page: int = 48):
     """
     PubMed paginé, 2 requêtes:
@@ -1149,18 +1153,17 @@ def fetch_pubmed_query_paged(query: str, page: int = 1, per_page: int = 48):
 
     base = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
 
-    # 1) ESearch
     try:
         esearch = requests.get(
             base + "esearch.fcgi",
-            params={
-                "db": "pubmed",
-                "retmode": "json",
-                "retmax": str(per_page),
-                "retstart": str(retstart),
-                "sort": "pub+date",
-                "term": f"({query})"
-            },
+            params=ncbi_params(
+                db="pubmed",
+                retmode="json",
+                retmax=str(per_page),
+                retstart=str(retstart),
+                sort="pub+date",
+                term=f"({query})"
+            ),
             timeout=30
         ).json()
 
@@ -1174,7 +1177,6 @@ def fetch_pubmed_query_paged(query: str, page: int = 1, per_page: int = 48):
         print("[PubMed(paged)] ESearch erreur:", e)
         return [], 0
 
-    # 2) EFetch batch (1 seule requête)
     meta = efetch_pubmed_batch(ids)
 
     out = []
@@ -1193,7 +1195,7 @@ def fetch_pubmed_query_paged(query: str, page: int = 1, per_page: int = 48):
             "journal": journal,
             "doi": doi,
             "url": f"https://pubmed.ncbi.nlm.nih.gov/{pid}/",
-            "abstract": abstract,              # ✅ maintenant tu l’as direct
+            "abstract": abstract,
             "published_date": pubdate,
             "source": "pubmed",
             "is_published": False,
@@ -1202,6 +1204,83 @@ def fetch_pubmed_query_paged(query: str, page: int = 1, per_page: int = 48):
         })
 
     return out, total
+
+def fetch_pubmed_query(query: str, days: int = 90, max_results: int = 200, prefer_epub: bool = True):
+    if not query or not query.strip():
+        return []
+
+    base = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
+    date_from = (datetime.utcnow() - timedelta(days=days)).strftime("%Y/%m/%d")
+    date_to   = datetime.utcnow().strftime("%Y/%m/%d")
+    date_filter = f'("{date_from}"[Date - Publication] : "{date_to}"[Date - Publication])'
+    term = f"({query}) AND {date_filter}"
+
+    try:
+        esearch = requests.get(
+            base + "esearch.fcgi",
+            params=ncbi_params(
+                db="pubmed",
+                retmode="json",
+                retmax=str(max_results),
+                sort="pub+date",
+                term=term
+            ),
+            timeout=30
+        ).json()
+
+        ids = esearch.get("esearchresult", {}).get("idlist", [])
+        if not ids:
+            return []
+
+        esum = requests.get(
+            base + "esummary.fcgi",
+            params=ncbi_params(db="pubmed", retmode="json", id=",".join(ids)),
+            timeout=30
+        ).json().get("result", {})
+
+    except Exception as e:
+        print("[PubMed(query)] Erreur:", e)
+        return []
+
+    out = []
+    for rank, pid in enumerate(ids, start=1):
+        it = esum.get(pid)
+        if not it:
+            continue
+
+        title   = (it.get("title") or "").strip().rstrip(".")
+        journal = it.get("fulljournalname") or it.get("source") or ""
+        authors = ", ".join([a.get("name") for a in it.get("authors", []) if a.get("name")])
+
+        pubdate = parse_pubmed_date_any(
+            it.get("epubdate"),
+            it.get("pubdate"),
+            it.get("sortpubdate"),
+            it.get("medlinedate"),
+        )
+
+        doi = None
+        for aid in it.get("articleids", []):
+            if (aid.get("idtype") or "").lower() == "doi":
+                doi = aid.get("value")
+                break
+
+        out.append({
+            "title": title,
+            "authors": authors,
+            "journal": journal,
+            "doi": doi,
+            "url": f"https://pubmed.ncbi.nlm.nih.gov/{pid}/",
+            "abstract": None,
+            "published_date": pubdate,
+            "source": "pubmed",
+            "is_published": False,
+            "source_order": rank
+        })
+
+    print(f"[PubMed(query)] {len(out)} résultats pour '{query}' (tri pubdate, ordre PubMed).")
+    return out
+
 
 def fetch_crossref(query: str = "", days: int = 90, max_results: int = 200):
     url = "https://api.crossref.org/works"
@@ -1420,92 +1499,6 @@ def extract_pmid_from_article(a: Article) -> str | None:
         except Exception:
             pass
     return None
-
-def fetch_pubmed_query(query: str, days: int = 90, max_results: int = 200, prefer_epub: bool = True):
-    """
-    Interroge PubMed avec 'query' (syntaxe PubMed autorisée), restreint par date de publication.
-    Renvoie une liste de dicts 'article' (NON publiés), dans le même ordre que PubMed (pub+date).
-    Aucun filtrage kiné ici.
-
-    prefer_epub=True -> colle mieux à l'affichage PubMed quand "Epub" est mis en avant.
-    """
-    if not query or not query.strip():
-        return []
-
-    base = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
-    date_from = (datetime.utcnow() - timedelta(days=days)).strftime("%Y/%m/%d")
-    date_to   = datetime.utcnow().strftime("%Y/%m/%d")
-    date_filter = f'("{date_from}"[Date - Publication] : "{date_to}"[Date - Publication])'
-    term = f"({query}) AND {date_filter}"
-
-    try:
-        esearch = requests.get(
-            base + "esearch.fcgi",
-            params={
-                "db": "pubmed",
-                "retmode": "json",
-                "retmax": str(max_results),
-                "sort": "pub+date",
-                "term": term
-            },
-            timeout=30
-        ).json()
-
-        ids = esearch.get("esearchresult", {}).get("idlist", [])
-        if not ids:
-            return []
-
-        esum = requests.get(
-            base + "esummary.fcgi",
-            params={"db": "pubmed", "retmode": "json", "id": ",".join(ids)},
-            timeout=30
-        ).json().get("result", {})
-
-    except Exception as e:
-        print("[PubMed(query)] Erreur:", e)
-        return []
-
-    out = []
-    for rank, pid in enumerate(ids, start=1):
-        it = esum.get(pid)
-        if not it:
-            continue
-
-        title   = (it.get("title") or "").strip().rstrip(".")
-        journal = it.get("fulljournalname") or it.get("source") or ""
-        authors = ", ".join([a.get("name") for a in it.get("authors", []) if a.get("name")])
-
-        # ---- date : on choisit epubdate vs pubdate
-        raw_date = (it.get("epubdate") or it.get("pubdate") or "") if prefer_epub else (it.get("pubdate") or it.get("epubdate") or "")
-        pubdate = parse_pubmed_date_any(
-            it.get("epubdate"),
-            it.get("pubdate"),
-            it.get("sortpubdate"),
-            it.get("medlinedate"),
-        )
-
-        doi = None
-        for aid in it.get("articleids", []):
-            if (aid.get("idtype") or "").lower() == "doi":
-                doi = aid.get("value")
-                break
-
-        out.append({
-            "title": title,
-            "authors": authors,
-            "journal": journal,
-            "doi": doi,
-            "url": f"https://pubmed.ncbi.nlm.nih.gov/{pid}/",
-            "abstract": None,
-            "published_date": pubdate,
-            "source": "pubmed",
-            "is_published": False,
-            "source_order": rank
-        })
-
-    print(f"[PubMed(query)] {len(out)} résultats pour '{query}' (tri pubdate, ordre PubMed).")
-    return out
-
 
 
 # -----------------------------------------------------------------------------
