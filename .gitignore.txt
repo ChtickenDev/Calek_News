@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.pyo
+instance/
+.env
+*.db
+*.sqlite
+logs/
+.DS_Store
+Thumbs.db

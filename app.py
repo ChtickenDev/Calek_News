@@ -8,6 +8,8 @@ from datetime import datetime, timedelta
 from functools import wraps
 from flask import session
 import requests
+from dotenv import load_dotenv
+load_dotenv()
 from flask import (
     Flask, render_template, request, redirect, url_for,
     flash, jsonify, Response
@@ -2561,53 +2563,6 @@ def drafts_load_pubmed():
     flash(f"PubMed « {q_pubmed} » : page {page} chargée ({len(results)}). +{linked} nouveaux.", "info")
 
     return redirect(url_for('my_drafts', q_pubmed=q_pubmed, page=page, sort=sort))
-# -----------------------------------------------------------------------------
-# Debug helpers
-# -----------------------------------------------------------------------------
-@app.route("/__debug/test-home")
-def __debug_test_home():
-    rows = (
-        Article.query
-        .filter(Article.is_published.is_(True))
-        .order_by(func.coalesce(Article.published_date, Article.created_at).desc())
-        .limit(10)
-        .all()
-    )
-    return "<pre>" + "\n".join(f"- {r.id} | {r.title[:80]}" for r in rows) + "</pre>"
-
-@app.route("/__debug/whoami")
-def __debug_whoami():
-    if current_user.is_authenticated:
-        cnt = Favorite.query.filter_by(proposer=current_user.id).count()
-        return f"AUTH=1 id={current_user.id} email={current_user.email} favs={cnt}"
-    return "AUTH=0 (pas connecté)"
-
-@app.route("/__debug/favs")
-@login_required
-def __debug_favs():
-    rows = (
-        Favorite.query
-        .filter_by(proposer_id=current_user.id)
-        .order_by(Favorite.created_at.desc())
-        .all()
-    )
-    out = []
-    for f in rows:
-        a = f.article or Article.query.get(f.article_id)
-        out.append(f"- fav_id={f.id} art_id={f.article_id} title={(a.title[:80] if a else '??')}")
-    return "<pre>" + "\n".join(out) + "</pre>"
-
-@app.route("/__debug/featured")
-def __debug_featured():
-    date_key = func.coalesce(Article.published_date, Article.created_at)
-    pubs = (Article.query
-            .filter(Article.is_published.is_(True))
-            .order_by(date_key.desc())
-            .all())
-    feats = [a for a in pubs if a.featured]
-    lines = ["== PUBLIES ==", *[f"{a.id:>4} | feat={int(bool(a.featured))} | {a.published_date or a.created_at} | {a.title[:70]}" for a in pubs[:20]],
-             "", "== FEATURED ONLY ==", *[f"{a.id:>4} | {a.title[:70]}" for a in feats]]
-    return "<pre>" + "\n".join(lines) + "</pre>"
 
 # -----------------------------------------------------------------------------
 # Boot
