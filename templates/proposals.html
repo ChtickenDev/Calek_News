@@ -1,0 +1,272 @@
+{% extends "layout.html" %}
+{% block content %}
+<h3 class="mb-3">Propositions d’articles</h3>
+
+{% if not proposals %}
+  <p class="text-muted">Aucune proposition pour le moment.</p>
+{% else %}
+  <div class="row gy-3">
+    {% for p in proposals %}
+    <div class="col-md-6 col-lg-4">
+      <div class="card h-100 article-card p-3"
+           role="button" tabindex="0"
+           data-article-id="{{ p.article.id }}"
+           data-proposal-id="{{ p.id }}">
+        <div class="small text-muted mb-2 d-flex flex-wrap align-items-center gap-2">
+          <span>Proposé par :
+            {% if p.user and p.share_name %}
+              <strong>{{ p.user.name or p.user.email }}</strong>
+            {% else %}
+              <em>anonyme</em>
+            {% endif %}
+          </span>
+          <span>· {{ p.created_at.strftime('%d %b %Y %H:%M') }}</span>
+        </div>
+
+        <h6 class="fw-bold line-clamp-2">{{ p.article.title }}</h6>
+        {% if p.article.authors %}
+          <p class="small text-muted mb-2">{{ p.article.authors }}</p>
+        {% endif %}
+
+        <div class="small text-muted mb-2 d-flex flex-wrap gap-2 align-items-center">
+          {% if p.article.journal %}<span class="badge badge-soft badge-journal">{{ p.article.journal }}</span>{% endif %}
+          {% if p.article.published_date %}<span>Paru le {{ p.article.published_date.strftime('%d %b %Y') }}</span>{% endif %}
+          {# IFS badge (comme ailleurs) #}
+          {% set sc = reliability_score(p.article)[0] %}
+          {% set ifs_color =
+              'bg-success' if sc>=80 else
+              'bg-primary' if sc>=60 else
+              'bg-warning' if sc>=40 else
+              'bg-danger' %}
+          <span class="badge {{ ifs_color }}">IFS: {{ sc }}</span>
+        </div>
+
+        <div class="mt-auto d-flex gap-2">
+          {% if p.article.url %}
+            <a class="btn btn-sm btn-primary" target="_blank" href="{{ p.article.url }}" onclick="event.stopPropagation()">Ouvrir</a>
+          {% endif %}
+          {% if p.article.doi %}
+            <a class="btn btn-sm btn-outline-primary" target="_blank" href="https://doi.org/{{ p.article.doi }}" onclick="event.stopPropagation()">DOI</a>
+          {% endif %}
+          <div class="ms-auto d-flex gap-2">
+            <form method="post" action="{{ url_for('admin_proposals_approve', pid=p.id) }}" onclick="event.stopPropagation()">
+              <button class="btn btn-sm btn-success">Publier</button>
+            </form>
+            <form method="post" action="{{ url_for('admin_proposals_reject', pid=p.id) }}"
+                  onclick="event.stopPropagation()"
+                  onsubmit="return confirm('Rejeter cette proposition ?');">
+              <button class="btn btn-sm btn-outline-danger">Rejeter</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+{% endif %}
+
+{# ---------- Modal fiche article (identique aux autres pages) ---------- #}
+<div class="modal fade" id="articleModal" tabindex="-1" aria-hidden="true" data-current-article="" data-current-proposal="">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 id="am-title" class="modal-title"></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+      </div>
+      <div class="modal-body">
+        <div class="d-flex flex-wrap gap-2 mb-2">
+          <span id="am-journal" class="badge badge-soft badge-journal"></span>
+          <span id="am-source" class="badge badge-soft"></span>
+          <span id="am-domain" class="badge badge-soft"></span>
+          <span id="am-pathology" class="badge badge-soft"></span>
+          <span id="am-studytype" class="badge badge-soft"></span>
+        </div>
+
+        <p id="am-authors" class="small text-muted mb-2"></p>
+
+        <div class="small text-muted mb-2">
+          <span id="am-pubdate"></span>
+          <span id="am-sitedate" class="ms-2"></span>
+        </div>
+
+        <div id="am-credit" class="small text-muted mb-2" style="display:none;"></div>
+
+        <div class="mb-3">
+          <div class="d-flex align-items-center justify-content-between">
+            <strong>Indice de fiabilité : <span id="am-rel-level">—</span></strong>
+            <span id="am-rel-score" class="small text-muted"></span>
+          </div>
+          <div class="progress mt-2" style="height:10px;">
+            <div id="am-rel-bar" class="progress-bar" role="progressbar" style="width:0%;" aria-valuemin="0" aria-valuemax="100"></div>
+          </div>
+          <ul id="am-rel-reasons" class="small mt-2 mb-0"></ul>
+        </div>
+
+        <h6 class="mb-2">Résumé</h6>
+        <div id="am-abstract" class="mb-0"></div>
+      </div>
+      <div class="modal-footer">
+        <a id="am-url" href="#" target="_blank" class="btn btn-primary" style="display:none;">Ouvrir</a>
+        <a id="am-doi" href="#" target="_blank" class="btn btn-outline-primary" style="display:none;">DOI</a>
+
+        {# Actions de modération (dans la modale) #}
+        <form id="am-approve" method="post" action="#" style="display:none;">
+          <button class="btn btn-success">Publier</button>
+        </form>
+        <form id="am-reject" method="post" action="#" style="display:none;"
+              onsubmit="return confirm('Rejeter cette proposition ?');">
+          <button class="btn btn-outline-danger">Rejeter</button>
+        </form>
+
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fermer</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* ---- Helpers résumé (comme les autres pages) ---- */
+function cap(s){ return s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : s; }
+function formatAbstract(raw) {
+  if (!raw) return "<p class='text-muted fst-italic'>Résumé non disponible.</p>";
+  try {
+    const html = raw.replace(/<\s*\/?\s*jats:/gi, m => m.replace(/jats:/gi, ''));
+    const div = document.createElement('div'); div.innerHTML = html;
+    const secs = div.querySelectorAll('sec, section');
+    if (secs.length) {
+      const out = [];
+      secs.forEach(sec => {
+        const t = sec.querySelector('title')?.textContent?.trim();
+        const ps = sec.querySelectorAll('p');
+        const text = Array.from(ps).map(p => p.textContent.trim()).join(' ');
+        if (t || text) out.push(`<p><strong>${t ? (t.replace(/[:.]\s*$/,'') + '.</strong> ') : ''}${text}</p>`);
+      });
+      if (out.length) return out.join('');
+    }
+    const ps = div.querySelectorAll('p');
+    if (ps.length) return Array.from(ps).map(p => `<p>${p.textContent.trim()}</p>`).join('');
+  } catch(_) {}
+  const d=document.createElement('div'); d.innerHTML=raw;
+  const text=(d.textContent||d.innerText||'').replace(/\s+/g,' ').trim();
+  return text ? `<p>${text}</p>` : "<p class='text-muted fst-italic'>Résumé non disponible.</p>";
+}
+
+/* ---- Ouvre la modale d’une proposition ---- */
+async function openProposalModal(articleId, proposalId){
+  try{
+    // Force la suppression de tous les backdrops Bootstrap
+    document.querySelectorAll('.modal-backdrop').forEach(bd => bd.remove());
+    // Force la fermeture du modal s'il est déjà ouvert
+    const modalEl = document.getElementById('articleModal');
+    if (modalEl.classList.contains('show')) {
+      bootstrap.Modal.getInstance(modalEl)?.hide();
+      modalEl.classList.remove('show');
+      modalEl.setAttribute('aria-hidden', 'true');
+      modalEl.style.display = 'none';
+    }
+
+    const res = await fetch(`/api/article/${articleId}`);
+    const data = await res.json();
+
+    modalEl.setAttribute('data-current-article', String(articleId));
+    modalEl.setAttribute('data-current-proposal', String(proposalId));
+
+    // Titre / auteurs
+    document.getElementById('am-title').textContent = data.title || "Sans titre";
+    document.getElementById('am-authors').textContent = data.authors || "";
+
+    // Badges
+    const setBadge = (id, val) => { const el=document.getElementById(id); if(val){el.textContent=val; el.style.display="";} else el.style.display="none"; };
+    setBadge('am-journal', data.journal);
+    setBadge('am-source', data.source ? `Source: ${data.source}` : "");
+    setBadge('am-domain', data.domain);
+    setBadge('am-pathology', data.pathology);
+    setBadge('am-studytype', data.study_type);
+
+    // Dates
+    const fmt = iso => { if(!iso) return null; try{ const d=new Date(iso); return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'});}catch{return null;} };
+    const pub = fmt(data.published_date);
+    const add = fmt(data.published_at);
+    document.getElementById('am-pubdate').textContent = pub ? `Paru le ${pub}` : "";
+    document.getElementById('am-sitedate').textContent = add ? `Ajouté le ${add}` : "";
+
+    // Crédit éventuel si tu ajoutes 'credit_name' dans /api/article
+    const credit = document.getElementById('am-credit');
+    if (data.credit_name) { credit.textContent = `Proposé par ${data.credit_name}`; credit.style.display=''; }
+    else { credit.textContent=''; credit.style.display='none'; }
+
+    // Résumé
+    document.getElementById('am-abstract').innerHTML = formatAbstract(data.abstract);
+
+    // Liens
+    const urlBtn = document.getElementById('am-url');
+    if (data.url) { urlBtn.href = data.url; urlBtn.style.display=""; } else urlBtn.style.display="none";
+    const doiBtn = document.getElementById('am-doi');
+    if (data.doi) { doiBtn.href = `https://doi.org/${data.doi}`; doiBtn.style.display=""; } else doiBtn.style.display="none";
+
+    // IFS
+    const bar = document.getElementById('am-rel-bar');
+    const level = document.getElementById('am-rel-level');
+    const score = document.getElementById('am-rel-score');
+    const reasons = document.getElementById('am-rel-reasons');
+    const sc = (data.reliability && data.reliability.score) || 0;
+    const lv = (data.reliability && data.reliability.level) || "—";
+    const rs = (data.reliability && data.reliability.reasons) || [];
+    bar.style.width = `${sc}%`;
+    bar.classList.remove('bg-danger','bg-warning','bg-success','bg-primary');
+    if (sc >= 80) bar.classList.add('bg-success');
+    else if (sc >= 60) bar.classList.add('bg-primary');
+    else if (sc >= 40) bar.classList.add('bg-warning');
+    else bar.classList.add('bg-danger');
+    level.textContent = lv;
+    score.textContent = `${sc}/100`;
+    reasons.innerHTML = rs.map(r => `<li>${r}</li>`).join('') || '<li>Aucune raison listée</li>';
+
+    // Actions (Publier / Rejeter) — on pointe sur la proposition courante
+    const approve = document.getElementById('am-approve');
+    const reject  = document.getElementById('am-reject');
+    if (proposalId){
+      approve.action = `/admin/proposals/approve/${proposalId}`;
+      reject.action  = `/admin/proposals/reject/${proposalId}`;
+      approve.style.display = '';
+      reject.style.display  = '';
+    } else {
+      approve.style.display = 'none';
+      reject.style.display  = 'none';
+    }
+
+    // Toujours créer une nouvelle instance pour éviter les conflits d'état
+    const modalInstance = new bootstrap.Modal(modalEl);
+    modalEl.addEventListener('hidden.bs.modal', function cleanupBackdrop() {
+      document.querySelectorAll('.modal-backdrop').forEach(bd => bd.remove());
+      document.body.classList.remove('modal-open');
+      modalEl.removeEventListener('hidden.bs.modal', cleanupBackdrop);
+    });
+    modalInstance.show();
+  } catch(e){ console.error(e); }
+}
+
+/* ---- Active le clic clavier/souris sur les cartes ---- */
+document.querySelectorAll('.card[data-article-id][data-proposal-id]').forEach(card=>{
+  card.querySelectorAll('a,button,input,textarea,select,form').forEach(el=>{
+    el.addEventListener('click', e=>e.stopPropagation(), {capture:true});
+  });
+  card.addEventListener('click', ()=>{
+    const aid = card.getAttribute('data-article-id');
+    const pid = card.getAttribute('data-proposal-id');
+    if (aid && pid) openProposalModal(aid, pid);
+  });
+  card.addEventListener('keydown', e=>{
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      const aid = card.getAttribute('data-article-id');
+      const pid = card.getAttribute('data-proposal-id');
+      if (aid && pid) openProposalModal(aid, pid);
+    }
+  });
+});
+</script>
+{% endblock %}
+

@@ -1,0 +1,356 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<h3 class="mb-3">Mes recherches</h3>
+
+<div class="card side-card p-3 mb-4">
+
+  <!-- Recherche distante PubMed (ajoute des brouillons puis revient ici) -->
+  <form class="row g-2 align-items-center mt-3" method="post" action="{{ url_for('drafts_pull_pubmed') }}">
+    <div class="col-lg-11">
+      <input type="search" name="q_pubmed" class="form-control"
+            placeholder="Rechercher sur PubMed (ex: ACL randomized physiotherapy)"
+            value="{{ q_pubmed or '' }}">
+    </div>
+
+    {# ✅ page courante (la route drafts_pull_pubmed va importer 48 résultats de cette page) #}
+    <input type="hidden" name="page" value="1">
+
+    <div class="col-lg-1 d-grid">
+      <button class="btn btn-outline-info" type="submit">PubMed</button>
+    </div>
+  </form>
+
+  <!-- Filtre local (reste sur Mes recherches) -->
+  <form class="row g-2 align-items-center mt-3" method="get" action="{{ url_for('my_drafts') }}">
+    <div class="col-lg-3">
+      <select name="sort" class="form-select" title="Tri local des brouillons">
+        {% set current_sort = sort or request.args.get('sort','date_desc') %}
+        <option value="date_desc" {{ 'selected' if current_sort=='date_desc' else '' }}>Date (récent → ancien)</option>
+        <option value="date_asc"  {{ 'selected' if current_sort=='date_asc'  else '' }}>Date (ancien → récent)</option>
+        <option value="ifs_desc"  {{ 'selected' if current_sort=='ifs_desc'  else '' }}>Fiabilité (élevée → faible)</option>
+        <option value="ifs_asc"   {{ 'selected' if current_sort=='ifs_asc'   else '' }}>Fiabilité (faible → élevée)</option>
+      </select>
+    </div>
+    <div class="col-lg-1 d-grid">
+      <button class="btn btn-primary" type="submit">OK</button>
+    </div>
+  </form>
+
+  <!-- Suppression de masse -->
+  <div class="d-flex flex-wrap gap-2 mt-3">
+    <form method="post" action="{{ url_for('drafts_delete_mine') }}"
+          onsubmit="return confirm('Supprimer TOUS vos brouillons ?');">
+      <button class="btn btn-outline-danger btn-sm">🗑 Supprimer tous MES brouillons</button>
+    </form>
+
+    {% if current_user.role == 'admin' %}
+    <form method="post" action="{{ url_for('admin_delete_all_drafts') }}"
+          onsubmit="return confirm('Supprimer TOUS les brouillons (tous utilisateurs) ?');">
+      <button class="btn btn-outline-danger btn-sm">🗑 Supprimer TOUS les brouillons</button>
+    </form>
+    {% endif %}
+  </div>
+
+</div>
+
+<h5 class="mb-3">Brouillons</h5>
+
+{# ---------- Grille des brouillons ---------- #}
+<div class="row gy-3">
+  {% for a in latest_drafts %}
+  <div class="col-md-6 col-lg-4">
+    <div class="card h-100 article-card p-3" data-article-id="{{ a.id }}" role="button" tabindex="0">
+
+      <div class="d-flex flex-wrap gap-2 mb-1">
+        {% if a.source %}<span class="badge badge-soft">{{ a.source|capitalize }}</span>{% endif %}
+        {% if a.domain %}<span class="badge badge-soft">{{ a.domain }}</span>{% endif %}
+        {% if a.pathology %}<span class="badge badge-soft">{{ a.pathology }}</span>{% endif %}
+        {% if a.study_type %}<span class="badge badge-soft">{{ a.study_type }}</span>{% endif %}
+      </div>
+
+      <h6 class="fw-bold line-clamp-2">{{ a.title }}</h6>
+      {% if a.authors %}<p class="text-muted small mb-2">{{ a.authors }}</p>{% endif %}
+
+      <div class="small text-muted mb-2 d-flex flex-wrap gap-2 align-items-center">
+        {% if a.journal %}<span class="badge badge-soft badge-journal">{{ a.journal }}</span>{% endif %}
+        {% if a.published_date %}<span>Paru le {{ a.published_date.strftime('%d %b %Y') }}</span>{% endif %}
+        {# Badge IFS partout #}
+        {% set sc = (reliability_score(a)[0]) %}
+        {% set ifs_color =
+            'bg-success' if sc>=80 else
+            'bg-primary' if sc>=60 else
+            'bg-warning' if sc>=40 else
+            'bg-danger' %}
+        <span class="badge {{ ifs_color }}">IFS: {{ sc }}</span>
+      </div>
+
+      <div class="mt-auto d-flex gap-2 align-items-center">
+        {% if a.url %}
+          <a class="btn btn-sm btn-primary" target="_blank" rel="noopener" href="{{ a.url }}" onclick="event.stopPropagation()">Ouvrir</a>
+        {% endif %}
+        {% if a.doi %}
+          <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" href="https://doi.org/{{ a.doi }}" onclick="event.stopPropagation()">DOI</a>
+        {% endif %}
+
+        {# Favoris #}
+        {% if current_user.is_authenticated %}
+        <form class="d-flex gap-2 align-items-center ms-auto favorite-form"
+              method="post" action="{{ url_for('favorite', article_id=a.id) }}"
+              onclick="event.stopPropagation()">
+          <input class="form-control form-control-sm" name="note" placeholder="Note…" style="max-width:140px;">
+          <button type="submit" class="btn btn-sm btn-outline-warning">★ Favori</button>
+        </form>
+        {% endif %}
+
+        {# --- Actions admin : Publier / Mettre en avant --- #}
+        {% if current_user.is_authenticated and current_user.role == 'admin' %}
+        <form method="post" action="{{ url_for('admin_publish', article_id=a.id) }}" class="ms-2" onclick="event.stopPropagation()">
+            <button class="btn btn-sm btn-success">Publier</button>
+        </form>
+        <form method="post" action="{{ url_for('admin_feature', article_id=a.id) }}" onclick="event.stopPropagation()">
+            <button class="btn btn-sm btn-outline-warning">Mettre en avant</button>
+        </form>
+        {% endif %}
+
+        {# --- Suppression : admin OU propriétaire du brouillon --- #}
+        {% set is_proposed = a.id in proposed_set %}
+        {% if not is_proposed and (current_user.role == 'admin' or a.posted_by_id == current_user.id) %}
+          <form method="post"
+                action="{{ url_for('drafts_remove_from_me', article_id=a.id) }}"
+                onclick="event.stopPropagation()"
+                onsubmit="return confirm('Supprimer ce brouillon ?');">
+            <button class="btn btn-sm btn-outline-danger">Supprimer</button>
+          </form>
+        {% else %}
+          {% if is_proposed %}
+            <span class="badge bg-info ms-auto">Proposé</span>
+          {% endif %}
+        {% endif %}
+      </div>
+
+    </div>
+  </div>
+  {% else %}
+    <div class="col-12"><p class="text-muted">Aucun brouillon.</p></div>
+  {% endfor %}
+</div>
+
+{% if q_pubmed and total_pages and total_pages > 1 %}
+<div class="d-flex align-items-center justify-content-between mt-3 flex-wrap gap-2">
+
+  <a class="btn btn-outline-secondary btn-sm {{ 'disabled' if page <= 1 else '' }}"
+     href="{{ url_for('drafts_load_pubmed', q_pubmed=q_pubmed, page=page-1, sort=sort) }}">
+    ‹ Précédent
+  </a>
+
+  <div class="small text-muted">
+    Page {{ page }} / {{ total_pages }}
+  </div>
+
+  <a class="btn btn-outline-secondary btn-sm {{ 'disabled' if page >= total_pages else '' }}"
+     href="{{ url_for('drafts_load_pubmed', q_pubmed=q_pubmed, page=page+1, sort=sort) }}">
+    Suivant ›
+  </a>
+
+</div>
+{% endif %}
+
+{# ---------- Modal (comme accueil/admin) ---------- #}
+<div class="modal fade" id="articleModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 id="am-title" class="modal-title"></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+      </div>
+      <div class="modal-body">
+        <div class="d-flex flex-wrap gap-2 mb-2">
+          <span id="am-journal" class="badge badge-soft badge-journal"></span>
+          <span id="am-source" class="badge badge-soft"></span>
+          <span id="am-domain" class="badge badge-soft"></span>
+          <span id="am-pathology" class="badge badge-soft"></span>
+          <span id="am-studytype" class="badge badge-soft"></span>
+        </div>
+        <p id="am-authors" class="small text-muted mb-2"></p>
+        <div class="small text-muted mb-3">
+          <span id="am-pubdate"></span>
+          <span id="am-sitedate" class="ms-2"></span>
+          <span id="am-credit" class="ms-2" style="display:none;"></span>
+        </div>
+        <div class="mb-3">
+          <div class="d-flex align-items-center justify-content-between">
+            <strong>Indice de fiabilité : <span id="am-rel-level">—</span></strong>
+            <span id="am-rel-score" class="small text-muted"></span>
+          </div>
+          <div class="progress mt-2" style="height:10px;">
+            <div id="am-rel-bar" class="progress-bar" role="progressbar" style="width:0%;" aria-valuemin="0" aria-valuemax="100"></div>
+          </div>
+          <ul id="am-rel-reasons" class="small mt-2 mb-0"></ul>
+        </div>
+        <h6 class="mb-2">Résumé</h6>
+        <div id="am-abstract" class="mb-0"></div>
+      </div>
+      <div class="modal-footer d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-2">
+          <a id="am-url" href="#" target="_blank" class="btn btn-primary" style="display:none;">Ouvrir</a>
+          <a id="am-doi" href="#" target="_blank" class="btn btn-outline-primary" style="display:none;">DOI</a>
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fermer</button>
+        </div>
+
+        {# ---- Formulaire "Proposer la publication" (visible si connecté) ---- #}
+        {% if current_user.is_authenticated %}
+        <form id="proposal-form" method="post" action="/propose/0"
+            class="d-flex align-items-center gap-2" style="display:none;">
+
+        <label class="small d-flex align-items-center gap-1 mb-0">
+          <input id="pf-share" type="checkbox" name="share_name" class="form-check-input">
+          <span>Afficher mon nom</span>
+        </label>
+
+        <input id="pf-note" type="text" name="note" class="form-control form-control-sm"
+              placeholder="(optionnel) Un mot pour l’équipe" style="max-width: 260px;">
+
+        <button id="pf-submit" type="submit" class="btn btn-sm btn-success">
+          Proposer la publication
+        </button>
+      </form>
+
+        {% else %}
+        <div id="proposal-form" class="text-muted small">
+          Connectez-vous pour proposer une publication.
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* Favoris AJAX */
+document.querySelectorAll('.favorite-form')?.forEach(form => {
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault(); e.stopPropagation();
+    const btn = form.querySelector('button'); const fd = new FormData(form);
+    btn.disabled = true;
+    try{
+      const res = await fetch(form.action, {method:'POST', body:fd, headers:{'Accept':'application/json'}});
+      const data = await res.json().catch(()=>({}));
+      btn.textContent = (res.ok && data.status==='ok') ? '✓ Enregistré' : '⚠️ Erreur';
+    }catch(_){ btn.textContent='⚠️ Réseau'; }
+    setTimeout(()=>{ btn.textContent='★ Favori'; btn.disabled=false; }, 1200);
+  }, {capture:true});
+});
+
+/* Helpers résumé */
+function cap(s){ return s ? s.charAt(0).toUpperCase()+s.slice(1).toLowerCase() : s; }
+function formatAbstract(raw){
+  if(!raw) return "<p class='text-muted fst-italic'>Résumé non disponible.</p>";
+  try{
+    const html = raw.replace(/<\s*\/?\s*jats:/gi, m=>m.replace(/jats:/gi,''));
+    const div = document.createElement('div'); div.innerHTML = html;
+    const secs = div.querySelectorAll('sec, section');
+    if(secs.length){
+      const out=[];
+      secs.forEach(sec=>{
+        const t = sec.querySelector('title')?.textContent?.trim();
+        const ps = sec.querySelectorAll('p');
+        const txt = Array.from(ps).map(p=>p.textContent.trim()).join(' ');
+        if(t||txt) out.push(`<p><strong>${t ? (t.replace(/[:.]\s*$/,'') + '.</strong> ') : ''}${txt}</p>`);
+      });
+      if(out.length) return out.join('');
+    }
+    const ps = div.querySelectorAll('p');
+    if(ps.length) return Array.from(ps).map(p=>`<p>${p.textContent.trim()}</p>`).join('');
+  }catch(_){}
+  const d=document.createElement('div'); d.innerHTML=raw;
+  const text=(d.textContent||d.innerText||'').replace(/\s+/g,' ').trim();
+  return text ? `<p>${text}</p>` : "<p class='text-muted fst-italic'>Résumé non disponible.</p>";
+}
+
+/* Modal Article */
+let articleModalInstance = null;
+async function openArticleModal(id){
+  try{
+    // Nettoie les backdrops Bootstrap orphelins
+    document.querySelectorAll('.modal-backdrop').forEach(bd => bd.remove());
+
+    const res = await fetch(`/api/article/${id}`); const data = await res.json();
+
+    document.getElementById('am-title').textContent = data.title || "Sans titre";
+    document.getElementById('am-authors').textContent = data.authors || "";
+
+    const setBadge=(id,val)=>{const el=document.getElementById(id); if(val){el.textContent=val; el.style.display='';} else el.style.display='none';};
+    setBadge('am-journal', data.journal);
+    setBadge('am-source', data.source ? `Source: ${data.source}` : "");
+    setBadge('am-domain', data.domain);
+    setBadge('am-pathology', data.pathology);
+    setBadge('am-studytype', data.study_type);
+
+    const fmt = iso => { if(!iso) return null; try{ const d=new Date(iso); return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'});}catch{return null;} };
+    document.getElementById('am-pubdate').textContent  = fmt(data.published_date) ? `Paru le ${fmt(data.published_date)}` : "";
+    document.getElementById('am-sitedate').textContent = fmt(data.published_at)   ? `Ajouté le ${fmt(data.published_at)}` : "";
+    const credit = document.getElementById('am-credit');
+    if (credit) {
+      if (data.credit_name) { credit.textContent = `Proposé par ${data.credit_name}`; credit.style.display=''; }
+      else { credit.textContent=''; credit.style.display='none'; }
+    }
+
+    document.getElementById('am-abstract').innerHTML = formatAbstract(data.abstract);
+
+    const urlBtn=document.getElementById('am-url'); if(data.url){urlBtn.href=data.url; urlBtn.style.display='';} else urlBtn.style.display='none';
+    const doiBtn=document.getElementById('am-doi'); if(data.doi){doiBtn.href=`https://doi.org/${data.doi}`; doiBtn.style.display='';} else doiBtn.style.display='none';
+
+    const bar=document.getElementById('am-rel-bar');
+    const level=document.getElementById('am-rel-level');
+    const score=document.getElementById('am-rel-score');
+    const reasons=document.getElementById('am-rel-reasons');
+    const sc=(data.reliability&&data.reliability.score)||0;
+    const lv=(data.reliability&&data.reliability.level)||"—";
+    const rs=(data.reliability&&data.reliability.reasons)||[];
+
+    bar.style.width = `${sc}%`;
+    bar.classList.remove('bg-danger','bg-warning','bg-success','bg-primary');
+    if(sc>=80) bar.classList.add('bg-success');
+    else if(sc>=60) bar.classList.add('bg-primary');
+    else if(sc>=40) bar.classList.add('bg-warning');
+    else bar.classList.add('bg-danger');
+
+    level.textContent=lv; score.textContent=`${sc}/100`;
+    reasons.innerHTML = rs.map(r=>`<li>${r}</li>`).join('') || '<li>Aucune raison listée</li>';
+
+    // --- Mise à jour du formulaire "Proposer la publication"
+    const propForm = document.getElementById('proposal-form');
+    if (propForm) {
+      // Si ton routeur est /propose/<int:article_id> (POST), on écrit directement l'URL :
+      propForm.action = `/propose/${id}`;
+      // et on renseigne aussi le hidden (utile si tu utilises /propose en POST simple)
+      const hid = document.getElementById('pf-article-id');
+      if (hid) hid.value = String(id);
+      propForm.style.display = '';
+    }
+
+    const modalEl = document.getElementById('articleModal');
+    if (!articleModalInstance) {
+      articleModalInstance = new bootstrap.Modal(modalEl);
+    }
+    articleModalInstance.show();
+  }catch(e){ console.error(e); }
+}
+
+document.querySelectorAll('.card[data-article-id]').forEach(card=>{
+  card.querySelectorAll('a,button,input,textarea,select,form').forEach(el=>{
+    el.addEventListener('click', e=>e.stopPropagation(), {capture:true});
+  });
+  card.addEventListener('click', ()=>{
+    const id=card.getAttribute('data-article-id'); if(id) openArticleModal(id);
+  });
+  card.addEventListener('keydown', e=>{
+    if(e.key==='Enter'||e.key===' '){ e.preventDefault(); const id=card.getAttribute('data-article-id'); if(id) openArticleModal(id); }
+  });
+});
+</script>
+{% endblock %}

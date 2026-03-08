@@ -1,0 +1,86 @@
+{% extends "layout.html" %}
+{% block content %}
+<h3 class="mb-3">Ajouter un article</h3>
+
+<div class="row gy-3">
+  <div class="col-lg-8">
+    <form class="card article-card p-3" method="post" action="{{ url_for('admin_new') }}">
+      <div class="row g-3">
+        <div class="col-12">
+          <label class="form-label">Titre *</label>
+          <input name="title" class="form-control" required>
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label">Auteurs</label>
+          <input name="authors" class="form-control" placeholder="Nom1, Nom2, …">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Revue / Journal</label>
+          <input name="journal" class="form-control">
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label">DOI</label>
+          <input name="doi" class="form-control" placeholder="10.xxxx/xxxxx">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">URL</label>
+          <input name="url" type="url" class="form-control" placeholder="https://…">
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label">Date de publication</label>
+          <input name="published_date" type="date" class="form-control">
+        </div>
+        <div class="col-md-6 d-flex align-items-end">
+          <div class="form-check">
+            <input id="featured" name="featured" type="checkbox" class="form-check-input">
+            <label for="featured" class="form-check-label">Mettre en avant</label>
+          </div>
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label">Domaine</label>
+          <input name="domain" class="form-control" placeholder="Ex. Musculo-squelettique">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Pathologie</label>
+          <input name="pathology" class="form-control" placeholder="Ex. Lombalgie">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Type d’étude</label>
+          <input name="study_type" class="form-control" placeholder="Ex. RCT, Revue systématique…">
+        </div>
+
+        <div class="col-12">
+          <label class="form-label">Résumé</label>
+          <textarea name="abstract" rows="6" class="form-control" placeholder="Résumé (facultatif)"></textarea>
+        </div>
+
+        <div class="col-12 d-flex gap-2 justify-content-end">
+          <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary">Annuler</a>
+          <button class="btn btn-success">Enregistrer & publier</button>
+        </div>
+      </div>
+      <p class="text-muted small mt-3 mb-0">
+        • Les champs * sont obligatoires. <br>
+        • L’article sera publié immédiatement (brouillon si tu utilises l’import auto).
+      </p>
+    </form>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card side-card">
+      <div class="card-body">
+        <h6 class="text-muted mb-2">Aide</h6>
+        <ul class="small m-0 ps-3">
+          <li>Si un DOI est présent et déjà en base, l’article ne sera pas dupliqué.</li>
+          <li>“Mettre en avant” remplace l’article du mois.</li>
+          <li>Les champs “Domaine/Pathologie/Type d’étude” aident les filtres de l’accueil.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

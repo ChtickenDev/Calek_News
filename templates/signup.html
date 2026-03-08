@@ -1,0 +1,23 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-5">
+    <h3>Créer un compte</h3>
+    <form method="post">
+      <div class="mb-3">
+        <label class="form-label">Nom (facultatif)</label>
+        <input class="form-control" type="text" name="name">
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Email</label>
+        <input class="form-control" type="email" name="email" required>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Mot de passe</label>
+        <input class="form-control" type="password" name="password" required minlength="6">
+      </div>
+      <button class="btn btn-success">Créer le compte</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

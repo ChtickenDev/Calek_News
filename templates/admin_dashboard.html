@@ -1,0 +1,380 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<h3 class="mb-3">Panneau d’administration</h3>
+
+<!-- Statistiques -->
+<div class="row gy-3 mb-3">
+  <div class="col-md-3">
+    <div class="card border-secondary side-card"><div class="card-body">
+      <div class="text-muted">Utilisateurs</div>
+      <div class="h4 m-0">{{ total_users }}</div>
+    </div></div>
+  </div>
+  <div class="col-md-3">
+    <div class="card border-secondary side-card"><div class="card-body">
+      <div class="text-muted">Articles (publiés + brouillons)</div>
+      <div class="h4 m-0">{{ total_articles }}</div>
+    </div></div>
+  </div>
+  <div class="col-md-3">
+    <div class="card border-secondary side-card"><div class="card-body">
+      <div class="text-muted">Brouillons</div>
+      <div class="h4 m-0">{{ drafts }}</div>
+    </div></div>
+  </div>
+  <div class="col-md-3">
+    <div class="card border-secondary side-card"><div class="card-body">
+      <div class="text-muted">Ajouts 30 j</div>
+      <div class="h4 m-0">{{ last_month }}</div>
+    </div></div>
+  </div>
+</div>
+
+<!-- Actions d'admin -->
+<div class="d-flex flex-wrap gap-2 mb-3">
+  <form method="post" action="{{ url_for('update_now') }}">
+    <button class="btn btn-outline-info">🔄 Lancer la collecte (brouillons)</button>
+  </form>
+
+  <a class="btn btn-success" href="{{ url_for('admin_new') }}">+ Ajouter un article</a>
+
+  <!-- Backfill résumés PubMed (route /admin/backfill-abstracts) -->
+  <form method="post" action="{{ url_for('admin_backfill_abstracts') }}" class="d-inline">
+    <button class="btn btn-outline-secondary btn-sm"
+            onclick="return confirm('Récupérer les résumés manquants depuis PubMed ?');">
+      Récupérer les résumés PubMed
+    </button>
+  </form>
+
+  <form method="post" action="{{ url_for('admin_reset_drafts_everyone') }}"
+      onsubmit="return confirm('RESET TOTAL : supprimer TOUS les brouillons de TOUS les comptes ?');">
+  <button class="btn btn-danger">⚠️ RESET brouillons (tout le monde)</button>
+</form>
+
+  <form method="get" action="{{ url_for('upgrade_db') }}" onsubmit="return false;">
+    <a class="btn btn-outline-secondary" href="{{ url_for('upgrade_db') }}">🛠 Mise à niveau BDD</a>
+  </form>
+
+  <form method="post" action="{{ url_for('admin_delete_all_drafts') }}"
+        onsubmit="return confirm('Supprimer TOUS les brouillons ?');">
+    <button class="btn btn-outline-danger">🗑 Supprimer tous les brouillons</button>
+  </form>
+</div>
+
+<!-- Recherche / tri -->
+<form class="card side-card p-3 mb-4" method="get" action="{{ url_for('admin_dashboard') }}">
+  {% set current_sort = request.args.get('sort', request.args.get('order','date')) %}
+  <div class="row g-2 align-items-center">
+    <div class="col-lg-8">
+      <input type="search" name="q" value="{{ request.args.get('q','') }}"
+             class="form-control" placeholder="Rechercher dans les brouillons (titre / auteurs / journal / DOI)">
+    </div>
+
+    <div class="col-lg-3">
+      <!-- IMPORTANT : le paramètre s'appelle 'sort' -->
+      <select name="sort" class="form-select">
+        <option value="date"
+          {% if current_sort in ['date', '', None] %}selected{% endif %}>
+          Trier par date
+        </option>
+        <option value="ifs_desc"
+          {% if current_sort in ['reliability','ifs','ifs_desc','reliability_desc'] %}selected{% endif %}>
+          Trier par fiabilité (élevée → faible)
+        </option>
+        <option value="ifs_asc"
+          {% if current_sort in ['ifs_asc','reliability_asc','ifs_low'] %}selected{% endif %}>
+          Trier par fiabilité (faible → élevée)
+        </option>
+      </select>
+    </div>
+
+    <div class="col-lg-1 d-grid">
+      <button class="btn btn-primary" type="submit">OK</button>
+    </div>
+  </div>
+
+  {% if request.args.get('q') %}
+    <div class="small text-muted mt-2">
+      Filtre : « <strong>{{ request.args.get('q') }}</strong> »
+    </div>
+  {% endif %}
+</form>
+
+<!-- Recherche distante PubMed (ajoute des brouillons) -->
+<form class="card side-card p-3 mb-4" method="post" action="{{ url_for('admin_pull_pubmed') }}">
+  <div class="row g-2 align-items-center">
+    <div class="col-lg-7">
+      <input type="search" name="q_pubmed" class="form-control"
+             placeholder="Rechercher sur PubMed (ex: physiotherapy ACL randomized)"
+             value="{{ request.args.get('q','') }}">
+    </div>
+    <div class="col-lg-2">
+      <input type="number" name="days" class="form-control" min="1" max="3650" value="10"
+             title="Nombre de jours en arrière (fenêtre de publication)">
+    </div>
+    <div class="col-lg-2">
+      <input type="number" name="max" class="form-control" min="1" max="500" value="100"
+             title="Nombre maximum de résultats à récupérer">
+    </div>
+    <div class="col-lg-1 d-grid">
+      <button class="btn btn-outline-info" type="submit">PubMed</button>
+    </div>
+  </div>
+  <div class="small text-muted mt-2">
+    Les résultats sont récupérés depuis PubMed puis ajoutés en <strong>brouillons</strong> (triés par date / ordre PubMed).
+  </div>
+</form>
+
+<h5 class="mb-3">Nouveaux brouillons en attente</h5>
+
+<!-- Grille des brouillons (cliquables) -->
+<div class="row gy-3">
+  {% for a in latest_drafts %}
+  <div class="col-md-6 col-lg-4">
+    <div class="card h-100 article-card p-3" data-article-id="{{ a.id }}" role="button" tabindex="0">
+      <div class="d-flex gap-2 mb-1">
+        {% if a.source %}<span class="badge badge-soft">{{ a.source|capitalize }}</span>{% endif %}
+        {% if a.domain %}<span class="badge badge-soft">{{ a.domain }}</span>{% endif %}
+        {% if a.pathology %}<span class="badge badge-soft">{{ a.pathology }}</span>{% endif %}
+        {% if a.study_type %}<span class="badge badge-soft">{{ a.study_type }}</span>{% endif %}
+      </div>
+
+      <h6 class="fw-bold line-clamp-2">{{ a.title }}</h6>
+      {% set sc = (ifs_scores.get(a.id) if ifs_scores is defined and ifs_scores else reliability_score(a)[0]) %}
+      {% set ifs_cls = 'badge-ifs-success' if sc>=80
+                        else ('badge-ifs-primary' if sc>=60
+                        else ('badge-ifs-warning' if sc>=40 else 'badge-ifs-danger')) %}
+
+      <div class="d-flex flex-wrap gap-2 mb-1 align-items-center">
+        {% if a.source %}<span class="badge badge-soft">{{ a.source|capitalize }}</span>{% endif %}
+        {% if a.journal %}<span class="badge badge-soft badge-journal">{{ a.journal }}</span>{% endif %}
+        <span class="badge badge-ifs {{ ifs_cls }}">IFS: {{ sc }}</span>
+      </div>
+      {% if a.authors %}<p class="text-muted small mb-2">{{ a.authors }}</p>{% endif %}
+
+      <div class="small text-muted mb-2 d-flex flex-wrap gap-2">
+        {% if a.journal %}<span class="badge badge-soft badge-journal">{{ a.journal }}</span>{% endif %}
+        {% if a.published_date %}<span>Paru le {{ a.published_date.strftime('%d %b %Y') }}</span>{% endif %}
+      </div>
+
+      {# --- APERÇU RÉSUMÉ (fallback : snippet -> clean -> message) --- #}
+      {% set preview = a.abstract_snippet or a.clean_abstract %}
+      {% if preview %}
+        <p class="small line-clamp-3 mb-3">{{ preview }}</p>
+      {% else %}
+        <p class="small text-muted fst-italic mb-3">Résumé non disponible.</p>
+      {% endif %}
+
+      <div class="mt-auto d-flex gap-2 align-items-center">
+        {% if a.url %}
+          <a class="btn btn-sm btn-primary" target="_blank" rel="noopener" href="{{ a.url }}" onclick="event.stopPropagation()">Ouvrir</a>
+        {% endif %}
+        {% if a.doi %}
+          <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" href="https://doi.org/{{ a.doi }}" onclick="event.stopPropagation()">DOI</a>
+        {% endif %}
+
+       {% if current_user.role == 'admin' %}
+          <form method="post" action="{{ url_for('admin_publish', article_id=a.id) }}" class="ms-auto">
+            <button class="btn btn-sm btn-success">Publier</button>
+          </form>
+          <form method="post" action="{{ url_for('admin_feature', article_id=a.id) }}">
+            <button class="btn btn-sm btn-outline-warning">Mettre en avant</button>
+          </form>
+        {% endif %}
+        <form method="post" action="{{ url_for('admin_delete_draft', article_id=a.id) }}" onclick="event.stopPropagation()"
+              onsubmit="return confirm('Supprimer ce brouillon ?');">
+          <button class="btn btn-sm btn-outline-danger">Supprimer</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% else %}
+    <div class="col-12"><p class="text-muted">Aucun brouillon récent.</p></div>
+  {% endfor %}
+</div>
+
+<!-- Modal fiche article (identique à l'accueil) -->
+<div class="modal fade" id="articleModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 id="am-title" class="modal-title"></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+      </div>
+      <div class="modal-body">
+        <div class="d-flex flex-wrap gap-2 mb-2">
+          <span id="am-journal" class="badge badge-soft badge-journal"></span>
+          <span id="am-source" class="badge badge-soft"></span>
+          <span id="am-domain" class="badge badge-soft"></span>
+          <span id="am-pathology" class="badge badge-soft"></span>
+          <span id="am-studytype" class="badge badge-soft"></span>
+        </div>
+
+        <p id="am-authors" class="small text-muted mb-2"></p>
+
+        <div class="small text-muted mb-3">
+          <span id="am-pubdate"></span>
+          <span id="am-sitedate" class="ms-2"></span>
+        </div>
+
+        <div class="mb-3">
+          <div class="d-flex align-items-center justify-content-between">
+            <strong>Indice de fiabilité : <span id="am-rel-level">—</span></strong>
+            <span id="am-rel-score" class="small text-muted"></span>
+          </div>
+          <div class="progress mt-2" style="height:10px;">
+            <div id="am-rel-bar" class="progress-bar" role="progressbar" style="width:0%;" aria-valuemin="0" aria-valuemax="100"></div>
+          </div>
+          <ul id="am-rel-reasons" class="small mt-2 mb-0"></ul>
+        </div>
+
+        <h6 class="mb-2">Résumé</h6>
+        <div id="am-abstract" class="mb-0"></div>
+      </div>
+      <div class="modal-footer">
+        <a id="am-url" href="#" target="_blank" class="btn btn-primary" style="display:none;">Ouvrir</a>
+        <a id="am-doi" href="#" target="_blank" class="btn btn-outline-primary" style="display:none;">DOI</a>
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fermer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* ---------- Helpers résumé (nettoyage et mise en forme) ---------- */
+function cap(s){ return s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : s; }
+
+function formatAbstract(raw) {
+  if (!raw) return "<p class='text-muted fst-italic'>Résumé non disponible.</p>";
+  try {
+    // retire le préfixe de namespace jats: mais conserve la structure
+    const html = raw.replace(/<\s*\/?\s*jats:/gi, m => m.replace(/jats:/gi, ''));
+    const div = document.createElement('div'); div.innerHTML = html;
+
+    // structure <sec><title>…</title><p>…</p></sec>
+    const secs = div.querySelectorAll('sec, section');
+    if (secs.length) {
+      const out = [];
+      secs.forEach(sec => {
+        const t = sec.querySelector('title')?.textContent?.trim();
+        const ps = sec.querySelectorAll('p');
+        const text = Array.from(ps).map(p => p.textContent.trim()).join(' ');
+        if (t || text) out.push(`<p><strong>${t ? (t.replace(/[:.]\s*$/,'') + '.</strong> ') : ''}${text}</p>`);
+      });
+      if (out.length) return out.join('');
+    }
+
+    // fallback <p>...</p>
+    const ps = div.querySelectorAll('p');
+    if (ps.length) return Array.from(ps).map(p => `<p>${p.textContent.trim()}</p>`).join('');
+  } catch(_) {}
+
+  // dernier fallback : texte brut + tentative de segmentation par en-têtes
+  const strip = s => {
+    try { const d=document.createElement('div'); d.innerHTML=s; return (d.textContent||d.innerText||'').replace(/\s+/g,' ').trim(); }
+    catch { return String(s).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim(); }
+  };
+  const text = strip(raw); if (!text) return "<p class='text-muted fst-italic'>Résumé non disponible.</p>";
+
+  const HEAD = ['abstract','background','purpose','objective','aim','aims','methods','materials and methods','patients and methods','method','results','findings','discussion','conclusion','conclusions','interpretation','clinical implications'];
+  const re = new RegExp(`(^|[.!?]\\s+)(${HEAD.join('|')})\\b`, 'gi');
+  const marker='§§§MARK§§§';
+  const marked = text.replace(re,(m,lead,head)=>`${lead}${marker}${head}`);
+  const chunks = marked.split(marker).map(s=>s.trim()).filter(Boolean);
+
+  if (chunks.length>1){
+    const out=[];
+    for(const ch of chunks){
+      const m = ch.match(new RegExp(`^(${HEAD.join('|')})\\b`,'i'));
+      if(m){ const title=cap(m[1]); const body=ch.slice(m[0].length).trim(); out.push(`<p><strong>${title}.</strong> ${body}</p>`); }
+      else out.push(`<p>${ch}</p>`);
+    }
+    return out.join('');
+  }
+  return `<p>${text}</p>`;
+}
+
+/* ---------- Modal Article (fetch + rendu) ---------- */
+let articleModalInstance = null;
+async function openArticleModal(id) {
+  try {
+    // Nettoie les backdrops Bootstrap orphelins
+    document.querySelectorAll('.modal-backdrop').forEach(bd => bd.remove());
+
+    const res = await fetch(`/api/article/${id}`);
+    const data = await res.json();
+
+    document.getElementById('am-title').textContent = data.title || "Sans titre";
+    document.getElementById('am-authors').textContent = data.authors || "";
+
+    const setBadge = (id, val) => { const el=document.getElementById(id); if(val){el.textContent=val; el.style.display="";} else el.style.display="none"; };
+    setBadge('am-journal', data.journal);
+    setBadge('am-source', data.source ? `Source: ${data.source}` : "");
+    setBadge('am-domain', data.domain);
+    setBadge('am-pathology', data.pathology);
+    setBadge('am-studytype', data.study_type);
+
+    const fmt = iso => { if(!iso) return null; try{ const d=new Date(iso); return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'});}catch{return null;} };
+    const pub = fmt(data.published_date);
+    const add = fmt(data.published_at);
+    document.getElementById('am-pubdate').textContent = pub ? `Paru le ${pub}` : "";
+    document.getElementById('am-sitedate').textContent = add ? `Ajouté le ${add}` : "";
+
+    // résumé formaté
+    document.getElementById('am-abstract').innerHTML = formatAbstract(data.abstract);
+
+    const urlBtn = document.getElementById('am-url');
+    if (data.url) { urlBtn.href = data.url; urlBtn.style.display=""; } else urlBtn.style.display="none";
+    const doiBtn = document.getElementById('am-doi');
+    if (data.doi) { doiBtn.href = `https://doi.org/${data.doi}`; doiBtn.style.display=""; } else doiBtn.style.display="none";
+
+    // IFS
+    const bar = document.getElementById('am-rel-bar');
+    const level = document.getElementById('am-rel-level');
+    const score = document.getElementById('am-rel-score');
+    const reasons = document.getElementById('am-rel-reasons');
+    const sc = (data.reliability && data.reliability.score) || 0;
+    const lv = (data.reliability && data.reliability.level) || "—";
+    const rs = (data.reliability && data.reliability.reasons) || [];
+    bar.style.width = `${sc}%`;
+    bar.classList.remove('bg-danger','bg-warning','bg-success','bg-primary');
+    if (sc >= 80) bar.classList.add('bg-success');
+    else if (sc >= 60) bar.classList.add('bg-primary');
+    else if (sc >= 40) bar.classList.add('bg-warning');
+    else bar.classList.add('bg-danger');
+    level.textContent = lv;
+    score.textContent = `${sc}/100`;
+    reasons.innerHTML = rs.map(r => `<li>${r}</li>`).join('') || '<li>Aucune raison listée</li>';
+
+    const modalEl = document.getElementById('articleModal');
+    if (!articleModalInstance) {
+      articleModalInstance = new bootstrap.Modal(modalEl);
+    }
+    articleModalInstance.show();
+
+  } catch (e) { console.error(e); }
+}
+
+// Active le clic sur les cartes (et bloque clic sur les boutons internes)
+document.querySelectorAll('.card[data-article-id]').forEach(card => {
+  card.querySelectorAll('a,button,input,textarea,select,form').forEach(el => {
+    el.addEventListener('click', e => e.stopPropagation());
+  });
+  card.addEventListener('click', () => {
+    const id = card.getAttribute('data-article-id');
+    if (id) openArticleModal(id);
+  });
+  card.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      const id = card.getAttribute('data-article-id');
+      if (id) openArticleModal(id);
+    }
+  });
+});
+</script>
+{% endblock %}

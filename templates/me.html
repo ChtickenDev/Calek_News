@@ -1,0 +1,11 @@
+{% extends "layout.html" %}
+{% block content %}
+<h3>Mon profil</h3>
+<ul class="list-group mb-3">
+  <li class="list-group-item bg-dark text-light d-flex justify-content-between"><span>Email</span><span>{{ current_user.email }}</span></li>
+  <li class="list-group-item bg-dark text-light d-flex justify-content-between"><span>Nom</span><span>{{ current_user.name or '—' }}</span></li>
+  <li class="list-group-item bg-dark text-light d-flex justify-content-between"><span>Inscrit le</span><span>{{ current_user.created_at.date() }}</span></li>
+  <li class="list-group-item bg-dark text-light d-flex justify-content-between"><span>Favoris</span><span>{{ current_user.favorites.count() }}</span></li>
+</ul>
+<a class="btn btn-outline-light" href="{{ url_for('favorites') }}">Voir mes favoris</a>
+{% endblock %}

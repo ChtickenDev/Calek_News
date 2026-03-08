@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="fr" data-bs-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CALEK NEWS</title>
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/calek-logo.png') }}">
+
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <!-- Thème global -->
+  <link href="{{ url_for('static', filename='css/theme.css') }}" rel="stylesheet">
+
+  <style>
+    /* Petit indicateur visuel : carte cliquable */
+    .card[role="button"] { cursor: pointer; }
+
+    /* Cartes qui ressortent un peu + hover doux */
+    .article-card, .side-card {
+      border: 1px solid rgba(0,0,0,.08);
+      background: var(--bs-body-bg);
+      transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+      border-radius: .75rem;
+    }
+    .article-card:hover, .side-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 26px rgba(0,0,0,.08);
+      border-color: rgba(0,0,0,.12);
+    }
+
+    .badge-soft {
+      background: rgba(0,0,0,.06);
+      color: var(--bs-body-color);
+      border: 1px solid rgba(0,0,0,.08);
+    }
+    .badge-journal {
+      display: inline-block;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      padding: .35rem .5rem;
+      border-radius: .5rem;
+    }
+
+    .line-clamp-2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+    .line-clamp-3{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+
+    /* Modale : résumé plus lisible */
+    #am-abstract p { margin-bottom: .5rem; }
+    #am-abstract p strong { color: var(--bs-emphasis-color); }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg sticky-top shadow-sm bg-body border-bottom">
+  <div class="container-fluid">
+    <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="{{ url_for('index') }}">
+      <img src="{{ url_for('static', filename='img/calek-logo.png') }}" alt="CALEK" class="logo-img" style="height:34px;width:auto;object-fit:contain">
+      <span>CALEK NEWS</span>
+    </a>
+
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+            aria-controls="navbarNav" aria-expanded="false" aria-label="Ouvrir la navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+        <li class="nav-item"><a class="nav-link{% if request.endpoint == 'index' %} active{% endif %}" href="{{ url_for('index') }}">Accueil</a></li>
+        {% if current_user.is_authenticated %}
+          <li class="nav-item"><a class="nav-link{% if request.endpoint == 'favorites' %} active{% endif %}" href="{{ url_for('favorites') }}">Favoris</a></li>
+          <li class="nav-item">
+            <a class="nav-link{% if request.endpoint == 'my_drafts' %} active{% endif %}" href="{{ url_for('my_drafts') }}">Mes recherches</a>
+          </li>
+          <li class="nav-item"><a class="nav-link{% if request.endpoint == 'me' %} active{% endif %}" href="{{ url_for('me') }}">Profil</a></li>
+          {% if current_user.role == 'admin' %}
+            <li class="nav-item"><a class="nav-link{% if request.endpoint and request.endpoint.startswith('admin_') %} active{% endif %}" href="{{ url_for('admin_dashboard') }}">Admin</a></li>
+          {% endif %}
+          {% if current_user.is_authenticated and current_user.role == 'admin' %}
+            <li class="nav-item"><a class="nav-link" href="{{ url_for('admin_proposals') }}">Propositions</a></li>
+          {% endif %}
+
+        {% endif %}
+      </ul>
+
+      <div class="d-flex align-items-center gap-3">
+        {% if current_user.is_authenticated %}
+          <span class="user-email text-nowrap">{{ current_user.email }}</span>
+          <a href="{{ url_for('logout') }}" class="btn btn-sm btn-outline-primary">Déconnexion</a>
+        {% else %}
+          <a href="{{ url_for('login') }}" class="btn btn-sm btn-outline-primary">Connexion</a>
+          <a href="{{ url_for('signup') }}" class="btn btn-sm btn-primary">Inscription</a>
+        {% endif %}
+        <button id="theme-toggle" class="btn btn-sm btn-outline-secondary" title="Basculer le thème" aria-label="Basculer le thème">🌞</button>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<main class="container py-4">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="mb-3">
+        {% for cat, msg in messages %}
+          <div class="alert alert-{{ 'warning' if cat=='message' else cat }} mb-2">{{ msg }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  {% block content %}{% endblock %}
+</main>
+
+<!-- MODALE GLOBALE ARTICLE (utilisable partout) -->
+<div class="modal fade" id="articleModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 id="am-title" class="modal-title"></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+      </div>
+      <div class="modal-body">
+        <div class="d-flex flex-wrap gap-2 mb-2">
+          <span id="am-journal" class="badge badge-soft badge-journal" style="display:none"></span>
+          <span id="am-source"  class="badge badge-soft" style="display:none"></span>
+          <span id="am-domain"  class="badge badge-soft" style="display:none"></span>
+          <span id="am-pathology" class="badge badge-soft" style="display:none"></span>
+          <span id="am-studytype" class="badge badge-soft" style="display:none"></span>
+        </div>
+
+        <p id="am-authors" class="small text-muted mb-2"></p>
+
+        <div class="small text-muted mb-3">
+          <span id="am-pubdate"></span>
+          <span id="am-sitedate" class="ms-2"></span>
+          <span id="am-credit" class="ms-2 fw-semibold text-primary" style="display:none"></span>
+        </div>
+
+        <div class="mb-3">
+          <div class="d-flex align-items-center justify-content-between">
+            <strong>Indice de fiabilité : <span id="am-rel-level">—</span></strong>
+            <span id="am-rel-score" class="small text-muted"></span>
+          </div>
+          <div class="progress mt-2" style="height:10px;">
+            <div id="am-rel-bar" class="progress-bar" role="progressbar" style="width:0%;" aria-valuemin="0" aria-valuemax="100"></div>
+          </div>
+          <ul id="am-rel-reasons" class="small mt-2 mb-0"></ul>
+        </div>
+
+        <h6 class="mb-2">Résumé</h6>
+        <div id="am-abstract" class="mb-0"></div>
+      </div>
+      <div class="modal-footer d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-2">
+          <a id="am-url" href="#" target="_blank" class="btn btn-primary" style="display:none;">Ouvrir</a>
+          <a id="am-doi" href="#" target="_blank" class="btn btn-outline-primary" style="display:none;">DOI</a>
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fermer</button>
+        </div>
+
+        {# ---- Formulaire "Proposer la publication" ---- #}
+        {% if current_user.is_authenticated %}
+        <form id="proposal-form" action="/propose" method="post" class="d-flex align-items-center gap-2">
+          <!-- ⚠️ Le JS remplit cet id automatiquement -->
+          <input type="hidden" id="pf-article-id" name="article_id" value="">
+          <label class="small d-flex align-items-center gap-1 mb-0">
+            <input id="pf-share" type="checkbox" name="share_name" class="form-check-input">
+            <span>Afficher mon nom</span>
+          </label>
+          <input id="pf-note" type="text" name="note" class="form-control form-control-sm"
+                placeholder="(optionnel) Un mot pour l’équipe" style="max-width: 260px;">
+          <button id="pf-submit" type="submit" class="btn btn-sm btn-success">
+            Proposer la publication
+          </button>
+        </form>
+        {% else %}
+        <div id="proposal-form" class="text-muted small">
+          Connectez-vous pour proposer une publication.
+        </div>
+        {% endif %}
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+/* ---------- Thème (clair/sombre) ---------- */
+(function initTheme(){
+  const saved = localStorage.getItem('theme');
+  const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const initial = saved || (prefersDark ? 'dark' : 'light');
+  document.documentElement.setAttribute('data-bs-theme', initial);
+  const btn = document.getElementById('theme-toggle');
+  if (btn) btn.textContent = (initial === 'dark') ? '🌙' : '🌞';
+})();
+function setTheme(mode){
+  document.documentElement.setAttribute('data-bs-theme', mode);
+  localStorage.setItem('theme', mode);
+  const btn = document.getElementById('theme-toggle');
+  if (btn) btn.textContent = (mode === 'dark') ? '🌙' : '🌞';
+}
+document.getElementById('theme-toggle')?.addEventListener('click', ()=>{
+  const current = document.documentElement.getAttribute('data-bs-theme') || 'light';
+  setTheme(current === 'dark' ? 'light' : 'dark');
+});
+
+/* ---------- Helpers résumé (JATS → paragraphes + titres) ---------- */
+function formatAbstract(raw) {
+  if (!raw) return "<p class='text-muted fst-italic'>Résumé non disponible.</p>";
+  try {
+    // retire le namespace jats:
+    const html = raw.replace(/<\s*\/?\s*jats:/gi, m => m.replace(/jats:/gi, ''));
+    const div = document.createElement('div'); div.innerHTML = html;
+
+    const secs = div.querySelectorAll('sec, section');
+    if (secs.length) {
+      const out = [];
+      secs.forEach(sec => {
+        const t = sec.querySelector('title')?.textContent?.trim();
+        const ps = sec.querySelectorAll('p');
+        const text = Array.from(ps).map(p => p.textContent.trim()).join(' ');
+        if (t || text) out.push(`<p><strong>${t ? (t.replace(/[:.]\s*$/,'') + '.</strong> ') : ''}${text}</p>`);
+      });
+      if (out.length) return out.join('');
+    }
+    const ps = div.querySelectorAll('p');
+    if (ps.length) return Array.from(ps).map(p => `<p>${p.textContent.trim()}</p>`).join('');
+  } catch(_) {}
+
+  // fallback : strip + segment simple
+  const strip = s => { const d=document.createElement('div'); d.innerHTML=s; return (d.textContent||d.innerText||'').replace(/\s+/g,' ').trim(); };
+  const text = strip(raw);
+  if (!text) return "<p class='text-muted fst-italic'>Résumé non disponible.</p>";
+  const HEAD = ['abstract','background','purpose','objective','aim','aims','methods','materials and methods','patients and methods','method','results','findings','discussion','conclusion','conclusions','interpretation','clinical implications'];
+  const re = new RegExp(`(^|[.!?]\\s+)(${HEAD.join('|')})\\b`, 'gi');
+  const marker='§§§MARK§§§';
+  const marked = text.replace(re,(m,lead,head)=>`${lead}${marker}${head}`);
+  const chunks = marked.split(marker).map(s=>s.trim()).filter(Boolean);
+  function cap(s){ return s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : s; }
+  if (chunks.length>1){
+    const out=[];
+    for(const ch of chunks){
+      const m = ch.match(new RegExp(`^(${HEAD.join('|')})\\b`,'i'));
+      if(m){ const title=cap(m[1]); const body=ch.slice(m[0].length).trim(); out.push(`<p><strong>${title}.</strong> ${body}</p>`); }
+      else out.push(`<p>${ch}</p>`);
+    }
+    return out.join('');
+  }
+  return `<p>${text}</p>`;
+}
+
+/* ---------- Modale Article (fetch + rendu) ---------- */
+async function openArticleModal(id) {
+  try {
+    const res = await fetch(`/api/article/${id}`);
+    const data = await res.json();
+
+    // Mémorise l'id dans le modal et globalement si tu t'en sers ailleurs
+    const modalEl = document.getElementById('articleModal');
+    modalEl.setAttribute('data-current-id', String(id));
+    window._lastArticleId = id;
+
+    // --------- Titre / auteurs ----------
+    document.getElementById('am-title').textContent = data.title || "Sans titre";
+    document.getElementById('am-authors').textContent = data.authors || "";
+
+    // --------- Badges ----------
+    const setBadge = (bid, val) => {
+      const el = document.getElementById(bid);
+      if (!el) return;
+      if (val) { el.textContent = val; el.style.display = ""; }
+      else { el.textContent = ""; el.style.display = "none"; }
+    };
+    setBadge('am-journal', data.journal);
+    setBadge('am-source', data.source ? `Source: ${data.source}` : "");
+    setBadge('am-domain', data.domain);
+    setBadge('am-pathology', data.pathology);
+    setBadge('am-studytype', data.study_type);
+
+    // --------- Dates & crédit public ----------
+    const fmt = iso => {
+      if (!iso) return null;
+      try { const d = new Date(iso); return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}); }
+      catch { return null; }
+    };
+    const pub = fmt(data.published_date);
+    const add = fmt(data.published_at);
+    document.getElementById('am-pubdate').textContent = pub ? `Paru le ${pub}` : "";
+    document.getElementById('am-sitedate').textContent = add ? `Ajouté le ${add}` : "";
+
+    const credit = document.getElementById('am-credit');
+    if (credit) {
+      if (data.credit_name) { credit.textContent = `Proposé par ${data.credit_name}`; credit.style.display = ''; }
+      else { credit.textContent = ''; credit.style.display = 'none'; }
+    }
+
+    // --------- Résumé ----------
+    document.getElementById('am-abstract').innerHTML = formatAbstract(data.abstract);
+
+    // --------- Liens ----------
+    const urlBtn = document.getElementById('am-url');
+    if (urlBtn) { if (data.url) { urlBtn.href = data.url; urlBtn.style.display=""; } else { urlBtn.style.display="none"; } }
+    const doiBtn = document.getElementById('am-doi');
+    if (doiBtn) { if (data.doi) { doiBtn.href = `https://doi.org/${data.doi}`; doiBtn.style.display=""; } else { doiBtn.style.display="none"; } }
+
+    // --------- Indice de fiabilité ----------
+    const bar = document.getElementById('am-rel-bar');
+    const level = document.getElementById('am-rel-level');
+    const score = document.getElementById('am-rel-score');
+    const reasons = document.getElementById('am-rel-reasons');
+
+    const sc = (data.reliability && data.reliability.score) || 0;
+    const lv = (data.reliability && data.reliability.level) || "—";
+    const rs = (data.reliability && data.reliability.reasons) || [];
+
+    if (bar) {
+      bar.style.width = `${sc}%`;
+      bar.classList.remove('bg-danger','bg-warning','bg-success','bg-primary');
+      if (sc >= 80) bar.classList.add('bg-success');
+      else if (sc >= 60) bar.classList.add('bg-primary');
+      else if (sc >= 40) bar.classList.add('bg-warning');
+      else bar.classList.add('bg-danger');
+    }
+    if (level) level.textContent = lv;
+    if (score) score.textContent = `${sc}/100`;
+    if (reasons) reasons.innerHTML = rs.map(r => `<li>${r}</li>`).join('') || '<li>Aucune raison listée</li>';
+
+    // --------- Formulaire "Proposer la publication" ----------
+    const propForm = document.getElementById('proposal-form');
+    const propBtn  = document.getElementById('pf-submit');
+    const propId   = document.getElementById('pf-article-id'); // <input type="hidden" name="article_id">
+    const propShare= document.getElementById('pf-share');      // <input type="checkbox" name="share_name">
+    const propNote = document.getElementById('pf-note');       // <input name="note">
+
+    if (propForm && propBtn) {
+      // On utilise /propose (sans id dans l'URL) et on passe l'id via un champ hidden
+      propForm.action = '/propose';
+      if (propId) propId.value = String(id);
+
+      // État selon API
+      const allowed = !!(data && data.proposal && data.proposal.allowed);
+      const already = !!(data && data.proposal && data.proposal.already);
+
+      if (!allowed) {
+        propBtn.disabled = true;
+        propBtn.textContent = 'Connectez-vous pour proposer';
+      } else if (already) {
+        propBtn.disabled = true;
+        propBtn.textContent = 'Déjà proposé ✓';
+      } else {
+        propBtn.disabled = false;
+        propBtn.textContent = 'Proposer la publication';
+      }
+
+      // Attache l'écouteur une seule fois
+      if (!propForm.dataset.listenerAttached) {
+        propForm.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          if (propBtn.disabled) return;
+
+          propBtn.disabled = true;
+          const fd = new FormData(propForm);
+          // fallback si le hidden manquait pour une raison quelconque
+          if (!fd.get('article_id')) fd.append('article_id', String(window._lastArticleId || id));
+
+          try {
+            const resp = await fetch(propForm.action, {
+              method: 'POST',
+              body: fd,
+              headers: { 'Accept': 'application/json' }
+            });
+
+            if (resp.status === 401) {
+              propBtn.textContent = 'Connectez-vous';
+              return;
+            }
+
+            const json = await resp.json().catch(() => ({}));
+            if (json.ok) {
+              propBtn.textContent = (json.status === 'already') ? 'Déjà proposé ✓' : 'Proposition envoyée ✓';
+            } else {
+              propBtn.textContent = 'Erreur';
+              propBtn.disabled = false;
+            }
+          } catch (err) {
+            console.error(err);
+            propBtn.textContent = 'Erreur réseau';
+            propBtn.disabled = false;
+          }
+        });
+        propForm.dataset.listenerAttached = '1';
+      }
+
+      // Rendre visible le formulaire dans le modal
+      propForm.style.display = '';
+      if (propShare) propShare.checked = false; // reset
+      if (propNote)  propNote.value = '';       // reset
+    }
+
+    // --------- Ouvre le modal ----------
+    const modal = new bootstrap.Modal(modalEl);
+    modal.show();
+
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+/* ---------- Bouton "Proposer la publication" ---------- */
+(function bindPropose(){
+  const btn = document.getElementById('am-propose');
+  if(!btn) return;
+  btn.addEventListener('click', async () => {
+    const modalEl = document.getElementById('articleModal');
+    const articleId = modalEl?.getAttribute('data-current-id') || window._lastArticleId;
+    if(!articleId){ return; }
+
+    const showName = confirm("Souhaitez-vous afficher votre nom publiquement sur cet article si publié ?\n(OK = OUI, Annuler = NON)");
+    const note = prompt("Optionnel : laissez un message à l’équipe (laisser vide sinon)") || "";
+
+    const fd = new FormData();
+    fd.append('show_name', showName ? 'true' : 'false');
+    fd.append('note', note);
+
+    try {
+      const res = await fetch(`/propose/${articleId}`, { method: 'POST', body: fd, headers: { 'Accept':'application/json' }, redirect: 'follow' });
+      const ct = res.headers.get('content-type') || '';
+      if (res.status === 401 || (res.url && res.url.includes('/login')) || ct.includes('text/html')) {
+        window.location.href = '/login';
+        return;
+      }
+      const data = await res.json().catch(()=>({}));
+      alert(data.message || 'Proposition envoyée. Merci !');
+    } catch(e){
+      alert("Erreur réseau, réessayez.");
+    }
+  });
+})();
+
+/* ---------- Délégation : ouvrir la modale en cliquant une carte ---------- */
+/* Nécessite que les cartes aient: class="article-card" et data-article-id="<ID de l’article>" */
+document.addEventListener('click', (e) => {
+  const interactive = e.target.closest('a, button, input, textarea, select, label, form');
+  if (interactive) return; // on laisse les éléments interactifs agir normalement
+  const card = e.target.closest('.article-card[data-article-id], .card[data-article-id]');
+  if (!card) return;
+  const id = card.getAttribute('data-article-id');
+  if (id) openArticleModal(id);
+});
+</script>
+
+{% block scripts %}{% endblock %}
+
+</body>
+</html>
