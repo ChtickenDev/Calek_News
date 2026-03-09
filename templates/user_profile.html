@@ -1,0 +1,161 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<div class="d-flex align-items-start justify-content-between flex-wrap gap-3 mb-4">
+  <div>
+    <h3 class="mb-1">{{ profile_user.name or profile_user.email.split('@')[0] }}</h3>
+    <p class="text-muted small mb-2">{{ profile_user.email }}</p>
+    <div class="d-flex gap-3 small text-muted">
+      <span><strong>{{ followers_count }}</strong> abonné{{ 's' if followers_count > 1 else '' }}</span>
+      <span><strong>{{ following_count }}</strong> abonnement{{ 's' if following_count > 1 else '' }}</span>
+      <span><strong>{{ public_favs|length }}</strong> favori{{ 's' if public_favs|length > 1 else '' }} public{{ 's' if public_favs|length > 1 else '' }}</span>
+    </div>
+  </div>
+
+  {% if profile_user.id != current_user.id %}
+    <button id="follow-btn"
+            class="btn {{ 'btn-outline-primary' if is_following else 'btn-primary' }}"
+            onclick="toggleFollow({{ profile_user.id }}, {{ 'true' if is_following else 'false' }})">
+      {{ "Se désabonner" if is_following else "Suivre" }}
+    </button>
+  {% endif %}
+</div>
+
+<!-- Dossiers publics -->
+{% if public_folders %}
+<h5 class="mb-3">📁 Dossiers publics</h5>
+<div class="d-flex flex-wrap gap-2 mb-4">
+  {% for f in public_folders %}
+    <a href="{{ url_for('folder_view', folder_id=f.id) }}" class="btn btn-outline-primary btn-sm">
+      📁 {{ f.name }}
+    </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Favoris publics -->
+<h5 class="mb-3">Favoris publics</h5>
+
+{% if public_favs %}
+<div class="row gy-3">
+  {% for f in public_favs %}
+  {% set a = f.article %}
+    {% set sc = (reliability_score(a)[0]) if reliability_score is defined else None %}
+    {% set ifs_cls = 'badge-ifs-success' if sc is not none and sc>=80
+                      else ('badge-ifs-primary' if sc is not none and sc>=60
+                      else ('badge-ifs-warning' if sc is not none and sc>=40 else 'badge-ifs-danger')) %}
+    <div class="col-md-6 col-lg-4">
+      <div class="card h-100 article-card p-3" data-article-id="{{ a.id }}" role="button" tabindex="0">
+
+        <div class="d-flex flex-wrap gap-2 mb-2 align-items-center">
+          {% if sc is not none %}<span class="badge badge-ifs {{ ifs_cls }}">IFS: {{ sc }}</span>{% endif %}
+          {% if a.domain %}<span class="badge badge-soft">{{ a.domain }}</span>{% endif %}
+          {% if a.study_type %}<span class="badge badge-soft">{{ a.study_type }}</span>{% endif %}
+        </div>
+
+        <h6 class="fw-bold line-clamp-2 mb-1">{{ a.title }}</h6>
+        {% if a.authors %}<p class="text-muted small mb-1">{{ a.authors }}</p>{% endif %}
+
+        <div class="small text-muted mb-2 d-flex flex-wrap gap-2">
+          {% if a.journal %}<span class="badge badge-soft badge-journal">{{ a.journal }}</span>{% endif %}
+          {% if a.published_date %}<span>Paru le {{ a.published_date.strftime('%d %b %Y') }}</span>{% endif %}
+        </div>
+
+        {% if f.public_note %}
+          <div class="alert alert-light py-2 px-3 small mb-2">
+            💬 {{ f.public_note }}
+          </div>
+        {% endif %}
+
+        {% if a.abstract %}
+          <p class="small line-clamp-3 mb-3">{{ (a.abstract|striptags)[:320] }}{% if a.abstract|length > 320 %}…{% endif %}</p>
+        {% else %}
+          <p class="small text-muted mb-3 fst-italic">Résumé non disponible.</p>
+        {% endif %}
+
+        <div class="mt-auto d-flex gap-2">
+          {% if a.url %}<a class="btn btn-sm btn-primary" href="{{ a.url }}" target="_blank" onclick="event.stopPropagation()">Ouvrir</a>{% endif %}
+          {% if a.doi %}<a class="btn btn-sm btn-outline-primary" href="https://doi.org/{{ a.doi }}" target="_blank" onclick="event.stopPropagation()">DOI</a>{% endif %}
+        </div>
+
+      </div>
+    </div>
+  {% endfor %}
+</div>
+{% else %}
+  <p class="text-muted">Aucun favori public pour le moment.</p>
+{% endif %}
+
+<!-- Modal article -->
+<div class="modal fade" id="articleModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 id="am-title" class="modal-title"></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="d-flex flex-wrap gap-2 mb-2">
+          <span id="am-journal" class="badge badge-soft badge-journal"></span>
+          <span id="am-ifs" class="badge badge-ifs"></span>
+          <span id="am-domain" class="badge badge-soft"></span>
+          <span id="am-studytype" class="badge badge-soft"></span>
+        </div>
+        <p id="am-authors" class="small text-muted mb-2"></p>
+        <div class="small text-muted mb-3">
+          <span id="am-pubdate"></span>
+        </div>
+        <h6 class="mb-2">Résumé</h6>
+        <div id="am-abstract" class="mb-0"></div>
+      </div>
+      <div class="modal-footer">
+        <a id="am-url" href="#" target="_blank" class="btn btn-primary" style="display:none;">Ouvrir</a>
+        <a id="am-doi" href="#" target="_blank" class="btn btn-outline-primary" style="display:none;">DOI</a>
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fermer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function toggleFollow(userId, isFollowing) {
+  const url = isFollowing ? `/unfollow/${userId}` : `/follow/${userId}`;
+  const res = await fetch(url, {method: 'POST'});
+  const data = await res.json();
+  if (data.ok) location.reload();
+}
+
+let articleModalInstance = null;
+async function openArticleModal(id) {
+  try {
+    document.querySelectorAll('.modal-backdrop').forEach(bd => bd.remove());
+    const res = await fetch(`/api/article/${id}`);
+    const data = await res.json();
+    document.getElementById('am-title').textContent = data.title || "Sans titre";
+    document.getElementById('am-authors').textContent = data.authors || "";
+    const setBadge = (id, val) => { const el=document.getElementById(id); if(val){el.textContent=val; el.style.display="";} else el.style.display="none"; };
+    setBadge('am-journal', data.journal);
+    setBadge('am-domain', data.domain);
+    setBadge('am-studytype', data.study_type);
+    const sc = (data.reliability && data.reliability.score) || null;
+    const ifs = document.getElementById('am-ifs');
+    if (sc!==null){ ifs.textContent=`IFS: ${sc}`; ifs.style.display=''; } else { ifs.style.display='none'; }
+    const fmt = iso => { if(!iso) return null; try{ const d=new Date(iso); return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'});}catch{return null;} };
+    document.getElementById('am-pubdate').textContent = fmt(data.published_date) ? `Paru le ${fmt(data.published_date)}` : "";
+    document.getElementById('am-abstract').innerHTML = data.abstract ? `<p>${data.abstract}</p>` : "<p class='text-muted fst-italic'>Résumé non disponible.</p>";
+    const urlBtn = document.getElementById('am-url'); if (data.url) { urlBtn.href = data.url; urlBtn.style.display=""; } else urlBtn.style.display="none";
+    const doiBtn = document.getElementById('am-doi'); if (data.doi) { doiBtn.href = `https://doi.org/${data.doi}`; doiBtn.style.display=""; } else doiBtn.style.display="none";
+    const modalEl = document.getElementById('articleModal');
+    if (!articleModalInstance) articleModalInstance = new bootstrap.Modal(modalEl);
+    articleModalInstance.show();
+  } catch(e){ console.error(e); }
+}
+document.querySelectorAll('.card[data-article-id]').forEach(card => {
+  card.querySelectorAll('a,button,form').forEach(el => el.addEventListener('click', e => e.stopPropagation()));
+  card.addEventListener('click', () => { const id=card.getAttribute('data-article-id'); if(id) openArticleModal(id); });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,199 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<div class="d-flex align-items-center justify-content-between mb-1 flex-wrap gap-2">
+  <div>
+    <h3 class="mb-0">{% if discovery %}Découverte{% else %}Mon feed{% endif %}</h3>
+    <p class="text-muted small mb-0">
+      {% if discovery %}
+        Tu ne suis personne encore — voici ce que la communauté partage.
+      {% else %}
+        Les favoris publics des personnes que tu suis.
+      {% endif %}
+    </p>
+  </div>
+  <a href="{{ url_for('users_list') }}" class="btn btn-outline-primary btn-sm">👥 Trouver des profils</a>
+</div>
+
+<hr class="mb-4">
+
+{% if not items %}
+  <div class="text-center py-5 text-muted">
+    <p class="fs-5">Aucun contenu partagé pour le moment.</p>
+    <a href="{{ url_for('users_list') }}" class="btn btn-primary mt-2">Trouver des profils à suivre</a>
+  </div>
+{% else %}
+<div class="row gy-3">
+  {% for f in items %}
+  {% set a = f.article %}
+  {% set u = f.user %}
+    {% set sc = (reliability_score(a)[0]) if reliability_score is defined else None %}
+    {% set ifs_cls = 'badge-ifs-success' if sc is not none and sc>=80
+                      else ('badge-ifs-primary' if sc is not none and sc>=60
+                      else ('badge-ifs-warning' if sc is not none and sc>=40 else 'badge-ifs-danger')) %}
+    <div class="col-md-6 col-lg-4">
+      <div class="card h-100 article-card p-3" data-article-id="{{ a.id }}" role="button" tabindex="0">
+
+        <!-- Auteur -->
+        <div class="d-flex align-items-center gap-2 mb-3" onclick="event.stopPropagation()">
+          <div class="avatar-circle">{{ (u.name or u.email)[0].upper() }}</div>
+          <div class="flex-grow-1 min-w-0">
+            <a href="{{ url_for('user_profile', user_id=u.id) }}"
+               class="text-decoration-none fw-semibold text-dark d-block text-truncate">
+              {{ u.name or u.email.split('@')[0] }}
+            </a>
+            <span class="text-muted" style="font-size:0.72rem;">{{ f.created_at.strftime('%d %b %Y') }}</span>
+          </div>
+          {% if u.id not in followed_ids and u.id != current_user.id %}
+            <button class="btn btn-sm btn-outline-primary follow-btn flex-shrink-0"
+                    data-user-id="{{ u.id }}"
+                    onclick="event.stopPropagation(); followUser({{ u.id }}, this)">
+              + Suivre
+            </button>
+          {% elif u.id in followed_ids %}
+            <span class="badge bg-success-subtle text-success flex-shrink-0" style="font-size:0.7rem;">Abonné·e</span>
+          {% endif %}
+        </div>
+
+        <div class="d-flex flex-wrap gap-2 mb-2 align-items-center">
+          {% if sc is not none %}<span class="badge badge-ifs {{ ifs_cls }}">IFS: {{ sc }}</span>{% endif %}
+          {% if a.domain %}<span class="badge badge-soft">{{ a.domain }}</span>{% endif %}
+          {% if a.study_type %}<span class="badge badge-soft">{{ a.study_type }}</span>{% endif %}
+        </div>
+
+        <h6 class="fw-bold line-clamp-2 mb-1">{{ a.title }}</h6>
+        {% if a.authors %}<p class="text-muted small mb-1">{{ a.authors }}</p>{% endif %}
+
+        <div class="small text-muted mb-2 d-flex flex-wrap gap-2">
+          {% if a.journal %}<span class="badge badge-soft badge-journal">{{ a.journal }}</span>{% endif %}
+          {% if a.published_date %}<span>Paru le {{ a.published_date.strftime('%d %b %Y') }}</span>{% endif %}
+        </div>
+
+        {% if f.public_note %}
+          <div class="public-note-box mb-2">
+            💬 {{ f.public_note }}
+          </div>
+        {% endif %}
+
+        {% if a.abstract %}
+          <p class="small line-clamp-3 mb-3">{{ (a.abstract|striptags)[:320] }}{% if a.abstract|length > 320 %}…{% endif %}</p>
+        {% else %}
+          <p class="small text-muted mb-3 fst-italic">Résumé non disponible.</p>
+        {% endif %}
+
+        <div class="mt-auto d-flex gap-2" onclick="event.stopPropagation()">
+          {% if a.url %}<a class="btn btn-sm btn-primary" href="{{ a.url }}" target="_blank">Ouvrir</a>{% endif %}
+          {% if a.doi %}<a class="btn btn-sm btn-outline-primary" href="https://doi.org/{{ a.doi }}" target="_blank">DOI</a>{% endif %}
+        </div>
+
+      </div>
+    </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Modal article -->
+<div class="modal fade" id="articleModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 id="am-title" class="modal-title"></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="d-flex flex-wrap gap-2 mb-2">
+          <span id="am-journal" class="badge badge-soft badge-journal"></span>
+          <span id="am-ifs" class="badge badge-ifs"></span>
+          <span id="am-domain" class="badge badge-soft"></span>
+          <span id="am-studytype" class="badge badge-soft"></span>
+        </div>
+        <p id="am-authors" class="small text-muted mb-2"></p>
+        <div class="small text-muted mb-3"><span id="am-pubdate"></span></div>
+        <div class="mb-3">
+          <div class="d-flex align-items-center justify-content-between">
+            <strong>Indice de fiabilité : <span id="am-rel-level">—</span></strong>
+            <span id="am-rel-score" class="small text-muted"></span>
+          </div>
+          <div class="progress mt-2" style="height:10px;">
+            <div id="am-rel-bar" class="progress-bar" role="progressbar" style="width:0%;"></div>
+          </div>
+          <ul id="am-rel-reasons" class="small mt-2 mb-0"></ul>
+        </div>
+        <h6 class="mb-2">Résumé</h6>
+        <div id="am-abstract" class="mb-0"></div>
+      </div>
+      <div class="modal-footer">
+        <a id="am-url" href="#" target="_blank" class="btn btn-primary" style="display:none;">Ouvrir</a>
+        <a id="am-doi" href="#" target="_blank" class="btn btn-outline-primary" style="display:none;">DOI</a>
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fermer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<style>
+.avatar-circle {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff; font-weight: 700; font-size: 0.85rem;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.public-note-box {
+  background: #f8f9fa; border-left: 3px solid #6366f1;
+  border-radius: 0 6px 6px 0; padding: 8px 12px;
+  font-size: 0.82rem; color: #444;
+}
+.badge-ifs { background: var(--bs-warning-bg-subtle,#fff3cd); color:#6c4b00; border:1px solid rgba(0,0,0,.08); }
+</style>
+<script>
+async function followUser(userId, btn) {
+  const res = await fetch(`/follow/${userId}`, {method: 'POST'});
+  const data = await res.json();
+  if (data.ok) {
+    btn.outerHTML = `<span class="badge bg-success-subtle text-success flex-shrink-0" style="font-size:0.7rem;">Abonné·e</span>`;
+  }
+}
+
+let articleModalInstance = null;
+async function openArticleModal(id) {
+  try {
+    document.querySelectorAll('.modal-backdrop').forEach(bd => bd.remove());
+    const res = await fetch(`/api/article/${id}`);
+    const data = await res.json();
+    document.getElementById('am-title').textContent = data.title || "Sans titre";
+    document.getElementById('am-authors').textContent = data.authors || "";
+    const setBadge = (id, val) => { const el=document.getElementById(id); if(val){el.textContent=val;el.style.display="";}else el.style.display="none"; };
+    setBadge('am-journal', data.journal);
+    setBadge('am-domain', data.domain);
+    setBadge('am-studytype', data.study_type);
+    const sc = (data.reliability && data.reliability.score) || null;
+    const lv = (data.reliability && data.reliability.level) || "—";
+    const rs = (data.reliability && data.reliability.reasons) || [];
+    const ifs = document.getElementById('am-ifs');
+    if (sc!==null){ ifs.textContent=`IFS: ${sc}`; ifs.style.display=''; } else { ifs.style.display='none'; }
+    const fmt = iso => { if(!iso) return null; try{ const d=new Date(iso); return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'});}catch{return null;} };
+    document.getElementById('am-pubdate').textContent = fmt(data.published_date) ? `Paru le ${fmt(data.published_date)}` : "";
+    document.getElementById('am-abstract').innerHTML = data.abstract ? `<p>${data.abstract}</p>` : "<p class='text-muted fst-italic'>Résumé non disponible.</p>";
+    const urlBtn = document.getElementById('am-url'); if(data.url){urlBtn.href=data.url;urlBtn.style.display="";}else urlBtn.style.display="none";
+    const doiBtn = document.getElementById('am-doi'); if(data.doi){doiBtn.href=`https://doi.org/${data.doi}`;doiBtn.style.display="";}else doiBtn.style.display="none";
+    const bar = document.getElementById('am-rel-bar');
+    bar.style.width=`${sc||0}%`; bar.className='progress-bar';
+    if(sc>=80) bar.classList.add('bg-success'); else if(sc>=60) bar.classList.add('bg-primary'); else if(sc>=40) bar.classList.add('bg-warning'); else bar.classList.add('bg-danger');
+    document.getElementById('am-rel-level').textContent = lv;
+    document.getElementById('am-rel-score').textContent = `${sc||0}/100`;
+    document.getElementById('am-rel-reasons').innerHTML = rs.map(r=>`<li>${r}</li>`).join('') || '<li>Aucune raison listée</li>';
+    const modalEl = document.getElementById('articleModal');
+    if(!articleModalInstance) articleModalInstance = new bootstrap.Modal(modalEl);
+    articleModalInstance.show();
+  } catch(e){ console.error(e); }
+}
+document.querySelectorAll('.card[data-article-id]').forEach(card => {
+  card.querySelectorAll('a,button,form').forEach(el => el.addEventListener('click', e => e.stopPropagation()));
+  card.addEventListener('click', () => { const id=card.getAttribute('data-article-id'); if(id) openArticleModal(id); });
+});
+</script>
+{% endblock %}

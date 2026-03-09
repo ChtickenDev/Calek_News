@@ -1,0 +1,121 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<div class="d-flex align-items-center justify-content-between mb-1 flex-wrap gap-2">
+  <div>
+    <h3 class="mb-0">👥 Trouver des profils</h3>
+    <p class="text-muted small mb-0">{{ users|length }} membre{{ 's' if users|length > 1 else '' }} sur la plateforme</p>
+  </div>
+</div>
+
+<hr class="mb-4">
+
+<!-- Recherche -->
+<div class="mb-4" style="max-width: 420px;">
+  <div class="input-group">
+    <span class="input-group-text bg-white border-end-0">🔍</span>
+    <input type="text" id="search-input" class="form-control border-start-0 ps-0"
+           placeholder="Rechercher par nom ou email..."
+           oninput="filterUsers(this.value)">
+  </div>
+</div>
+
+<!-- Grille utilisateurs -->
+<div class="row gy-3" id="users-grid">
+  {% for u in users %}
+  {% set s = stats[u.id] %}
+  <div class="col-md-6 col-lg-4 user-card-col"
+       data-name="{{ (u.name or '')|lower }}"
+       data-email="{{ u.email|lower }}">
+    <div class="card p-3 h-100 d-flex flex-row align-items-center gap-3">
+
+      <!-- Avatar -->
+      <div class="avatar-circle-lg flex-shrink-0">
+        {{ (u.name or u.email)[0].upper() }}
+      </div>
+
+      <!-- Infos -->
+      <div class="flex-grow-1 min-w-0">
+        <div class="fw-semibold text-truncate">{{ u.name or u.email.split('@')[0] }}</div>
+        <div class="text-muted small text-truncate mb-2">{{ u.email }}</div>
+        <div class="d-flex gap-3 small text-muted">
+          <span>📄 <strong>{{ s.pub_favs }}</strong> favori{{ 's' if s.pub_favs > 1 else '' }}</span>
+          <span>👥 <strong>{{ s.followers }}</strong> abonn{{ 'és' if s.followers > 1 else 'é' }}</span>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex-shrink-0 d-flex flex-column gap-2 align-items-end">
+        <a href="{{ url_for('user_profile', user_id=u.id) }}"
+           class="btn btn-sm btn-outline-secondary">Profil</a>
+        {% if u.id in followed_ids %}
+          <button class="btn btn-sm btn-success unfollow-btn"
+                  data-user-id="{{ u.id }}"
+                  onclick="unfollowUser({{ u.id }}, this)">
+            ✓ Abonné·e
+          </button>
+        {% else %}
+          <button class="btn btn-sm btn-primary follow-btn"
+                  data-user-id="{{ u.id }}"
+                  onclick="followUser({{ u.id }}, this)">
+            + Suivre
+          </button>
+        {% endif %}
+      </div>
+
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div id="no-results" class="text-muted text-center py-5" style="display:none;">
+  Aucun résultat pour cette recherche.
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<style>
+.avatar-circle-lg {
+  width: 46px; height: 46px; border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff; font-weight: 700; font-size: 1.1rem;
+  display: flex; align-items: center; justify-content: center;
+}
+</style>
+<script>
+function filterUsers(query) {
+  const q = query.toLowerCase().trim();
+  const cols = document.querySelectorAll('.user-card-col');
+  let visible = 0;
+  cols.forEach(col => {
+    const name = col.dataset.name || '';
+    const email = col.dataset.email || '';
+    const match = !q || name.includes(q) || email.includes(q);
+    col.style.display = match ? '' : 'none';
+    if (match) visible++;
+  });
+  document.getElementById('no-results').style.display = visible === 0 ? 'block' : 'none';
+}
+
+async function followUser(userId, btn) {
+  const res = await fetch(`/follow/${userId}`, {method: 'POST'});
+  const data = await res.json();
+  if (data.ok) {
+    btn.className = 'btn btn-sm btn-success unfollow-btn';
+    btn.textContent = '✓ Abonné·e';
+    btn.onclick = function() { unfollowUser(userId, this); };
+  }
+}
+
+async function unfollowUser(userId, btn) {
+  const res = await fetch(`/unfollow/${userId}`, {method: 'POST'});
+  const data = await res.json();
+  if (data.ok) {
+    btn.className = 'btn btn-sm btn-primary follow-btn';
+    btn.textContent = '+ Suivre';
+    btn.onclick = function() { followUser(userId, this); };
+  }
+}
+</script>
+{% endblock %}

@@ -30,6 +30,15 @@
 <!-- Vue dossier -->
 <div class="d-flex align-items-center gap-2 mb-3">
   <h5 class="mb-0">📁 {{ active_folder.name }}</h5>
+
+  <!-- Visibilité du dossier -->
+  <button class="btn btn-sm {{ 'btn-success' if active_folder.is_public else 'btn-outline-secondary' }}"
+          id="folder-vis-btn"
+          onclick="toggleFolderVisibility({{ active_folder.id }}, this)"
+          title="{{ 'Public - cliquer pour rendre privé' if active_folder.is_public else 'Privé - cliquer pour rendre public' }}">
+    {{ '🌐' if active_folder.is_public else '🔒' }}
+  </button>
+
   <form method="post" action="{{ url_for('folder_delete', folder_id=active_folder.id) }}"
         onsubmit="return confirm('Supprimer ce dossier ?')">
     <button class="btn btn-sm btn-outline-danger">Supprimer le dossier</button>
@@ -121,9 +130,31 @@
           {% endfor %}
         </div>
 
+        <!-- Note publique existante -->
+        {% if f.public_note %}
+          <div class="alert alert-light py-2 px-3 small mb-2">
+            💬 {{ f.public_note }}
+          </div>
+        {% endif %}
+
         <div class="mt-auto d-flex align-items-center gap-2 flex-wrap">
           {% if a.url %}<a class="btn btn-sm btn-primary" href="{{ a.url }}" target="_blank" onclick="event.stopPropagation()">Ouvrir</a>{% endif %}
           {% if a.doi %}<a class="btn btn-sm btn-outline-primary" href="https://doi.org/{{ a.doi }}" target="_blank" onclick="event.stopPropagation()">DOI</a>{% endif %}
+
+          <!-- Public / Privé -->
+          <button class="btn btn-sm {{ 'btn-success' if f.is_public else 'btn-outline-secondary' }}"
+                  id="vis-btn-{{ a.id }}"
+                  onclick="event.stopPropagation(); toggleVisibility({{ a.id }}, this)"
+                  title="{{ 'Public - cliquer pour rendre privé' if f.is_public else 'Privé - cliquer pour rendre public' }}">
+            {{ '🌐' if f.is_public else '🔒' }}
+          </button>
+
+          <!-- Note publique -->
+          <button class="btn btn-sm btn-outline-secondary"
+                  onclick="event.stopPropagation(); togglePublicNote({{ a.id }})"
+                  title="Note publique">
+            💬
+          </button>
 
           <!-- Ajouter à un dossier -->
           <div class="dropdown" onclick="event.stopPropagation()">
@@ -152,6 +183,17 @@
                 class="ms-auto" onclick="event.stopPropagation()">
             <button class="btn btn-sm btn-outline-danger">Retirer</button>
           </form>
+        </div>
+
+        <!-- Zone note publique (cachée par défaut) -->
+        <div id="public-note-{{ a.id }}" class="w-100 mt-2" style="display:none;" onclick="event.stopPropagation()">
+          <div class="input-group input-group-sm">
+            <input type="text" class="form-control"
+                   id="public-note-input-{{ a.id }}"
+                   placeholder="Note publique visible par vos abonnés..."
+                   value="{{ f.public_note or '' }}">
+            <button class="btn btn-outline-success" onclick="savePublicNote({{ a.id }})">Enregistrer</button>
+          </div>
         </div>
 
       </div>
@@ -244,6 +286,47 @@ async function addToFolder(folderId, articleId, btn) {
   if (data.ok) {
     btn.classList.add('text-success');
     btn.textContent = '✓ ' + btn.textContent;
+  }
+}
+
+// --- Visibilité favori ---
+async function toggleVisibility(articleId, btn) {
+  const res = await fetch(`/favorite/${articleId}/visibility`, {method: 'POST'});
+  const data = await res.json();
+  if (data.ok) {
+    btn.textContent = data.is_public ? '🌐' : '🔒';
+    btn.className = `btn btn-sm ${data.is_public ? 'btn-success' : 'btn-outline-secondary'}`;
+    btn.title = data.is_public ? 'Public - cliquer pour rendre privé' : 'Privé - cliquer pour rendre public';
+  }
+}
+
+// --- Visibilité dossier ---
+async function toggleFolderVisibility(folderId, btn) {
+  const res = await fetch(`/folder/${folderId}/visibility`, {method: 'POST'});
+  const data = await res.json();
+  if (data.ok) {
+    btn.textContent = data.is_public ? '🌐' : '🔒';
+    btn.className = `btn btn-sm ${data.is_public ? 'btn-success' : 'btn-outline-secondary'}`;
+    btn.title = data.is_public ? 'Public - cliquer pour rendre privé' : 'Privé - cliquer pour rendre public';
+  }
+}
+
+// --- Note publique ---
+function togglePublicNote(articleId) {
+  const zone = document.getElementById(`public-note-${articleId}`);
+  zone.style.display = zone.style.display === 'none' ? 'block' : 'none';
+}
+async function savePublicNote(articleId) {
+  const note = document.getElementById(`public-note-input-${articleId}`).value.trim();
+  const res = await fetch(`/favorite/${articleId}/public_note`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({note})
+  });
+  const data = await res.json();
+  if (data.ok) {
+    togglePublicNote(articleId);
+    location.reload();
   }
 }
 

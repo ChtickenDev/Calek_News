@@ -72,6 +72,8 @@
       <ul class="navbar-nav me-auto mb-2 mb-lg-0">
         <li class="nav-item"><a class="nav-link{% if request.endpoint == 'index' %} active{% endif %}" href="{{ url_for('index') }}">Accueil</a></li>
         {% if current_user.is_authenticated %}
+          <li class="nav-item"><a class="nav-link{% if request.endpoint == 'feed' %} active{% endif %}" href="{{ url_for('feed') }}">Feed</a></li>
+          <li class="nav-item"><a class="nav-link{% if request.endpoint == 'users_list' %} active{% endif %}" href="{{ url_for('users_list') }}">Profils</a></li>
           <li class="nav-item"><a class="nav-link{% if request.endpoint == 'favorites' %} active{% endif %}" href="{{ url_for('favorites') }}">Favoris</a></li>
           <li class="nav-item">
             <a class="nav-link{% if request.endpoint == 'my_drafts' %} active{% endif %}" href="{{ url_for('my_drafts') }}">Mes recherches</a>

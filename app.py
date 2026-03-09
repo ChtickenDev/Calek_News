@@ -143,15 +143,14 @@ class Favorite(db.Model):
     __tablename__ = "favorite"
 
     id = db.Column(db.Integer, primary_key=True)
-
-    # ✅ ces deux colonnes DOIVENT exister avec ForeignKey
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), index=True, nullable=False)
     article_id = db.Column(db.Integer, db.ForeignKey("article.id"), index=True, nullable=False)
 
     note = db.Column(db.Text)
+    is_public = db.Column(db.Boolean, default=True, nullable=False)
+    public_note = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    # ✅ relations
     user = db.relationship("User", backref=db.backref("favorites", lazy="dynamic"))
     article = db.relationship("Article", backref=db.backref("favorited_by", lazy="dynamic"))
 
@@ -213,13 +212,13 @@ class Folder(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
     name = db.Column(db.String(100), nullable=False)
+    is_public = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     user = db.relationship("User", backref=db.backref("folders", lazy="dynamic"))
-    articles = db.relationship("Article", secondary="folder_article", backref=db.backref("folders", lazy="dynamic"))
 
     __table_args__ = (
-        db.UniqueConstraint("user_id", "name", name="uq_folder_user_name"),
+        db.UniqueConstraint("user_id", "name", name="_user_folder_uc"),
     )
 
 
@@ -233,6 +232,21 @@ class FolderArticle(db.Model):
 
     __table_args__ = (
         db.UniqueConstraint("folder_id", "article_id", name="uq_folder_article"),
+    )
+
+class Follow(db.Model):
+    __tablename__ = "follow"
+
+    id = db.Column(db.Integer, primary_key=True)
+    follower_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    followed_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    follower = db.relationship("User", foreign_keys=[follower_id], backref=db.backref("following", lazy="dynamic"))
+    followed = db.relationship("User", foreign_keys=[followed_id], backref=db.backref("followers", lazy="dynamic"))
+
+    __table_args__ = (
+        db.UniqueConstraint("follower_id", "followed_id", name="_follow_uc"),
     )
 # -----------------------------------------------------------------------------
 # Helpers & schema upgrade (SQLite)
@@ -516,48 +530,46 @@ def ensure_proposal_schema():
 from sqlalchemy import text
 
 def ensure_favorite_columns():
-    """Garantit que la table favorite possède bien user_id et article_id, et backfill si besoin."""
-    # La table existe ?
+    """Garantit que la table favorite possède bien toutes ses colonnes."""
     row = db.session.execute(
         text("SELECT name FROM sqlite_master WHERE type='table' AND name='favorite'")
     ).fetchone()
     if not row:
-        # Création propre si la table n'existe pas
         db.session.execute(text("""
             CREATE TABLE favorite (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
                 article_id INTEGER NOT NULL,
                 note TEXT,
+                is_public BOOLEAN NOT NULL DEFAULT 1,
+                public_note TEXT,
                 created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY(user_id) REFERENCES user(id),
                 FOREIGN KEY(article_id) REFERENCES article(id)
             )
         """))
-        # Contrainte d’unicité
         db.session.execute(text(
             "CREATE UNIQUE INDEX IF NOT EXISTS ix_favorite_user_article ON favorite(user_id, article_id)"
         ))
         db.session.commit()
         return
 
-    # Sinon on vérifie les colonnes
     cols = {r["name"] for r in db.session.execute(text("PRAGMA table_info(favorite)")).mappings().all()}
 
-    # Si user_id a été “perdu”, on le recrée et on tente de le backfiller
     if "user_id" not in cols:
         db.session.execute(text("ALTER TABLE favorite ADD COLUMN user_id INTEGER"))
-        # Si, par mégarde, une colonne proposer_id existe (remplacement global), on recopie
         if "proposer_id" in cols:
-            db.session.execute(text(
-                "UPDATE favorite SET user_id = proposer_id WHERE user_id IS NULL"
-            ))
+            db.session.execute(text("UPDATE favorite SET user_id = proposer_id WHERE user_id IS NULL"))
 
-    # Si article_id n'existe pas (rare), on l’ajoute
     if "article_id" not in cols:
         db.session.execute(text("ALTER TABLE favorite ADD COLUMN article_id INTEGER"))
 
-    # Index et contrainte d’unicité (best-effort, silencieux si déjà là)
+    if "is_public" not in cols:
+        db.session.execute(text("ALTER TABLE favorite ADD COLUMN is_public BOOLEAN NOT NULL DEFAULT 1"))
+
+    if "public_note" not in cols:
+        db.session.execute(text("ALTER TABLE favorite ADD COLUMN public_note TEXT"))
+
     db.session.execute(text(
         "CREATE UNIQUE INDEX IF NOT EXISTS ix_favorite_user_article ON favorite(user_id, article_id)"
     ))
@@ -616,8 +628,14 @@ def ensure_userdraft_schema():
     db.session.commit()
 
 def ensure_folder_schema():
-    """Crée les tables folder et folder_article si absentes."""
+    """Crée / aligne les tables folder, folder_article et follow."""
     db.create_all()
+
+    # Ajoute is_public sur folder si manquant
+    cols = {r["name"] for r in db.session.execute(text("PRAGMA table_info(folder)")).mappings().all()}
+    if "is_public" not in cols:
+        db.session.execute(text("ALTER TABLE folder ADD COLUMN is_public BOOLEAN NOT NULL DEFAULT 1"))
+        db.session.commit()
 
 # -----------------------------------------------------------------------------
 # Filtrage kiné (utilisé par fetch par défaut, mais pas sur la recherche libre)
@@ -1606,6 +1624,8 @@ from sqlalchemy.orm import joinedload
 @app.route('/')
 def index():
     print("[DEBUG index route] Appel de la route / (page d'accueil)", flush=True)
+    if current_user.is_authenticated:
+        return redirect(url_for('feed'))
     q = request.args.get('q', '').strip()
     domain = request.args.get('domain', '')
     pathology = request.args.get('pathology', '')
@@ -1907,6 +1927,153 @@ def folder_view(folder_id):
                            folder_articles=articles,
                            favs=favs)
 
+# -----------------------------------------------------------------------------
+# Visibilité des favoris et abonnements
+# -----------------------------------------------------------------------------
+
+@app.route('/favorite/<int:article_id>/visibility', methods=['POST'])
+@login_required
+def favorite_toggle_visibility(article_id):
+    f = Favorite.query.filter_by(user_id=current_user.id, article_id=article_id).first_or_404()
+    f.is_public = not f.is_public
+    db.session.commit()
+    return jsonify({"ok": True, "is_public": f.is_public})
+
+
+@app.route('/favorite/<int:article_id>/public_note', methods=['POST'])
+@login_required
+def favorite_set_public_note(article_id):
+    f = Favorite.query.filter_by(user_id=current_user.id, article_id=article_id).first_or_404()
+    f.public_note = (request.json.get('note') or '').strip() or None
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route('/folder/<int:folder_id>/visibility', methods=['POST'])
+@login_required
+def folder_toggle_visibility(folder_id):
+    f = Folder.query.filter_by(id=folder_id, user_id=current_user.id).first_or_404()
+    f.is_public = not f.is_public
+    db.session.commit()
+    return jsonify({"ok": True, "is_public": f.is_public})
+
+
+@app.route('/follow/<int:user_id>', methods=['POST'])
+@login_required
+def follow_user(user_id):
+    if user_id == current_user.id:
+        return jsonify({"ok": False, "error": "Tu ne peux pas te suivre toi-même"}), 400
+    User.query.get_or_404(user_id)
+    existing = Follow.query.filter_by(follower_id=current_user.id, followed_id=user_id).first()
+    if existing:
+        return jsonify({"ok": True, "status": "already"})
+    db.session.add(Follow(follower_id=current_user.id, followed_id=user_id))
+    db.session.commit()
+    return jsonify({"ok": True, "status": "following"})
+
+
+@app.route('/unfollow/<int:user_id>', methods=['POST'])
+@login_required
+def unfollow_user(user_id):
+    f = Follow.query.filter_by(follower_id=current_user.id, followed_id=user_id).first()
+    if f:
+        db.session.delete(f)
+        db.session.commit()
+    return jsonify({"ok": True, "status": "unfollowed"})
+
+
+@app.route('/user/<int:user_id>')
+@login_required
+def user_profile(user_id):
+    u = User.query.get_or_404(user_id)
+    is_following = Follow.query.filter_by(
+        follower_id=current_user.id, followed_id=user_id
+    ).first() is not None
+
+    # Favoris publics
+    public_favs = (
+        Favorite.query
+        .options(joinedload(Favorite.article))
+        .filter_by(user_id=u.id, is_public=True)
+        .order_by(Favorite.created_at.desc())
+        .all()
+    )
+    public_favs = [f for f in public_favs if f.article is not None]
+
+    # Dossiers publics
+    public_folders = Folder.query.filter_by(user_id=u.id, is_public=True).order_by(Folder.name.asc()).all()
+
+    followers_count = Follow.query.filter_by(followed_id=u.id).count()
+    following_count = Follow.query.filter_by(follower_id=u.id).count()
+
+    return render_template('user_profile.html',
+                           profile_user=u,
+                           is_following=is_following,
+                           public_favs=public_favs,
+                           public_folders=public_folders,
+                           followers_count=followers_count,
+                           following_count=following_count)
+
+
+@app.route('/feed')
+@login_required
+def feed():
+    followed_ids = [f.followed_id for f in Follow.query.filter_by(follower_id=current_user.id).all()]
+
+    if followed_ids:
+        # Feed normal : favoris publics des abonnements
+        items = (
+            Favorite.query
+            .options(joinedload(Favorite.user), joinedload(Favorite.article))
+            .filter(
+                Favorite.user_id.in_(followed_ids),
+                Favorite.is_public == True
+            )
+            .order_by(Favorite.created_at.desc())
+            .limit(100)
+            .all()
+        )
+        items = [i for i in items if i.article is not None]
+        discovery = False
+    else:
+        # Découverte : favoris publics de tous sauf soi-même
+        items = (
+            Favorite.query
+            .options(joinedload(Favorite.user), joinedload(Favorite.article))
+            .filter(
+                Favorite.user_id != current_user.id,
+                Favorite.is_public == True
+            )
+            .order_by(Favorite.created_at.desc())
+            .limit(60)
+            .all()
+        )
+        items = [i for i in items if i.article is not None]
+        discovery = True
+
+    return render_template('feed.html',
+                           items=items,
+                           followed_ids=followed_ids,
+                           discovery=discovery)
+
+
+@app.route('/users')
+@login_required
+def users_list():
+    followed_ids = {f.followed_id for f in Follow.query.filter_by(follower_id=current_user.id).all()}
+    users = User.query.filter(User.id != current_user.id).order_by(User.name.asc()).all()
+
+    # Stats par user
+    stats = {}
+    for u in users:
+        pub_favs = Favorite.query.filter_by(user_id=u.id, is_public=True).count()
+        followers = Follow.query.filter_by(followed_id=u.id).count()
+        stats[u.id] = {"pub_favs": pub_favs, "followers": followers}
+
+    return render_template('users_list.html',
+                           users=users,
+                           stats=stats,
+                           followed_ids=followed_ids)
 
 # --------- DRAFTS: suppression par l'utilisateur ---------
 from flask import abort
