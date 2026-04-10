@@ -1,13 +1,16 @@
-# app.py — CALEK NEWS PRO (fixed & cleaned, same features)
+# app.py — Physara (fixed & cleaned, same features)
 
 import os
 import re
 import csv
 import io
+import time
+import math
 from datetime import datetime, timedelta
 from functools import wraps
 from flask import session
 import requests
+import json
 from dotenv import load_dotenv
 load_dotenv()
 NCBI_API_KEY = os.environ.get("NCBI_API_KEY", "")
@@ -49,8 +52,78 @@ app.url_map.strict_slashes = False  # évite les redirections 308/301
 
 db = SQLAlchemy(app)
 
+# --- Rate limiting (PubMed routes uniquement) ---
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from flask_limiter.errors import RateLimitExceeded
+
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=[],
+    storage_uri="memory://"
+)
+
+@app.errorhandler(RateLimitExceeded)
+def handle_rate_limit(e):
+    flash("Trop de requêtes. Attendez quelques secondes avant de réessayer.", "warning")
+    return redirect(request.referrer or url_for('my_drafts'))
+
+# --- Chiffrement Fernet des clés API ---
+from cryptography.fernet import Fernet
+
+def _get_or_create_fernet_key() -> bytes:
+    key = os.environ.get("PHYSARA_FERNET_KEY", "").strip()
+    if key:
+        return key.encode()
+    new_key = Fernet.generate_key().decode()
+    env_path = os.path.join(os.path.dirname(__file__), ".env")
+    try:
+        with open(env_path, "a", encoding="utf-8") as f:
+            f.write(f"\nPHYSARA_FERNET_KEY={new_key}\n")
+        os.environ["PHYSARA_FERNET_KEY"] = new_key
+        print(f"[Physara] Clé Fernet générée et ajoutée à .env")
+    except Exception as e:
+        print(f"[Physara] Impossible d'écrire dans .env : {e}")
+    return new_key.encode()
+
+_fernet = Fernet(_get_or_create_fernet_key())
+
+def encrypt_api_key(value: str) -> str:
+    if not value:
+        return ""
+    return _fernet.encrypt(value.encode()).decode()
+
+def decrypt_api_key(value: str) -> str:
+    if not value:
+        return ""
+    try:
+        return _fernet.decrypt(value.encode()).decode()
+    except Exception:
+        return value  # fallback rétrocompatibilité (clé déjà en clair)
+
 login_manager = LoginManager(app)
 login_manager.login_view = "login"
+
+# -----------------------------------------------------------------------------
+# Internationalisation (FR / EN) — sans dépendance externe
+# -----------------------------------------------------------------------------
+def _load_translations() -> dict:
+    out = {}
+    for lang in ('fr', 'en'):
+        path = os.path.join(os.path.dirname(__file__), 'translations', f'{lang}.json')
+        with open(path, encoding='utf-8') as f:
+            out[lang] = json.load(f)
+    return out
+
+TRANSLATIONS = _load_translations()
+
+def t(key: str) -> str:
+    lang = session.get('lang', 'fr')
+    return TRANSLATIONS.get(lang, {}).get(key, key)
+
+app.jinja_env.globals['t'] = t
+app.jinja_env.globals['current_lang'] = lambda: session.get('lang', 'fr')
 
 # -----------------------------------------------------------------------------
 # Models
@@ -62,6 +135,28 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), default="user")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Profil enrichi
+    bio = db.Column(db.Text)
+    photo_filename = db.Column(db.String(255))
+    profession = db.Column(db.String(120))
+    profession_autre = db.Column(db.String(120))
+    annee_etudes = db.Column(db.String(10))
+    est_etudiant = db.Column(db.Boolean, default=False)
+    formations_complementaires = db.Column(db.Text)
+    specialite = db.Column(db.String(120))
+    specialite_autre = db.Column(db.String(120))
+    ville = db.Column(db.String(120))
+    adresse_cabinet = db.Column(db.Text)
+    annees_experience = db.Column(db.Integer)
+    facebook = db.Column(db.String(255))
+    instagram = db.Column(db.String(255))
+    linkedin = db.Column(db.String(255))
+    tiktok = db.Column(db.String(255))
+    youtube = db.Column(db.String(255))
+    abonnements_publics = db.Column(db.Boolean, default=True)
+    zotero_api_key = db.Column(db.String(200))
+    zotero_user_id = db.Column(db.String(50))
 
     def set_password(self, pw):
         self.password_hash = generate_password_hash(pw)
@@ -213,6 +308,7 @@ class Folder(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
     name = db.Column(db.String(100), nullable=False)
     is_public = db.Column(db.Boolean, default=True, nullable=False)
+    color = db.Column(db.String(20), default="#6366f1", nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     user = db.relationship("User", backref=db.backref("folders", lazy="dynamic"))
@@ -248,6 +344,31 @@ class Follow(db.Model):
     __table_args__ = (
         db.UniqueConstraint("follower_id", "followed_id", name="_follow_uc"),
     )
+
+class UserEvent(db.Model):
+    __tablename__ = "user_event"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    article_id = db.Column(db.Integer, db.ForeignKey("article.id"), nullable=True, index=True)
+    event_type = db.Column(db.String(50), nullable=False)
+    extra = db.Column(db.Text, nullable=True)  # JSON : domaine, pathologie, query pubmed...
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    user = db.relationship("User", backref=db.backref("events", lazy="dynamic"))
+
+class Like(db.Model):
+    __tablename__ = "like"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    article_id = db.Column(db.Integer, db.ForeignKey("article.id"), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "article_id", name="_user_like_uc"),
+    )
+
 # -----------------------------------------------------------------------------
 # Helpers & schema upgrade (SQLite)
 # -----------------------------------------------------------------------------
@@ -363,6 +484,12 @@ def add_or_attach_article(d, user):
         if a.posted_by_id is None and user is not None:
             a.posted_by = user
 
+        if d.get('study_type'):
+            a.study_type = d.get('study_type')
+
+        if not a.domain:
+            a.domain = d.get('domain') or _infer_domain(a.title, a.abstract, a.journal)
+
         if not a.source and d.get('source'):
             a.source = d.get('source')
 
@@ -382,18 +509,22 @@ def add_or_attach_article(d, user):
         return a
 
 
+    _title = (d.get('title') or '')[:500]
+    _abstract = d.get('abstract')
+    _journal = d.get('journal')
+    _domain = d.get('domain') or _infer_domain(_title, _abstract, _journal)
     new_a = Article(
-        title=(d.get('title') or '')[:500],
+        title=_title,
         authors=d.get('authors'),
-        journal=d.get('journal'),
+        journal=_journal,
         doi=doi,
         url=d.get('url'),
-        abstract=d.get('abstract'),
+        abstract=_abstract,
         published_date=incoming_date,
         source=d.get('source') or 'pubmed',
         is_published=False,
         featured=False,
-        domain=d.get('domain'),
+        domain=_domain,
         pathology=d.get('pathology'),
         study_type=d.get('study_type'),
         source_order=d.get('source_order'),
@@ -628,14 +759,48 @@ def ensure_userdraft_schema():
     db.session.commit()
 
 def ensure_folder_schema():
-    """Crée / aligne les tables folder, folder_article et follow."""
     db.create_all()
 
-    # Ajoute is_public sur folder si manquant
+    # Migration table folder
     cols = {r["name"] for r in db.session.execute(text("PRAGMA table_info(folder)")).mappings().all()}
     if "is_public" not in cols:
         db.session.execute(text("ALTER TABLE folder ADD COLUMN is_public BOOLEAN NOT NULL DEFAULT 1"))
-        db.session.commit()
+    if "color" not in cols:
+        db.session.execute(text("ALTER TABLE folder ADD COLUMN color VARCHAR(20) NOT NULL DEFAULT '#6366f1'"))
+
+    # Migration table user
+    user_cols = {r["name"] for r in db.session.execute(text("PRAGMA table_info(user)")).mappings().all()}
+    new_user_cols = {
+        "bio": "TEXT",
+        "photo_filename": "VARCHAR(255)",
+        "profession": "VARCHAR(120)",
+        "profession_autre": "VARCHAR(120)",
+        "annee_etudes": "VARCHAR(10)",
+        "est_etudiant": "BOOLEAN DEFAULT 0",
+        "formations_complementaires": "TEXT",
+        "specialite": "VARCHAR(120)",
+        "specialite_autre": "VARCHAR(120)",
+        "ville": "VARCHAR(120)",
+        "adresse_cabinet": "TEXT",
+        "annees_experience": "INTEGER",
+        "facebook": "VARCHAR(255)",
+        "instagram": "VARCHAR(255)",
+        "linkedin": "VARCHAR(255)",
+        "tiktok": "VARCHAR(255)",
+        "youtube": "VARCHAR(255)",
+        "abonnements_publics": "BOOLEAN DEFAULT 1",
+        "zotero_api_key": "VARCHAR(100)",
+        "zotero_user_id": "VARCHAR(50)",
+    }
+    for col, coltype in new_user_cols.items():
+        if col not in user_cols:
+            db.session.execute(text(f"ALTER TABLE user ADD COLUMN {col} {coltype}"))
+
+    db.session.commit()
+
+def ensure_event_schema():
+    db.create_all()
+
 
 # -----------------------------------------------------------------------------
 # Filtrage kiné (utilisé par fetch par défaut, mais pas sur la recherche libre)
@@ -708,120 +873,434 @@ def is_physio_article(title, abstract=None, journal=None):
 # -----------------------------------------------------------------------------
 # Indice de Fiabilité Scientifique (IFS)
 # -----------------------------------------------------------------------------
-_STUDY_HINTS = [
-    ("meta-analysis", 25), ("meta analysis", 25), ("systematic review", 25),
-    ("randomized", 20), ("randomised", 20), ("rct", 20), ("randomized controlled", 20),
-    ("cohort", 12), ("prospective", 12), ("longitudinal", 12),
-    ("case-control", 10), ("case control", 10),
-    ("cross-sectional", 8), ("cross sectional", 8), ("observational", 8),
-    ("case series", 5), ("case report", 3), ("pilot study", 5),
-]
-
-REPUTABLE_JOURNALS = {
-    "Journal of Orthopaedic & Sports Physical Therapy",
-    "Physical Therapy",
-    "Clinical Rehabilitation",
-    "Archives of Physical Medicine and Rehabilitation",
-    "British Journal of Sports Medicine",
-    "Journal of Physiotherapy",
-    "Physiotherapy Theory and Practice",
-    "Physiotherapy Research International",
-    "Disability and Rehabilitation",
-    "Spine",
-    "Gait & Posture",
-    "Scandinavian Journal of Medicine & Science in Sports",
+# Table d'Impact Factors réels (JCR 2023)
+JOURNAL_IF: dict[str, float] = {
+    "British Journal of Sports Medicine": 18.4,
+    "Journal of Sport and Health Science": 13.8,
+    "Sports Medicine": 12.8,
+    "American Journal of Sports Medicine": 6.5,
+    "Knee Surgery, Sports Traumatology, Arthroscopy": 4.5,
+    "Journal of Orthopaedic & Sports Physical Therapy": 4.4,
+    "Physical Therapy": 4.4,
+    "Journal of Physiotherapy": 10.7,
+    "Scandinavian Journal of Medicine & Science in Sports": 4.6,
+    "Exercise and Sport Sciences Reviews": 5.4,
+    "International Journal of Sports Physical Therapy": 3.0,
+    "Journal of Athletic Training": 2.8,
+    "Physiotherapy": 3.5,
+    "Clinical Rehabilitation": 3.4,
+    "Archives of Physical Medicine and Rehabilitation": 4.4,
+    "Disability and Rehabilitation": 2.8,
+    "Journal of Rehabilitation Medicine": 3.0,
+    "Musculoskeletal Science and Practice": 2.5,
+    "Physical Therapy in Sport": 2.5,
+    "Manual Therapy": 3.0,
+    "Osteoarthritis and Cartilage": 7.0,
+    "Annals of the Rheumatic Diseases": 27.4,
+    "Arthritis & Rheumatology": 14.5,
+    "Journal of Bone and Joint Surgery": 5.4,
+    "Bone and Joint Journal": 4.9,
+    "Acta Orthopaedica": 3.5,
+    "Clinical Orthopaedics and Related Research": 4.4,
+    "Spine": 3.4,
+    "European Spine Journal": 3.0,
+    "Journal of Spinal Disorders & Techniques": 2.5,
+    "New England Journal of Medicine": 96.2,
+    "The Lancet": 98.4,
+    "JAMA": 63.1,
+    "BMJ": 39.9,
+    "PLOS ONE": 3.7,
+    "Cochrane Database of Systematic Reviews": 8.8,
+    "Pain": 7.6,
+    "Journal of Pain": 5.5,
+    "European Journal of Pain": 4.5,
+    "Neurorehabilitation and Neural Repair": 5.0,
+    "Journal of Aging and Physical Activity": 2.5,
+    "Age and Ageing": 6.0,
+    "Journal of Cardiopulmonary Rehabilitation and Prevention": 3.5,
+    "Trials": 2.9,
+    "BMC Musculoskeletal Disorders": 2.5,
+    "BMC Sports Science, Medicine and Rehabilitation": 2.5,
+    "Gait & Posture": 3.0,
+    "Physiotherapy Theory and Practice": 2.5,
+    "Physiotherapy Research International": 2.0,
 }
 
-def _infer_study_score(article):
-    st = (article.study_type or "").lower().strip()
-    title = (article.title or "").lower()
-    abst  = (article.abstract or "").lower()
-    txt   = f"{st} {title} {abst}"
+def _journal_score(journal: str) -> tuple[int, str]:
+    if not journal:
+        return 0, ""
+    if_ = JOURNAL_IF.get(journal)
+    if if_ is None:
+        jl = journal.lower()
+        for k, v in JOURNAL_IF.items():
+            if k.lower() in jl or jl in k.lower():
+                if_ = v
+                break
+    if if_ is None:
+        return 0, ""
+    if if_ >= 30:   pts = 30
+    elif if_ >= 15: pts = 25
+    elif if_ >= 8:  pts = 20
+    elif if_ >= 4:  pts = 15
+    elif if_ >= 2:  pts = 10
+    else:           pts = 5
+    return pts, f"IF={if_} (+{pts})"
 
-    m = {
-        "meta-analysis": 25, "meta analyse": 25, "systematic review": 25,
-        "randomized controlled trial": 20, "randomised controlled trial": 20, "rct": 20,
-        "cohort": 12, "prospective": 12, "longitudinal": 12,
-        "case-control": 10, "case control": 10,
-        "cross-sectional": 8, "cross sectional": 8, "observational": 8,
-        "case series": 5, "case report": 3, "pilot": 5
-    }
-    for k, v in m.items():
-        if k in st:
-            return v, k
-    for kw, v in _STUDY_HINTS:
+STUDY_TYPE_SCORES: dict[str, tuple[int, str]] = {
+    "meta-analysis":              (28, "Méta-analyse (OCEBM 1)"),
+    "systematic review":          (26, "Revue systématique (OCEBM 1)"),
+    "randomized controlled trial":(22, "RCT (OCEBM 2)"),
+    "controlled clinical trial":  (18, "Essai clinique contrôlé (OCEBM 2)"),
+    "multicenter study":          (16, "Étude multicentrique (OCEBM 2-3)"),
+    "clinical trial":             (14, "Essai clinique (OCEBM 3)"),
+    "cohort study":               (12, "Étude de cohorte (OCEBM 3)"),
+    "observational study":        (10, "Étude observationnelle (OCEBM 4)"),
+    "comparative study":          (10, "Étude comparative (OCEBM 3-4)"),
+    "case-control":               (8,  "Cas-témoins (OCEBM 4)"),
+    "cross-sectional":            (6,  "Transversale (OCEBM 4)"),
+    "review":                     (6,  "Revue narrative (OCEBM 5)"),
+    "practice guideline":         (6,  "Recommandation de pratique"),
+    "guideline":                  (6,  "Guideline"),
+    "case report":                (2,  "Cas clinique (OCEBM 5)"),
+}
+
+_STUDY_HINTS = [
+    ("meta-analysis", "meta-analysis"), ("meta analyse", "meta-analysis"),
+    ("systematic review", "systematic review"),
+    ("randomized controlled", "randomized controlled trial"),
+    ("randomised controlled", "randomized controlled trial"),
+    ("randomized", "randomized controlled trial"),
+    ("randomised", "randomized controlled trial"),
+    ("rct", "randomized controlled trial"),
+    ("cohort", "cohort study"), ("prospective", "cohort study"), ("longitudinal", "cohort study"),
+    ("case-control", "case-control"), ("case control", "case-control"),
+    ("cross-sectional", "cross-sectional"), ("cross sectional", "cross-sectional"),
+    ("observational", "observational study"),
+    ("case series", "case report"), ("case report", "case report"),
+    ("review", "review"),
+]
+
+def _infer_study_type(article) -> str | None:
+    txt = f"{article.title or ''} {article.abstract or ''}".lower()
+    for kw, label in _STUDY_HINTS:
         if kw in txt:
-            return v, kw
-    return 0, "type d'étude non déterminé"
+            return label
+    return None
 
-def _sample_size_score(article):
-    text = f"{article.abstract or ''} {article.title or ''}".replace("\u00a0"," ")
+PHYSARA_DOMAINS = [
+    "Musculo-squelettique",
+    "Neurologique",
+    "Cardio-respiratoire",
+    "Pédiatrique",
+    "Gériatrique",
+    "Sport et performance",
+    "Rééducation périnéale",
+    "Douleur",
+    "Oncologie",
+    "Rhumatologie",
+]
+
+_DOMAIN_KEYWORDS: dict[str, list[str]] = {
+    "Musculo-squelettique": [
+        "musculoskeletal", "musculo-squelettique", "musculo squelettique",
+        "orthopedic", "orthopaedic", "ligament", "tendon", "tendinopathy",
+        "tendinopathie", "rotator cuff", "coiffe des rotateurs",
+        "low back pain", "lombalgie", "cervicalgia", "cervicalgie",
+        "spine", "rachis", "vertebr", "disc herniation", "hernie discale",
+        "shoulder", "épaule", "knee", "genou", "hip", "hanche",
+        "ankle", "cheville", "wrist", "poignet", "elbow", "coude",
+        "fracture", "sprain", "entorse", "manual therapy", "thérapie manuelle",
+        "joint", "articulaire", "myofascial", "trigger point",
+    ],
+    "Neurologique": [
+        "neurolog", "neuroreh", "stroke", "avc", "accident vasculaire cérébral",
+        "parkinson", "multiple sclerosis", "sclérose en plaques",
+        "traumatic brain injury", "tbi", "traumatisme crânien",
+        "spinal cord injury", "lésion médullaire",
+        "cerebral palsy", "paralysie cérébrale",
+        "gait", "marche", "balance", "équilibre", "vestibular", "vestibulaire",
+        "neuropathy", "neuropathie", "dementia", "démence",
+        "epilepsy", "épilepsie", "ataxia", "ataxie",
+    ],
+    "Cardio-respiratoire": [
+        "cardiac", "cardiaque", "cardiorespiratory", "cardio-respiratoire",
+        "heart failure", "insuffisance cardiaque", "coronary", "coronarien",
+        "pulmonary", "pulmonaire", "respiratory", "respiratoire",
+        "copd", "bpco", "asthma", "asthme",
+        "dyspnea", "dyspnée", "oxygen", "oxygène",
+        "aerobic", "aérobie", "vo2", "cardiopulmonary",
+        "hypertension", "blood pressure", "pression artérielle",
+        "cardiac rehabilitation", "réadaptation cardiaque",
+    ],
+    "Pédiatrique": [
+        "pediatric", "paediatric", "pédiatrique", "children", "enfant",
+        "infant", "nourrisson", "neonatal", "néonatal", "adolescent",
+        "school-age", "developmental", "développemental",
+        "cerebral palsy", "scoliosis", "scoliose",
+        "autism", "autisme", "asd", "down syndrome", "trisomie",
+        "congenital", "congénital",
+    ],
+    "Gériatrique": [
+        "geriatric", "gériatrique", "elderly", "personnes âgées", "older adult",
+        "aging", "vieillissement", "fall", "chute", "frailty", "fragilité",
+        "sarcopenia", "sarcopénie", "dementia", "démence", "alzheimer",
+        "nursing home", "ehpad", "maison de retraite",
+        "osteoporosis", "ostéoporose", "polypharmacy", "polymédication",
+    ],
+    "Sport et performance": [
+        "sport", "athletic", "athlétique", "athlete", "athlète",
+        "performance", "exercise", "exercice", "training", "entraînement",
+        "running", "course à pied", "football", "rugby", "basketball",
+        "swimming", "natation", "cycling", "cyclisme",
+        "injury prevention", "prévention des blessures",
+        "strength", "force", "endurance", "power", "puissance",
+        "plyometric", "sprint", "agility", "agilité",
+    ],
+    "Rééducation périnéale": [
+        "pelvic floor", "plancher pelvien", "perineal", "périnéal",
+        "urinary incontinence", "incontinence urinaire",
+        "fecal incontinence", "incontinence fécale",
+        "pelvic organ prolapse", "prolapsus", "overactive bladder",
+        "vesical", "vésical", "obstetric", "obstétrique", "postpartum",
+        "post-partum", "périnée", "perineum",
+        "pelvic pain", "douleur pelvienne", "dyspareunia", "dyspareunie",
+    ],
+    "Douleur": [
+        "pain", "douleur", "chronic pain", "douleur chronique",
+        "fibromyalgia", "fibromyalgie", "nociceptive", "neuropathic",
+        "neuropathique", "central sensitization", "sensitisation centrale",
+        "analgesic", "analgésique", "hyperalgesia", "hyperalgésie",
+        "allodynia", "allodynie", "vnrs", "visual analogue scale", "vas",
+        "pain management", "gestion de la douleur",
+    ],
+    "Oncologie": [
+        "cancer", "oncolog", "tumor", "tumeur", "malignant", "malin",
+        "chemotherapy", "chimiothérapie", "radiotherapy", "radiothérapie",
+        "lymphedema", "lymphœdème", "palliative", "palliatif",
+        "breast cancer", "cancer du sein", "prostate cancer", "lung cancer",
+        "colorectal", "leukemia", "leucémie", "survivorship", "survie",
+    ],
+    "Rhumatologie": [
+        "rheumatolog", "rhumatolog", "rheumatoid arthritis", "polyarthrite",
+        "osteoarthritis", "arthrose", "ankylosing spondylitis",
+        "spondylarthrite", "psoriatic arthritis", "gout", "goutte",
+        "lupus", "systemic", "systémique", "autoimmune", "auto-immune",
+        "inflammatory joint", "articulaire inflammatoire",
+    ],
+}
+
+def _infer_domain(title: str | None, abstract: str | None, journal: str | None) -> str | None:
+    """Retourne le domaine Physara le plus probable par matching de mots-clés."""
+    text = " ".join(filter(None, [title, abstract, journal])).lower()
+    if not text:
+        return None
+    best_domain = None
+    best_score = 0
+    for domain, keywords in _DOMAIN_KEYWORDS.items():
+        score = sum(1 for kw in keywords if kw in text)
+        if score > best_score:
+            best_score = score
+            best_domain = domain
+    return best_domain if best_score > 0 else None
+
+
+def _study_score(article) -> tuple[int, str]:
+    st = (article.study_type or "").lower().strip()
+    if not st:
+        st = _infer_study_type(article) or ""
+    if st in STUDY_TYPE_SCORES:
+        pts, label = STUDY_TYPE_SCORES[st]
+        return pts, label
+    return 0, "Type d'étude non déterminé"
+
+def _sample_size_score(article) -> tuple[int, str]:
+    text = f"{article.abstract or ''} {article.title or ''}".replace("\u00a0", " ")
     n = None
     m = re.search(r"\bn\s*=\s*(\d{2,5})\b", text, re.I)
     if m:
         n = int(m.group(1))
     else:
-        m = re.search(r"\b(\d{2,5})\s+(participants?|patients?|subjects?)\b", text, re.I)
-        if m: n = int(m.group(1))
+        m = re.search(r"\b(\d{2,5})\s+(participants?|patients?|subjects?|individuals?)\b", text, re.I)
+        if m:
+            n = int(m.group(1))
     if not n:
-        return 0, "taille d'échantillon non trouvée"
-    if n < 30: s = 2
-    elif n < 100: s = 5
-    elif n < 300: s = 8
-    else: s = 10
-    return s, f"n≈{n}"
+        return 0, ""
+    if n >= 1000: s, label = 15, f"n≈{n} (large)"
+    elif n >= 300: s, label = 12, f"n≈{n}"
+    elif n >= 100: s, label = 8,  f"n≈{n}"
+    elif n >= 30:  s, label = 4,  f"n≈{n} (petit)"
+    else:          s, label = 1,  f"n≈{n} (très petit)"
+    return s, label
+
+def _abstract_score(article) -> tuple[int, str]:
+    ab = (article.abstract or "").strip()
+    if not ab:
+        return -5, "Abstract absent (-5)"
+    structured = bool(re.search(
+        r'\b(background|methods|results|conclusion|objective|aims?|purpose)\b',
+        ab[:500], re.I
+    ))
+    if structured:
+        return 7, "Abstract structuré (+7)"
+    return 3, "Abstract présent (+3)"
+
+def _freshness_score(article) -> tuple[int, str]:
+    if not article.published_date:
+        return 0, ""
+    years = max(0.0, (datetime.utcnow() - article.published_date).days / 365.25)
+    if years <= 1:    s, label = 8,  "Très récent ≤1 an (+8)"
+    elif years <= 3:  s, label = 5,  "Récent ≤3 ans (+5)"
+    elif years <= 7:  s, label = 2,  "Modérément récent (+2)"
+    elif years <= 12: s, label = 0,  ""
+    else:             s, label = -5, "Ancien >12 ans (-5)"
+    return s, label
 
 def reliability_score(article: Article):
+    """
+    Indice de repérabilité bibliographique automatisé.
+    Basé sur la pyramide des preuves OCEBM et les IF JCR 2023.
+    Max théorique : 100 pts
+      - Identité     : 15 pts max
+      - Journal (IF) : 30 pts max
+      - Type d'étude : 28 pts max  (OCEBM)
+      - Échantillon  : 15 pts max
+      - Abstract     : 7 pts max (ou -5)
+      - Fraîcheur    : 8 pts max (ou -5)
+    """
     score = 0
     reasons = []
 
+    # 1. Identité (15 pts max)
     ident = 0
     if article.doi:
-        ident += 15; reasons.append("DOI présent (+15)")
-    src = (article.source or "").lower()
-    if src in {"pubmed", "crossref"}:
-        ident += 10; reasons.append(f"Source {article.source.capitalize()} (+10)")
+        ident += 8; reasons.append("DOI présent (+8)")
     if article.authors:
-        ident += 5;  reasons.append("Auteurs renseignés (+5)")
+        ident += 4; reasons.append("Auteurs renseignés (+4)")
     if article.published_date:
-        ident += 5;  reasons.append("Date de parution renseignée (+5)")
-    score += min(35, ident)
+        ident += 3; reasons.append("Date de parution renseignée (+3)")
+    score += min(15, ident)
 
-    if article.journal and article.journal in REPUTABLE_JOURNALS:
-        score += 25; reasons.append("Revue reconnue (+25)")
+    # 2. Journal IF JCR 2023 (30 pts max)
+    j_pts, j_label = _journal_score(article.journal)
+    if j_pts:
+        score += j_pts
+        reasons.append(f"Revue : {article.journal} — {j_label}")
 
-    st_score, st_label = _infer_study_score(article)
-    if st_score:
-        score += st_score; reasons.append(f"Type d'étude : {st_label} (+{st_score})")
-    ss_score, ss_label = _sample_size_score(article)
-    if ss_score:
-        score += ss_score; reasons.append(f"Taille d'échantillon : {ss_label} (+{ss_score})")
+    # 3. Type d'étude OCEBM (28 pts max)
+    st_pts, st_label = _study_score(article)
+    if st_pts:
+        score += st_pts
+        reasons.append(f"Type d'étude : {st_label} (+{st_pts})")
 
-    fresh = 0
-    if article.published_date:
-        years = max(0.0, (datetime.utcnow() - article.published_date).days / 365.25)
-        if years < 2: fresh = +5
-        elif years > 12: fresh = -5
-        if fresh != 0:
-            reasons.append(("Récent (<2 ans)" if fresh>0 else "Ancien (>12 ans)") + f" ({fresh:+d})")
-    score += fresh
+    # 4. Taille d'échantillon (15 pts max)
+    ss_pts, ss_label = _sample_size_score(article)
+    if ss_pts:
+        score += ss_pts
+        reasons.append(f"Taille d'échantillon : {ss_label} (+{ss_pts})")
+
+    # 5. Abstract (7 pts max ou -5)
+    ab_pts, ab_label = _abstract_score(article)
+    score += ab_pts
+    if ab_label:
+        reasons.append(ab_label)
+
+    # 6. Fraîcheur (8 pts max ou -5)
+    fr_pts, fr_label = _freshness_score(article)
+    score += fr_pts
+    if fr_label:
+        reasons.append(fr_label)
 
     score = max(0, min(100, score))
-    if score >= 80: level = "Élevée"
+
+    if score >= 80:   level = "Élevée"
     elif score >= 60: level = "Bonne"
     elif score >= 40: level = "Moyenne"
-    else: level = "Faible"
+    else:             level = "Faible"
+
     return score, level, reasons
+
+def _is_probably_french(text: str) -> bool:
+    """
+    Heuristique légère : détecte si un texte est probablement français
+    en cherchant des mots fonctionnels FR très fréquents.
+    """
+    if not text:
+        return True  # pas de résumé = pas de bouton
+    sample = text[:300].lower()
+    fr_markers = ['les ', 'des ', 'une ', 'dans ', 'cette ', 'avec ',
+                  'sont ', 'pour ', 'sur ', 'est ', 'que ', 'qui ']
+    matches = sum(1 for m in fr_markers if m in sample)
+    return matches >= 3
+
 
 @app.context_processor
 def inject_helpers():
     return {
-        "reliability_score": reliability_score
+        "reliability_score": reliability_score,
+        "is_probably_french": _is_probably_french,
     }
 # -----------------------------------------------------------------------------
 # API JSON (modal)
 # -----------------------------------------------------------------------------
 from sqlalchemy.orm import joinedload
+
+@app.route('/api/translate', methods=['POST'])
+@login_required
+def api_translate():
+    import re as _re
+    payload = request.json or {}
+
+    def _split_chunks(t, max_len=500):
+        sentences = _re.split(r'(?<=[.!?])\s+', t)
+        chunks, current = [], ''
+        for s in sentences:
+            if len(current) + len(s) + 1 <= max_len:
+                current = (current + ' ' + s).strip()
+            else:
+                if current:
+                    chunks.append(current)
+                while len(s) > max_len:
+                    chunks.append(s[:max_len])
+                    s = s[max_len:]
+                current = s
+        if current:
+            chunks.append(current)
+        return chunks or [t[:max_len]]
+
+    def _translate(t):
+        parts = []
+        for chunk in _split_chunks(t[:2000]):
+            r = requests.get(
+                "https://api.mymemory.translated.net/get",
+                params={"q": chunk, "langpair": "en|fr"},
+                timeout=10
+            )
+            if r.status_code != 200:
+                raise ValueError(f"MyMemory status {r.status_code}")
+            data = r.json()
+            if data.get("responseStatus") != 200:
+                raise ValueError(data.get("responseDetails", "MyMemory error"))
+            parts.append(data["responseData"]["translatedText"])
+        return " ".join(parts)
+
+    # Mode tableau : traduction paragraphe par paragraphe
+    texts = payload.get('texts')
+    if texts and isinstance(texts, list):
+        try:
+            results = [_translate((t or '').strip()) for t in texts[:30] if (t or '').strip()]
+            return jsonify({"ok": True, "texts": results})
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)}), 502
+
+    # Mode texte simple (fallback)
+    text = (payload.get('text') or '').strip()[:5000]
+    if not text:
+        return jsonify({"ok": False, "error": "Texte vide"}), 400
+    try:
+        return jsonify({"ok": True, "text": _translate(text)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 503
+
 
 @app.route('/api/article/<int:article_id>')
 def api_article(article_id):
@@ -1077,10 +1556,6 @@ import xml.etree.ElementTree as ET
 import xml.etree.ElementTree as ET
 
 def efetch_pubmed_batch(pmids: list[str]) -> dict[str, dict]:
-    """
-    1 requête efetch pour N PMIDs.
-    Retourne {pmid: {title, journal, authors, doi, published_date, abstract}}
-    """
     if not pmids:
         return {}
 
@@ -1107,6 +1582,33 @@ def efetch_pubmed_batch(pmids: list[str]) -> dict[str, dict]:
         if el is None or el.text is None:
             return default
         return el.text.strip()
+
+    # Mapping publication type PubMed → label normalisé
+    PUBTYPE_MAP = {
+        "meta-analysis": "meta-analysis",
+        "systematic review": "systematic review",
+        "randomized controlled trial": "randomized controlled trial",
+        "controlled clinical trial": "controlled clinical trial",
+        "clinical trial": "clinical trial",
+        "multicenter study": "multicenter study",
+        "observational study": "observational study",
+        "cohort study": "cohort study",
+        "case-control studies": "case-control",
+        "cross-sectional study": "cross-sectional",
+        "case reports": "case report",
+        "review": "review",
+        "comparative study": "comparative study",
+        "practice guideline": "practice guideline",
+        "guideline": "guideline",
+    }
+    # Priorité : le type le plus fort l'emporte
+    PUBTYPE_PRIORITY = [
+        "meta-analysis", "systematic review", "randomized controlled trial",
+        "controlled clinical trial", "clinical trial", "multicenter study",
+        "cohort study", "observational study", "case-control",
+        "cross-sectional", "comparative study", "review",
+        "practice guideline", "guideline", "case report",
+    ]
 
     month_map = {"jan":1,"feb":2,"mar":3,"apr":4,"may":5,"jun":6,"jul":7,
                  "aug":8,"sep":9,"oct":10,"nov":11,"dec":12}
@@ -1147,8 +1649,20 @@ def efetch_pubmed_batch(pmids: list[str]) -> dict[str, dict]:
                 abs_parts.append(f"{label}. {txt}" if label else txt)
         abstract = " ".join(abs_parts).strip() or None
 
-        pub_dt = None
+        # Publication type — on prend le plus fort selon priorité
+        pub_types_raw = []
+        for pt in art.findall(".//Article/PublicationTypeList/PublicationType"):
+            if pt.text:
+                pub_types_raw.append(pt.text.strip().lower())
 
+        study_type = None
+        mapped = [PUBTYPE_MAP[pt] for pt in pub_types_raw if pt in PUBTYPE_MAP]
+        for priority in PUBTYPE_PRIORITY:
+            if priority in mapped:
+                study_type = priority
+                break
+
+        pub_dt = None
         ad = art.find(".//Article/ArticleDate")
         if ad is not None:
             y = _txt(ad, "Year", "")
@@ -1181,24 +1695,65 @@ def efetch_pubmed_batch(pmids: list[str]) -> dict[str, dict]:
             "doi": doi,
             "published_date": pub_dt or datetime.utcnow(),
             "abstract": abstract,
+            "study_type": study_type,
+            "domain": _infer_domain(title, abstract, journal),
         }
 
     return out
 
 
-def fetch_pubmed_query_paged(query: str, page: int = 1, per_page: int = 48):
-    """
-    PubMed paginé, 2 requêtes:
-      1) esearch (ids + count)
-      2) efetch batch (infos complètes)
-    Renvoie (results, total_count).
-    """
+def fetch_pubmed_query_paged(query: str, page: int = 1, per_page: int = 48,
+                              sort: str = "pub+date", filters: dict = None):
     if not query or not query.strip():
         return [], 0
 
     page = max(1, int(page or 1))
     per_page = max(1, min(int(per_page or 48), 200))
     retstart = (page - 1) * per_page
+    filters = filters or {}
+
+    # Construction du terme avec filtres
+    term = f"({query})"
+
+    # Type d'étude
+    study_type = filters.get("study_type")
+    study_type_map = {
+        "rct":        "Randomized Controlled Trial[pt]",
+        "meta":       "Meta-Analysis[pt]",
+        "systematic": "Systematic Review[pt]",
+        "review":     "Review[pt]",
+        "clinical":   "Clinical Trial[pt]",
+    }
+    if study_type and study_type in study_type_map:
+        term += f" AND {study_type_map[study_type]}"
+
+    # Accès
+    access = filters.get("access")
+    if access == "fulltext":
+        term += " AND full text[sb]"
+    elif access == "free":
+        term += " AND free full text[sb]"
+
+    # Langue
+    lang = filters.get("lang")
+    if lang == "fr":
+        term += " AND French[lang]"
+    elif lang == "en":
+        term += " AND English[lang]"
+
+    # Date
+    date_range = filters.get("date_range")
+    if date_range == "1y":
+        term += " AND (\"1 year\"[PDat])"
+    elif date_range == "5y":
+        term += " AND (\"5 years\"[PDat])"
+    elif date_range == "10y":
+        term += " AND (\"10 years\"[PDat])"
+    elif date_range == "custom":
+        date_from = filters.get("date_from", "")
+        date_to = filters.get("date_to", "")
+        if date_from and date_to:
+            term += f" AND (\"{date_from}\"[PDat] : \"{date_to}\"[PDat])"
 
     base = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
 
@@ -1210,8 +1765,8 @@ def fetch_pubmed_query_paged(query: str, page: int = 1, per_page: int = 48):
                 retmode="json",
                 retmax=str(per_page),
                 retstart=str(retstart),
-                sort="pub+date",
-                term=f"({query})"
+                sort=sort,
+                term=term
             ),
             timeout=30
         ).json()
@@ -1343,7 +1898,7 @@ def fetch_crossref(query: str = "", days: int = 90, max_results: int = 200):
         "rows": str(max_results)
     }
     try:
-        r = requests.get(url, params=params, timeout=30, headers={"User-Agent": "calek-news/1.0 (mailto:example@example.com)"})
+        r = requests.get(url, params=params, timeout=30, headers={"User-Agent": "physara/1.0 (mailto:example@example.com)"})
         items = r.json().get("message", {}).get("items", [])
     except Exception as e:
         print("[Crossref] Erreur:", e)
@@ -1591,25 +2146,67 @@ def logout():
     return redirect(url_for("index"))
 
 
-@app.route('/me')
+import os
+from werkzeug.utils import secure_filename
+
+AVATAR_UPLOAD_FOLDER = os.path.join('static', 'uploads', 'avatars')
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+@app.route('/me', methods=['GET', 'POST'])
 @login_required
 def me():
-    # ✅ Favoris : utiliser user_id (et pas proposer_id)
-    fav_count = Favorite.query.filter(Favorite.user_id == current_user.id).count()
+    if request.method == 'POST':
+        # Photo
+        if 'photo' in request.files:
+            file = request.files['photo']
+            if file and file.filename and allowed_file(file.filename):
+                os.makedirs(AVATAR_UPLOAD_FOLDER, exist_ok=True)
+                ext = file.filename.rsplit('.', 1)[1].lower()
+                filename = f"avatar_{current_user.id}.{ext}"
+                file.save(os.path.join(AVATAR_UPLOAD_FOLDER, filename))
+                current_user.photo_filename = filename
 
-    # Brouillons visibles pour l'utilisateur (les siens + ceux sans auteur si tu gardes ce comportement)
+        # Champs texte
+        current_user.name = request.form.get('name', '').strip() or current_user.name
+        current_user.bio = request.form.get('bio', '').strip()
+        current_user.profession = request.form.get('profession', '').strip()
+        current_user.profession_autre = request.form.get('profession_autre', '').strip()
+        current_user.annee_etudes = request.form.get('annee_etudes', '').strip()
+        current_user.est_etudiant = 'est_etudiant' in request.form
+        current_user.formations_complementaires = request.form.get('formations_complementaires', '').strip()
+        current_user.specialite = request.form.get('specialite', '').strip()
+        current_user.specialite_autre = request.form.get('specialite_autre', '').strip()
+        current_user.ville = request.form.get('ville', '').strip()
+        current_user.adresse_cabinet = request.form.get('adresse_cabinet', '').strip()
+        exp = request.form.get('annees_experience', '').strip()
+        current_user.annees_experience = int(exp) if exp.isdigit() else None
+        current_user.facebook = request.form.get('facebook', '').strip()
+        current_user.instagram = request.form.get('instagram', '').strip()
+        current_user.linkedin = request.form.get('linkedin', '').strip()
+        current_user.tiktok = request.form.get('tiktok', '').strip()
+        current_user.youtube = request.form.get('youtube', '').strip()
+        current_user.abonnements_publics = 'abonnements_publics' in request.form
+        new_zotero_key = request.form.get('zotero_api_key', '').strip()
+        if new_zotero_key and not all(c == '•' for c in new_zotero_key):
+            current_user.zotero_api_key = encrypt_api_key(new_zotero_key)
+        # sinon on conserve l'ancienne valeur chiffrée
+        current_user.zotero_user_id = request.form.get('zotero_user_id', '').strip() or None
+
+        db.session.commit()
+        flash('Profil mis à jour !', 'success')
+        return redirect(url_for('me'))
+
+    fav_count = Favorite.query.filter(Favorite.user_id == current_user.id).count()
     drafts_count = (Article.query
                     .filter(Article.is_published.is_(False))
                     .filter(db.or_(Article.posted_by_id == current_user.id,
-                                   Article.posted_by_id.is_(None)))
-                    ).count()
-
-    # Propositions faites par l'utilisateur : ici c'est bien proposer_id
+                                   Article.posted_by_id.is_(None)))).count()
     proposed_count = Proposal.query.filter(Proposal.proposer_id == current_user.id).count()
 
-    # Si tu affiches aussi la liste des favoris ou autre, complète ici…
-    return render_template(
-        'me.html',
+    return render_template('me.html',
         fav_count=fav_count,
         drafts_count=drafts_count,
         proposed_count=proposed_count
@@ -1620,6 +2217,12 @@ def me():
 # Accueil
 # -----------------------------------------------------------------------------
 from sqlalchemy.orm import joinedload
+
+@app.route('/lang/<lang>')
+def set_lang(lang):
+    if lang in ('fr', 'en'):
+        session['lang'] = lang
+    return redirect(request.referrer or url_for('index'))
 
 @app.route('/')
 def index():
@@ -1758,6 +2361,11 @@ def favorites_view():
             if folder:
                 folders_by_article.setdefault(fa.article_id, []).append(folder)
 
+    # Nombre d'articles par dossier
+    folder_article_counts = {}
+    for folder in folders:
+        folder_article_counts[folder.id] = FolderArticle.query.filter_by(folder_id=folder.id).count()
+
     return render_template(
         'favorites.html',
         favorites=favs,
@@ -1767,6 +2375,7 @@ def favorites_view():
         folder_articles=None,
         folders_by_article=folders_by_article,
         favs={f.article_id for f in favs},
+        folder_article_counts=folder_article_counts,
     )
 
 @app.route('/favorite/<int:article_id>', methods=['POST'], endpoint='favorite')
@@ -1774,25 +2383,29 @@ def favorites_view():
 def favorite_add(article_id):
     a = Article.query.get_or_404(article_id)
 
-    # on stocke une note éventuelle
     note = (request.form.get('note') or "").strip()
+    public_note = (request.form.get('public_note') or "").strip()
 
-    # >>> ICI on utilise user_id (PAS proposer_id) <<<
     f = Favorite.query.filter_by(user_id=current_user.id, article_id=a.id).first()
 
     if not f:
-        f = Favorite(user_id=current_user.id, article_id=a.id, note=note)
+        f = Favorite(user_id=current_user.id, article_id=a.id, note=note, public_note=public_note)
         db.session.add(f)
+        event = UserEvent(
+            user_id=current_user.id,
+            article_id=a.id,
+            event_type="favorite"
+        )
+        db.session.add(event)
     else:
-        f.note = note  # mise à jour de la note
+        f.note = note
+        f.public_note = public_note
 
     db.session.commit()
 
-    # Si l'appel attend du JSON (AJAX)
-    if "application/json" in (request.headers.get("Accept") or ""):
-        return {"status": "ok", "favorite_id": f.id}
+    if "application/json" in (request.headers.get("Accept") or "") or request.is_json:
+        return jsonify({"ok": True, "favorite_id": f.id})
 
-    # Sinon on revient « d’où on vient »
     ref = request.headers.get("Referer") or url_for('index')
     return redirect(ref)
 
@@ -1861,16 +2474,19 @@ def folders_list():
 
 @app.route('/folders/create', methods=['POST'])
 @login_required
-def folder_create():
-    name = (request.json.get('name') or request.form.get('name') or '').strip()
+def folders_create():
+    data = request.json or {}
+    name = (data.get('name') or '').strip()
+    color = (data.get('color') or '#6366f1').strip()
     if not name:
-        return jsonify({"ok": False, "error": "Nom vide"}), 400
-    if Folder.query.filter_by(user_id=current_user.id, name=name).first():
-        return jsonify({"ok": False, "error": "Dossier déjà existant"}), 409
-    f = Folder(user_id=current_user.id, name=name)
+        return jsonify({"ok": False, "error": "Nom requis"})
+    existing = Folder.query.filter_by(user_id=current_user.id, name=name).first()
+    if existing:
+        return jsonify({"ok": False, "error": "Ce dossier existe déjà"})
+    f = Folder(user_id=current_user.id, name=name, color=color)
     db.session.add(f)
     db.session.commit()
-    return jsonify({"ok": True, "id": f.id, "name": f.name})
+    return jsonify({"ok": True, "folder_id": f.id})
 
 
 @app.route('/folders/delete/<int:folder_id>', methods=['POST'])
@@ -1889,9 +2505,10 @@ def folder_add_article(folder_id, article_id):
     f = Folder.query.filter_by(id=folder_id, user_id=current_user.id).first_or_404()
     Article.query.get_or_404(article_id)
     existing = FolderArticle.query.filter_by(folder_id=f.id, article_id=article_id).first()
-    if not existing:
-        db.session.add(FolderArticle(folder_id=f.id, article_id=article_id))
-        db.session.commit()
+    if existing:
+        return jsonify({"ok": False, "error": "already_in_folder"})
+    db.session.add(FolderArticle(folder_id=f.id, article_id=article_id))
+    db.session.commit()
     return jsonify({"ok": True})
 
 
@@ -1911,21 +2528,45 @@ def folder_remove_article(folder_id, article_id):
 @app.route('/folders/<int:folder_id>')
 @login_required
 def folder_view(folder_id):
-    f = Folder.query.filter_by(id=folder_id, user_id=current_user.id).first_or_404()
+    f = Folder.query.get_or_404(folder_id)
+
+    # Dossier privé d'un autre utilisateur
+    if f.user_id != current_user.id and not f.is_public:
+        abort(403)
+
+    # Dossiers de l'utilisateur connecté (pour la sidebar)
     folders = Folder.query.filter_by(user_id=current_user.id).order_by(Folder.name.asc()).all()
+
     articles = (Article.query
                 .join(FolderArticle, FolderArticle.article_id == Article.id)
                 .filter(FolderArticle.folder_id == f.id)
                 .order_by(FolderArticle.created_at.desc())
                 .all())
+
     favs = {fav.article_id for fav in Favorite.query.filter_by(user_id=current_user.id).all()}
+
+    # Nombre d'articles par dossier
+    folder_article_counts = {folder.id: FolderArticle.query.filter_by(folder_id=folder.id).count() for folder in folders}
+
     return render_template('favorites.html',
                            favorites=[],
                            notes_by_article={},
                            folders=folders,
                            active_folder=f,
                            folder_articles=articles,
-                           favs=favs)
+                           folders_by_article={},
+                           favs=favs,
+                           folder_article_counts=folder_article_counts)
+
+@app.route('/folder/<int:folder_id>/color', methods=['POST'])
+@login_required
+def folder_set_color(folder_id):
+    f = Folder.query.filter_by(id=folder_id, user_id=current_user.id).first_or_404()
+    color = (request.json.get('color') or '#6366f1').strip()
+    f.color = color
+    db.session.commit()
+    return jsonify({"ok": True})
+
 
 # -----------------------------------------------------------------------------
 # Visibilité des favoris et abonnements
@@ -1948,6 +2589,359 @@ def favorite_set_public_note(article_id):
     db.session.commit()
     return jsonify({"ok": True})
 
+
+@app.route('/zotero/import', methods=['POST'])
+@login_required
+def zotero_import():
+    zotero_uid = getattr(current_user, 'zotero_user_id', None)
+    zotero_key = decrypt_api_key(getattr(current_user, 'zotero_api_key', None) or '')
+    if not zotero_uid or not zotero_key:
+        flash("Configurez d'abord votre User ID et clé API Zotero dans votre profil.", 'warning')
+        return redirect(url_for('favorites'))
+
+    headers = {"Zotero-API-Key": zotero_key}
+    limit = 100
+
+    # --- 1. Récupérer toutes les collections Zotero ---
+    collections_map = {}  # collection_key → nom
+    coll_start = 0
+    while True:
+        try:
+            cr = requests.get(
+                f"https://api.zotero.org/users/{zotero_uid}/collections",
+                headers=headers,
+                params={"format": "json", "limit": limit, "start": coll_start},
+                timeout=30
+            )
+            if cr.status_code != 200:
+                flash(f"Erreur Zotero API (collections) : {cr.status_code}", 'danger')
+                return redirect(url_for('favorites'))
+            colls = cr.json()
+        except Exception as e:
+            flash(f"Erreur lors de la récupération des collections Zotero : {e}", 'danger')
+            return redirect(url_for('favorites'))
+
+        for c in colls:
+            key = c.get('key', '')
+            name = (c.get('data') or {}).get('name', '').strip()
+            if key and name:
+                collections_map[key] = name
+
+        if len(colls) < limit:
+            break
+        coll_start += limit
+
+    # Cache local des Folder déjà existants ou créés durant cet import
+    # {folder_name → Folder}
+    folder_cache = {}
+    folders_created = 0
+
+    def get_or_create_folder(name):
+        nonlocal folders_created
+        if name in folder_cache:
+            return folder_cache[name]
+        folder = Folder.query.filter_by(name=name, user_id=current_user.id).first()
+        if not folder:
+            folder = Folder(name=name, user_id=current_user.id,
+                            is_public=True, color='#6366f1')
+            db.session.add(folder)
+            db.session.flush()  # obtenir l'id sans commit global
+            folders_created += 1
+        folder_cache[name] = folder
+        return folder
+
+    # --- 2. Parcourir les items ---
+    imported = 0
+    already = 0
+    not_found = 0
+    items_start = 0
+
+    while True:
+        try:
+            resp = requests.get(
+                f"https://api.zotero.org/users/{zotero_uid}/items",
+                headers=headers,
+                params={"format": "json", "limit": limit,
+                        "start": items_start, "itemType": "journalArticle"},
+                timeout=30
+            )
+            if resp.status_code != 200:
+                flash(f"Erreur Zotero API : {resp.status_code}", 'danger')
+                return redirect(url_for('favorites'))
+            items = resp.json()
+        except Exception as e:
+            flash(f"Erreur lors de la connexion à Zotero : {e}", 'danger')
+            return redirect(url_for('favorites'))
+
+        if not items:
+            break
+
+        for item in items:
+            data = item.get('data', {})
+            doi = (data.get('DOI') or '').strip()
+            if not doi:
+                continue
+
+            # Cherche l'article en base par DOI
+            article = Article.query.filter_by(doi=normalize_doi(doi)).first()
+
+            if not article:
+                # Recherche PubMed via DOI
+                try:
+                    time.sleep(0.1)
+                    es_resp = requests.get(
+                        "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
+                        params=ncbi_params(db="pubmed", term=f"{doi}[DOI]", retmode="json"),
+                        timeout=20
+                    )
+                    pmids = es_resp.json().get("esearchresult", {}).get("idlist", [])
+                except Exception:
+                    pmids = []
+
+                if not pmids:
+                    not_found += 1
+                    continue
+
+                pmid = pmids[0]
+                time.sleep(0.1)
+                meta_map = efetch_pubmed_batch([pmid])
+                meta = meta_map.get(pmid)
+                if not meta:
+                    not_found += 1
+                    continue
+
+                meta['source'] = 'pubmed'
+                article = add_or_attach_article(meta, current_user)
+
+            # Créer le favori si inexistant
+            existing_fav = Favorite.query.filter_by(
+                user_id=current_user.id, article_id=article.id).first()
+            if existing_fav:
+                already += 1
+            else:
+                db.session.add(Favorite(
+                    user_id=current_user.id,
+                    article_id=article.id,
+                    is_public=False,
+                ))
+                db.session.add(UserEvent(
+                    user_id=current_user.id,
+                    article_id=article.id,
+                    event_type="zotero_import",
+                    extra=json.dumps({"doi": doi}),
+                ))
+                imported += 1
+
+            # --- 3. Ranger dans les dossiers correspondant aux collections ---
+            for coll_key in (data.get('collections') or []):
+                coll_name = collections_map.get(coll_key)
+                if not coll_name:
+                    continue
+                folder = get_or_create_folder(coll_name)
+                exists_fa = FolderArticle.query.filter_by(
+                    folder_id=folder.id, article_id=article.id).first()
+                if not exists_fa:
+                    db.session.add(FolderArticle(
+                        folder_id=folder.id, article_id=article.id))
+
+        db.session.commit()
+
+        if len(items) < limit:
+            break
+        items_start += limit
+
+    flash(
+        f"Import Zotero terminé : {imported} article(s) importé(s), "
+        f"{already} déjà en favoris, {not_found} non trouvé(s) sur PubMed, "
+        f"{folders_created} dossier(s) créé(s).",
+        'success'
+    )
+    return redirect(url_for('favorites'))
+
+@app.route('/zotero/export/all', methods=['POST'])
+@login_required
+def zotero_export_all():
+    zotero_uid = current_user.zotero_user_id
+    zotero_key = decrypt_api_key(current_user.zotero_api_key or '')
+    if not zotero_uid or not zotero_key:
+        flash("Configurez d'abord votre User ID et clé API Zotero dans votre profil.", 'warning')
+        return redirect(url_for('favorites'))
+
+    favs = (Favorite.query
+            .options(joinedload(Favorite.article))
+            .filter_by(user_id=current_user.id)
+            .all())
+    articles = [f.article for f in favs if f.article]
+
+    added, skipped, errors = _zotero_export_articles(articles, zotero_uid, zotero_key)
+    flash(f"Export Zotero : {added} article(s) ajouté(s), {skipped} déjà présent(s), {errors} erreur(s).", 'success')
+    return redirect(url_for('favorites'))
+
+
+@app.route('/zotero/export/folder/<int:folder_id>', methods=['POST'])
+@login_required
+def zotero_export_folder(folder_id):
+    folder = Folder.query.filter_by(id=folder_id, user_id=current_user.id).first_or_404()
+    zotero_uid = current_user.zotero_user_id
+    zotero_key = decrypt_api_key(current_user.zotero_api_key or '')
+    if not zotero_uid or not zotero_key:
+        flash("Configurez d'abord votre User ID et clé API Zotero dans votre profil.", 'warning')
+        return redirect(url_for('folder_view', folder_id=folder_id))
+
+    articles = (Article.query
+                .join(FolderArticle, FolderArticle.article_id == Article.id)
+                .filter(FolderArticle.folder_id == folder_id)
+                .all())
+
+    added, skipped, errors = _zotero_export_articles(articles, zotero_uid, zotero_key,
+                                                      collection_name=folder.name)
+    flash(f"Export « {folder.name} » → Zotero : {added} ajouté(s), {skipped} déjà présent(s), {errors} erreur(s).", 'success')
+    return redirect(url_for('folder_view', folder_id=folder_id))
+
+
+def _zotero_export_articles(articles: list, zotero_uid: str, zotero_key: str,
+                             collection_name: str = None) -> tuple[int, int, int]:
+    """
+    Envoie une liste d'Article vers la bibliothèque Zotero de l'utilisateur.
+    - Déduplique sur DOI (vérifie les items existants).
+    - Si collection_name fourni, crée/réutilise la collection Zotero correspondante.
+    Retourne (added, skipped, errors).
+    """
+    headers = {
+        "Zotero-API-Key": zotero_key,
+        "Content-Type": "application/json",
+    }
+    base = f"https://api.zotero.org/users/{zotero_uid}"
+
+    # 1. Récupère les DOI déjà présents dans Zotero (pour déduplication)
+    existing_dois = set()
+    start = 0
+    while True:
+        try:
+            r = requests.get(f"{base}/items", headers=headers,
+                             params={"format": "json", "limit": 100, "start": start,
+                                     "itemType": "journalArticle"},
+                             timeout=30)
+            items = r.json() if r.status_code == 200 else []
+        except Exception:
+            items = []
+        for it in items:
+            doi = (it.get('data') or {}).get('DOI', '').strip().lower()
+            if doi:
+                existing_dois.add(doi)
+        if len(items) < 100:
+            break
+        start += 100
+
+    # 2. Crée ou récupère la collection Zotero si demandée
+    collection_key = None
+    if collection_name:
+        try:
+            cr = requests.get(f"{base}/collections", headers=headers,
+                              params={"format": "json", "limit": 100}, timeout=30)
+            colls = cr.json() if cr.status_code == 200 else []
+            for c in colls:
+                if (c.get('data') or {}).get('name', '').strip().lower() == collection_name.strip().lower():
+                    collection_key = c['key']
+                    break
+            if not collection_key:
+                cr2 = requests.post(f"{base}/collections", headers=headers,
+                                    json=[{"name": collection_name}], timeout=30)
+                if cr2.status_code in (200, 201):
+                    created = cr2.json()
+                    # Zotero renvoie {successful: {"0": {key: ...}}}
+                    first = (created.get('successful') or {}).get('0') or {}
+                    collection_key = first.get('key')
+        except Exception:
+            pass
+
+    # 3. Construit les items Zotero et envoie par batch de 50
+    added = skipped = errors = 0
+    to_send = []
+
+    for a in articles:
+        doi_norm = (a.doi or '').strip().lower()
+        if doi_norm and doi_norm in existing_dois:
+            skipped += 1
+            continue
+
+        item = {
+            "itemType": "journalArticle",
+            "title": a.title or "",
+            "abstractNote": a.clean_abstract or "",
+            "publicationTitle": a.journal or "",
+            "DOI": a.doi or "",
+            "url": a.url or "",
+            "date": a.published_date.strftime('%Y-%m-%d') if a.published_date else "",
+            "extra": f"PMID: {_extract_pmid_from_url(a.url)}" if a.url else "",
+            "collections": [collection_key] if collection_key else [],
+            "creators": _parse_authors_for_zotero(a.authors or ""),
+            "tags": _build_zotero_tags(a),
+        }
+        to_send.append(item)
+
+    # Envoi par batch de 50 (limite Zotero)
+    for i in range(0, len(to_send), 50):
+        batch = to_send[i:i+50]
+        try:
+            r = requests.post(f"{base}/items", headers=headers,
+                              json=batch, timeout=30)
+            if r.status_code in (200, 201):
+                result = r.json()
+                added += len(result.get('successful') or {})
+                errors += len(result.get('failed') or {})
+            else:
+                errors += len(batch)
+        except Exception:
+            errors += len(batch)
+
+    return added, skipped, errors
+
+
+def _extract_pmid_from_url(url: str) -> str:
+    if not url:
+        return ""
+    m = re.search(r'/pubmed\.ncbi\.nlm\.nih\.gov/(\d+)', url)
+    return m.group(1) if m else ""
+
+
+def _parse_authors_for_zotero(authors_str: str) -> list:
+    """
+    Convertit 'Prénom Nom, Prénom Nom' en liste de creators Zotero.
+    """
+    if not authors_str:
+        return []
+    creators = []
+    for author in authors_str.split(','):
+        author = author.strip()
+        if not author:
+            continue
+        parts = author.rsplit(' ', 1)
+        if len(parts) == 2:
+            creators.append({
+                "creatorType": "author",
+                "firstName": parts[0].strip(),
+                "lastName": parts[1].strip(),
+            })
+        else:
+            creators.append({
+                "creatorType": "author",
+                "firstName": "",
+                "lastName": author,
+            })
+    return creators
+
+
+def _build_zotero_tags(a) -> list:
+    tags = []
+    if a.domain:
+        tags.append({"tag": a.domain})
+    if a.study_type:
+        tags.append({"tag": a.study_type})
+    if a.pathology:
+        tags.append({"tag": a.pathology})
+    tags.append({"tag": "Physara"})
+    return tags
 
 @app.route('/folder/<int:folder_id>/visibility', methods=['POST'])
 @login_required
@@ -1981,6 +2975,38 @@ def unfollow_user(user_id):
         db.session.commit()
     return jsonify({"ok": True, "status": "unfollowed"})
 
+@app.route('/like/<int:article_id>', methods=['POST'])
+@login_required
+def like_article(article_id):
+    existing = Like.query.filter_by(user_id=current_user.id, article_id=article_id).first()
+    if existing:
+        return jsonify({"ok": True, "liked": True, "message": "already liked"})
+    
+    like = Like(user_id=current_user.id, article_id=article_id)
+    db.session.add(like)
+
+    # Log UserEvent
+    event = UserEvent(
+        user_id=current_user.id,
+        article_id=article_id,
+        event_type="like"
+    )
+    db.session.add(event)
+    db.session.commit()
+    
+    count = Like.query.filter_by(article_id=article_id).count()
+    return jsonify({"ok": True, "liked": True, "count": count})
+
+@app.route('/unlike/<int:article_id>', methods=['POST'])
+@login_required
+def unlike_article(article_id):
+    like = Like.query.filter_by(user_id=current_user.id, article_id=article_id).first()
+    if like:
+        db.session.delete(like)
+        db.session.commit()
+    
+    count = Like.query.filter_by(article_id=article_id).count()
+    return jsonify({"ok": True, "liked": False, "count": count})
 
 @app.route('/user/<int:user_id>')
 @login_required
@@ -2003,6 +3029,9 @@ def user_profile(user_id):
     # Dossiers publics
     public_folders = Folder.query.filter_by(user_id=u.id, is_public=True).order_by(Folder.name.asc()).all()
 
+    # Nombre d'articles par dossier
+    folder_article_counts = {f.id: FolderArticle.query.filter_by(folder_id=f.id).count() for f in public_folders}
+
     followers_count = Follow.query.filter_by(followed_id=u.id).count()
     following_count = Follow.query.filter_by(follower_id=u.id).count()
 
@@ -2011,69 +3040,404 @@ def user_profile(user_id):
                            is_following=is_following,
                            public_favs=public_favs,
                            public_folders=public_folders,
+                           folder_article_counts=folder_article_counts,
                            followers_count=followers_count,
                            following_count=following_count)
-
 
 @app.route('/feed')
 @login_required
 def feed():
-    followed_ids = [f.followed_id for f in Follow.query.filter_by(follower_id=current_user.id).all()]
+    from collections import defaultdict, Counter
 
-    if followed_ids:
-        # Feed normal : favoris publics des abonnements
-        items = (
-            Favorite.query
-            .options(joinedload(Favorite.user), joinedload(Favorite.article))
-            .filter(
-                Favorite.user_id.in_(followed_ids),
-                Favorite.is_public == True
-            )
-            .order_by(Favorite.created_at.desc())
-            .limit(100)
-            .all()
+    now = datetime.utcnow()
+    cutoff_30j = now - timedelta(days=30)
+    cutoff_48h = now - timedelta(hours=48)
+
+    # --- Abonnements ---
+    followed = Follow.query.filter_by(follower_id=current_user.id).all()
+    followed_ids = {f.followed_id for f in followed}
+    discovery = len(followed_ids) == 0
+
+    # --- Profil utilisateur : pondération domaines / study_types / keywords ---
+    domain_weight: Counter = Counter()
+    study_type_weight: Counter = Counter()
+    search_keywords: set = set()
+
+    # Favoris de l'utilisateur (toutes dates pour pénalité, 30j pour profil)
+    all_user_favs = Favorite.query.filter_by(user_id=current_user.id).all()
+    user_fav_article_ids = {f.article_id for f in all_user_favs}
+
+    for fav in all_user_favs:
+        if fav.created_at >= cutoff_30j:
+            a = Article.query.get(fav.article_id)
+            if a:
+                if a.domain: domain_weight[a.domain] += 3
+                if a.study_type: study_type_weight[a.study_type] += 3
+
+    # Likes de l'utilisateur
+    user_likes = Like.query.filter_by(user_id=current_user.id).all()
+    user_liked_article_ids = {lk.article_id for lk in user_likes}
+    for lk in user_likes:
+        a = Article.query.get(lk.article_id)
+        if a:
+            if a.domain: domain_weight[a.domain] += 2
+            if a.study_type: study_type_weight[a.study_type] += 2
+
+    # Events : vues (profil + pénalité) et recherches (keywords)
+    viewed_article_ids: set = set()
+    user_events = UserEvent.query.filter_by(user_id=current_user.id).all()
+    for ev in user_events:
+        if ev.event_type == "view" and ev.article_id:
+            viewed_article_ids.add(ev.article_id)
+            a = Article.query.get(ev.article_id)
+            if a:
+                if a.domain: domain_weight[a.domain] += 0.5
+                if a.study_type: study_type_weight[a.study_type] += 0.5
+        elif ev.event_type == "search" and ev.extra:
+            try:
+                extra = json.loads(ev.extra)
+                q_words = extra.get("query", "").lower().split()
+                search_keywords.update(w for w in q_words if len(w) > 2)
+            except Exception:
+                pass
+
+    top_domains = {d for d, _ in domain_weight.most_common(3)}
+    top_study_types = {s for s, _ in study_type_weight.most_common(3)}
+
+    # --- Favoris publics (base du feed) ---
+    favs = Favorite.query.filter(
+        Favorite.is_public == True,
+        Favorite.user_id != current_user.id
+    ).order_by(Favorite.created_at.asc()).all()
+
+    groups = defaultdict(list)
+    for f in favs:
+        groups[f.article_id].append(f)
+
+    # --- Construire les items (même logique sharers qu'avant) ---
+    items = []
+    for article_id, fav_list in groups.items():
+        a = Article.query.get(article_id)
+        if not a:
+            continue
+
+        followed_sharers_favs = sorted(
+            [f for f in fav_list if f.user_id in followed_ids],
+            key=lambda f: f.created_at
         )
-        items = [i for i in items if i.article is not None]
-        discovery = False
-    else:
-        # Découverte : favoris publics de tous sauf soi-même
-        items = (
-            Favorite.query
-            .options(joinedload(Favorite.user), joinedload(Favorite.article))
-            .filter(
-                Favorite.user_id != current_user.id,
-                Favorite.is_public == True
-            )
-            .order_by(Favorite.created_at.desc())
-            .limit(60)
-            .all()
+        other_sharers_favs = sorted(
+            [f for f in fav_list if f.user_id not in followed_ids],
+            key=lambda f: f.created_at
         )
-        items = [i for i in items if i.article is not None]
-        discovery = True
+
+        sharers = []
+        for f in followed_sharers_favs + other_sharers_favs:
+            u = User.query.get(f.user_id)
+            if u:
+                sharers.append({
+                    "user": u,
+                    "fav": f,
+                    "is_followed": f.user_id in followed_ids
+                })
+
+        if not sharers:
+            continue
+
+        latest_at = max(f.created_at for f in fav_list)
+
+        items.append({
+            "article": a,
+            "sharers": sharers,
+            "total_sharers": len(sharers),
+            "latest_at": latest_at,
+            "score": 0,
+            "score_detail": {}
+        })
+
+    # --- Likes globaux (inchangé) ---
+    article_ids = [it["article"].id for it in items]
+    like_counts = {}
+    liked_ids = set()
+    if article_ids:
+        rows = db.session.query(Like.article_id, db.func.count(Like.id))\
+            .filter(Like.article_id.in_(article_ids))\
+            .group_by(Like.article_id).all()
+        like_counts = {r[0]: r[1] for r in rows}
+        liked_ids = {lk.article_id for lk in Like.query.filter(
+            Like.user_id == current_user.id,
+            Like.article_id.in_(article_ids)
+        ).all()}
+
+    # --- Scoring ---
+    for it in items:
+        a = it["article"]
+        lc = like_counts.get(a.id, 0)
+        age_days = (now - it["latest_at"]).total_seconds() / 86400
+
+        # Signal social
+        fs = [s for s in it["sharers"] if s["is_followed"]]
+        sig_followed = len(fs) * 20
+        sig_recent = sum(10 for s in fs if s["fav"].created_at >= cutoff_48h)
+        sig_total = int(math.log2(it["total_sharers"] + 1)) * 3
+        sig_likes = int(math.log2(lc + 1)) * 4
+        signal_social = sig_followed + sig_recent + sig_total + sig_likes
+
+        # Signal pertinence
+        sig_domain = 12 if (a.domain and a.domain in top_domains) else 0
+        sig_study = 8 if (a.study_type and a.study_type in top_study_types) else 0
+        if search_keywords and a.title:
+            text_words = set((a.title + " " + (a.abstract or "")).lower().split())
+            kw_count = len(search_keywords & text_words)
+        else:
+            kw_count = 0
+        sig_keywords = min(kw_count * 3, 15)
+        signal_pertinence = sig_domain + sig_study + sig_keywords
+
+        # Signal qualité
+        ifs_score, _, _ = reliability_score(a)
+        sig_ifs = int(ifs_score / 10)  # max 10
+        abstract_lower = (a.abstract or "").lower()
+        if abstract_lower:
+            sig_abstract = 5 if any(k in abstract_lower for k in ("background", "methods", "results")) else 3
+        else:
+            sig_abstract = 0
+        sig_doi = 2 if a.doi else 0
+        signal_qualite = sig_ifs + sig_abstract + sig_doi
+
+        # Signal fraîcheur
+        if age_days < 1:
+            sig_fraicheur = 10
+        elif age_days < 7:
+            sig_fraicheur = 8
+        elif age_days < 30:
+            sig_fraicheur = 4
+        elif age_days < 90:
+            sig_fraicheur = 0
+        elif age_days < 365:
+            sig_fraicheur = -5
+        else:
+            sig_fraicheur = -10
+
+        # Pénalités
+        pen_fav = -50 if a.id in user_fav_article_ids else 0
+        pen_vu = -15 if a.id in viewed_article_ids else 0
+        penalites = pen_fav + pen_vu
+
+        score = signal_social + signal_pertinence + signal_qualite + sig_fraicheur + penalites
+
+        it["score"] = score
+        it["score_detail"] = {
+            "social": signal_social,
+            "pertinence": signal_pertinence,
+            "qualite": signal_qualite,
+            "fraicheur": sig_fraicheur,
+            "penalites": penalites,
+        }
+
+    # --- MMR re-ranking pour diversifier le feed ---
+    candidats = sorted(items, key=lambda x: x["score"], reverse=True)[:100]
+    max_score = candidats[0]["score"] if candidats else 1
+    if max_score == 0:
+        max_score = 1
+    for it in candidats:
+        it["score_norm"] = it["score"] / max_score
+
+    def same_domain_penalty(item, last5):
+        d = item["article"].domain
+        if not d:
+            return 0
+        return 1 if any(x["article"].domain == d for x in last5) else 0
+
+    feed_final = []
+    remaining = list(candidats)
+    for _ in range(min(50, len(candidats))):
+        if not remaining:
+            break
+        best = max(
+            remaining,
+            key=lambda x: 0.7 * x["score_norm"] - 0.3 * same_domain_penalty(x, feed_final[-5:])
+        )
+        feed_final.append(best)
+        remaining.remove(best)
+
+    for it in feed_final:
+        it["suggested"] = False
+
+    # --- Séparation followed / other ---
+    items_followed = [it for it in feed_final if any(s["is_followed"] for s in it["sharers"])]
+
+    # --- Génération des suggestions ---
+    feed_article_ids = {it["article"].id for it in feed_final}
+    fav_ids  = {f.article_id for f in Favorite.query.filter_by(user_id=current_user.id).all()}
+    seen_ids = {ev.article_id for ev in UserEvent.query.filter_by(
+        user_id=current_user.id, event_type="view").all() if ev.article_id}
+    exclude_ids = feed_article_ids | fav_ids | seen_ids
+
+    candidates_sugg = Article.query.filter(
+        Article.is_published.is_(True),
+        ~Article.id.in_(exclude_ids or {-1})
+    ).limit(200).all()
+
+    def suggestion_score(a):
+        s = 0
+        ifs, _, _ = reliability_score(a)
+        s += int(ifs / 10)
+        if a.domain and a.domain in top_domains:     s += 12
+        if a.study_type and a.study_type in top_study_types: s += 8
+        if search_keywords and a.title:
+            matches = search_keywords & set(a.title.lower().split())
+            s += min(len(matches) * 3, 10)
+        if a.published_date:
+            age = (datetime.utcnow() - a.published_date).days
+            if age <= 7:    s += 10
+            elif age <= 30: s += 6
+            elif age <= 90: s += 2
+        s += like_counts.get(a.id, 0) * 2
+        return s
+
+    suggestions_raw = sorted(candidates_sugg, key=suggestion_score, reverse=True)[:20]
+    suggestions = []
+    for a in suggestions_raw:
+        suggestions.append({
+            "article": a,
+            "sharers": [],
+            "total_sharers": 0,
+            "latest_at": a.published_date or a.created_at or now,
+            "score": suggestion_score(a),
+            "score_detail": {"suggested": True},
+            "suggested": True,
+        })
+
+    # --- Mix 70/30 avec intercalation ---
+    TARGET = 50
+    n_followed  = min(len(items_followed), int(TARGET * 0.7))
+    n_suggested = min(len(suggestions), TARGET - n_followed)
+
+    followed_slice  = items_followed[:n_followed]
+    suggested_slice = suggestions[:n_suggested]
+
+    mixed = []
+    s_idx = 0
+    for i, item in enumerate(followed_slice):
+        mixed.append(item)
+        if (i + 1) % 2 == 0 and s_idx < len(suggested_slice):
+            mixed.append(suggested_slice[s_idx])
+            s_idx += 1
+    while s_idx < len(suggested_slice):
+        mixed.append(suggested_slice[s_idx])
+        s_idx += 1
+
+    items = mixed
+
+    # Étendre like_counts / liked_ids aux articles suggérés
+    sugg_ids = [it["article"].id for it in items if it["suggested"]]
+    if sugg_ids:
+        rows2 = db.session.query(Like.article_id, db.func.count(Like.id))\
+            .filter(Like.article_id.in_(sugg_ids))\
+            .group_by(Like.article_id).all()
+        like_counts.update({r[0]: r[1] for r in rows2})
+        liked_ids |= {lk.article_id for lk in Like.query.filter(
+            Like.user_id == current_user.id,
+            Like.article_id.in_(sugg_ids)
+        ).all()}
 
     return render_template('feed.html',
-                           items=items,
-                           followed_ids=followed_ids,
-                           discovery=discovery)
+        items=items,
+        followed_ids=followed_ids,
+        discovery=discovery,
+        like_counts=like_counts,
+        liked_ids=liked_ids,
+        fav_ids=user_fav_article_ids
+    )
 
+@app.route('/api/article/<int:article_id>/sharers')
+@login_required
+def article_sharers(article_id):
+    followed = Follow.query.filter_by(follower_id=current_user.id).all()
+    followed_ids = {f.followed_id for f in followed}
+
+    favs = Favorite.query.filter_by(article_id=article_id, is_public=True).all()
+
+    followed_sharers = sorted(
+        [f for f in favs if f.user_id in followed_ids],
+        key=lambda f: f.created_at
+    )
+    other_sharers = sorted(
+        [f for f in favs if f.user_id not in followed_ids and f.user_id != current_user.id],
+        key=lambda f: f.created_at
+    )
+
+    result = []
+    for f in followed_sharers + other_sharers:
+        u = User.query.get(f.user_id)
+        if u:
+            result.append({
+                "name": u.name or u.email.split('@')[0],
+                "initial": (u.name or u.email)[0].upper(),
+                "profile_url": url_for('user_profile', user_id=u.id),
+                "date": f.created_at.strftime('%d %b %Y'),
+                "note": f.public_note or "",
+                "is_followed": f.user_id in followed_ids,
+                "user_id": u.id,
+                "email": u.email,
+                "photo": u.photo_filename or ""
+            })
+
+    return jsonify(result)
 
 @app.route('/users')
 @login_required
 def users_list():
-    followed_ids = {f.followed_id for f in Follow.query.filter_by(follower_id=current_user.id).all()}
-    users = User.query.filter(User.id != current_user.id).order_by(User.name.asc()).all()
+    users = User.query.filter(User.id != current_user.id).order_by(User.name).all()
+    followed = Follow.query.filter_by(follower_id=current_user.id).all()
+    followed_ids = {f.followed_id for f in followed}
 
-    # Stats par user
     stats = {}
+    last_active = {}
     for u in users:
         pub_favs = Favorite.query.filter_by(user_id=u.id, is_public=True).count()
         followers = Follow.query.filter_by(followed_id=u.id).count()
         stats[u.id] = {"pub_favs": pub_favs, "followers": followers}
 
+        # Dernier favori partagé
+        last_fav = Favorite.query.filter_by(user_id=u.id, is_public=True)\
+            .order_by(Favorite.created_at.desc()).first()
+        last_active[u.id] = last_fav.created_at if last_fav else None
+
+    # Top contributeurs du mois
+    from datetime import date
+    month_start = datetime(date.today().year, date.today().month, 1)
+
+    top_scores = {}
+    for u in users:
+        favs_month = Favorite.query.filter(
+            Favorite.user_id == u.id,
+            Favorite.is_public == True,
+            Favorite.created_at >= month_start
+        ).count()
+        likes_received = db.session.query(db.func.count(Like.id))\
+            .join(Favorite, Like.article_id == Favorite.article_id)\
+            .filter(
+                Favorite.user_id == u.id,
+                Like.created_at >= month_start
+            ).scalar() or 0
+        score = (favs_month * 2) + likes_received
+        top_scores[u.id] = {"score": score, "favs": favs_month, "likes": likes_received}
+
+    top_contributors = sorted(
+        [u for u in users if top_scores[u.id]["score"] > 0],
+        key=lambda u: top_scores[u.id]["score"],
+        reverse=True
+    )[:3]
+
     return render_template('users_list.html',
-                           users=users,
-                           stats=stats,
-                           followed_ids=followed_ids)
+        users=users,
+        followed_ids=followed_ids,
+        stats=stats,
+        last_active=last_active,
+        top_contributors=top_contributors,
+        top_scores=top_scores
+    )
 
 # --------- DRAFTS: suppression par l'utilisateur ---------
 from flask import abort
@@ -2330,6 +3694,7 @@ def admin_unpublish(article_id):
 @app.route("/admin/pull_pubmed", methods=["POST"])
 @login_required
 @admin_required
+@limiter.limit("30 per minute")
 def admin_pull_pubmed():
     q = (request.form.get("q_pubmed") or "").strip()
     try:
@@ -2401,6 +3766,7 @@ def admin_reset_drafts_everyone():
 @app.route("/admin/backfill_abstracts", methods=["POST"])
 @login_required
 @admin_required
+@limiter.limit("5 per minute")
 def admin_backfill_abstracts():
     missing = Article.query.filter(
         Article.abstract.is_(None),
@@ -2419,6 +3785,63 @@ def admin_backfill_abstracts():
         db.session.commit()
     flash(f"Résumés récupérés : {got} article(s).", "info")
     return redirect(url_for("admin_dashboard"))
+
+# --- Backfill domain / study_type manquants ---
+@app.route("/admin/backfill_domains", methods=["POST"])
+@login_required
+@admin_required
+@limiter.limit("5 per minute")
+def admin_backfill_domains():
+    articles = Article.query.filter(
+        db.or_(Article.domain.is_(None), Article.study_type.is_(None))
+    ).limit(500).all()
+
+    filled_domain = 0
+    filled_study = 0
+    for i, a in enumerate(articles):
+        changed = False
+        if a.domain is None:
+            inferred = _infer_domain(a.title, a.abstract, a.journal)
+            if inferred:
+                a.domain = inferred
+                filled_domain += 1
+                changed = True
+        if a.study_type is None:
+            inferred_st = _infer_study_type(a)
+            if inferred_st:
+                a.study_type = inferred_st
+                filled_study += 1
+                changed = True
+        if changed and (i + 1) % 50 == 0:
+            db.session.commit()
+
+    db.session.commit()
+    flash(
+        f"Backfill terminé : {filled_domain} domain(s) remplis, "
+        f"{filled_study} study_type(s) remplis sur {len(articles)} articles traités.",
+        "info"
+    )
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route('/admin/migrate_zotero_keys', methods=['POST'])
+@login_required
+@admin_required
+def admin_migrate_zotero_keys():
+    users = User.query.filter(User.zotero_api_key.isnot(None)).all()
+    migrated = 0
+    for u in users:
+        raw = u.zotero_api_key
+        if not raw:
+            continue
+        if raw.startswith("gAAAAA"):
+            continue  # déjà chiffré
+        u.zotero_api_key = encrypt_api_key(raw)
+        migrated += 1
+    db.session.commit()
+    flash(f"Migration Zotero : {migrated} clé(s) chiffrée(s).", "success")
+    return redirect(url_for('admin_dashboard'))
+
 
 from sqlalchemy.orm import joinedload
 
@@ -2482,6 +3905,7 @@ def admin_proposals_reject(pid):
 # -----------------------------------------------------------------------------
 @app.route('/pubmed_search', methods=['GET', 'POST'], endpoint='pubmed_search')
 @login_required
+@limiter.limit("20 per minute")
 def pubmed_search():
     # PRG : on convertit POST -> GET
     if request.method == 'POST':
@@ -2558,6 +3982,11 @@ def my_drafts():
 
     # ✅ si on arrive sans q_pubmed, on restaure l'état de CE user seulement
     if not q_pubmed:
+        # Supprime les anciens brouillons de cet utilisateur pour repartir propre
+        old_drafts = UserDraft.query.filter_by(user_id=current_user.id).all()
+        for od in old_drafts:
+            db.session.delete(od)
+        db.session.commit()
         q_pubmed = (ustate.get("q_pubmed") or "").strip()
         try:
             page = int(ustate.get("page") or page)
@@ -2751,6 +4180,7 @@ def propose_publish(article_id):
 
 @app.route('/drafts/pull_pubmed', methods=['POST'])
 @login_required
+@limiter.limit("10 per minute")
 def drafts_pull_pubmed():
     q = (request.form.get('q_pubmed') or '').strip()
     try:
@@ -2763,20 +4193,32 @@ def drafts_pull_pubmed():
         flash("Saisis un terme pour la recherche PubMed.", "warning")
         return redirect(url_for('my_drafts'))
 
+    # Récupération des filtres
+    sort = request.form.get('pubmed_sort') or 'pub+date'
+    if sort not in ('pub+date', 'relevance'):
+        sort = 'pub+date'
+
+    filters = {
+        "study_type": request.form.get('study_type') or '',
+        "access":     request.form.get('access') or '',
+        "lang":       request.form.get('lang') or '',
+        "date_range": request.form.get('date_range') or '',
+        "date_from":  request.form.get('date_from') or '',
+        "date_to":    request.form.get('date_to') or '',
+    }
+
     PER_PAGE = 48
-    results, total = fetch_pubmed_query_paged(q, page=page, per_page=PER_PAGE)
+    results, total = fetch_pubmed_query_paged(q, page=page, per_page=PER_PAGE,
+                                               sort=sort, filters=filters)
 
     linked = 0
-
     with db.session.no_autoflush:
         for d in results:
-            art = add_or_attach_article(d, user=None)  # Article global dédupliqué
+            art = add_or_attach_article(d, user=None)
             if not art:
                 continue
-
-            rank = d.get("source_order")  # rank global dans CETTE recherche/page
+            rank = d.get("source_order")
             link = UserDraft.query.filter_by(user_id=current_user.id, article_id=art.id).first()
-
             if not link:
                 db.session.add(UserDraft(
                     user_id=current_user.id,
@@ -2786,19 +4228,26 @@ def drafts_pull_pubmed():
                 ))
                 linked += 1
             else:
-                # IMPORTANT : on force la cohérence de pagination par requête
                 if link.search_query != q:
                     link.search_query = q
                 if rank is not None and link.pubmed_rank != rank:
                     link.pubmed_rank = rank
 
+    event = UserEvent(
+        user_id=current_user.id,
+        article_id=None,
+        event_type="search",
+        extra=json.dumps({"query": q})
+    )
+    db.session.add(event)
     db.session.commit()
 
-    flash(f"PubMed « {q} » : page {page} → {len(results)} résultats, {linked} ajoutés à MES recherches.", "info")
-    return redirect(url_for('my_drafts', q_pubmed=q, page=page))
+    pass
+    return redirect(url_for('my_drafts', q_pubmed=q, page=page, pubmed_sort=sort, **filters))
 
 @app.route('/drafts/load_pubmed', methods=['GET'], endpoint='drafts_load_pubmed')
 @login_required
+@limiter.limit("10 per minute")
 def drafts_load_pubmed():
     q_pubmed = (request.args.get('q_pubmed') or '').strip()
     try:
@@ -2873,6 +4322,7 @@ if __name__ == "__main__":
         ensure_favorite_columns()
         ensure_userdraft_schema()
         ensure_folder_schema()
+        ensure_event_schema()
         db.session.execute(text("UPDATE article SET featured=0 WHERE featured IS NULL"))
         db.session.commit()
     app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)

@@ -1,48 +1,227 @@
 {% extends "layout.html" %}
 {% block content %}
-
+{% macro share_dropdown(article_id) %}
+<div class="dropdown" onclick="event.stopPropagation()">
+  <button class="btn btn-sm btn-outline-secondary dropdown-toggle"
+          data-bs-toggle="dropdown" data-bs-auto-close="outside"
+          onclick="event.stopPropagation()" title="Partager">
+    Partager
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end" style="min-width:190px;">
+    <li>
+      <button class="dropdown-item" onclick="openShare('whatsapp', {{ article_id }})">
+        <span class="share-icon" style="background:#25d366; color:#fff;">W</span> WhatsApp
+      </button>
+    </li>
+    <li>
+      <button class="dropdown-item" onclick="openShare('telegram', {{ article_id }})">
+        <span class="share-icon" style="background:#229ed9; color:#fff;">T</span> Telegram
+      </button>
+    </li>
+    <li>
+      <button class="dropdown-item" onclick="openShare('twitter', {{ article_id }})">
+        <span class="share-icon" style="background:#000; color:#fff;">𝕏</span> X / Twitter
+      </button>
+    </li>
+    <li>
+      <button class="dropdown-item" onclick="openShare('facebook', {{ article_id }})">
+        <span class="share-icon" style="background:#1877f2; color:#fff;">f</span> Facebook
+      </button>
+    </li>
+    <li>
+      <button class="dropdown-item" onclick="openShare('linkedin', {{ article_id }})">
+        <span class="share-icon" style="background:#0a66c2; color:#fff;">in</span> LinkedIn
+      </button>
+    </li>
+    <li><hr class="dropdown-divider"></li>
+    <li>
+      <button class="dropdown-item" onclick="openShare('sms', {{ article_id }})">
+        <span class="share-icon" style="background:#34c759; color:#fff;">✉</span> SMS
+      </button>
+    </li>
+    <li>
+      <button class="dropdown-item" onclick="openShare('email', {{ article_id }})">
+        <span class="share-icon" style="background:#6366f1; color:#fff;">@</span> Email
+      </button>
+    </li>
+    <li><hr class="dropdown-divider"></li>
+    <li>
+      <button class="dropdown-item" data-copy-id="{{ article_id }}"
+              onclick="openShare('copy', {{ article_id }})">
+        <span class="share-icon" style="background:#64748b; color:#fff;">🔗</span> Copier le lien
+      </button>
+    </li>
+  </ul>
+</div>
+{% endmacro %}
 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-  <h3 class="mb-0">Mes favoris</h3>
-  <a href="{{ url_for('favorites') }}" class="btn btn-sm btn-outline-secondary">Tous les favoris</a>
+  <h3 class="mb-0">{{ t('favorites.title') }}</h3>
+  <div class="d-flex gap-2">
+    {% if current_user.zotero_api_key and current_user.zotero_user_id %}
+    <form method="post" action="{{ url_for('zotero_export_all') }}" onclick="event.stopPropagation()">
+      <button class="btn btn-sm btn-outline-success" type="submit"
+              title="{{ t('favorites.export_zotero') }}">
+        {{ t('favorites.export_zotero') }}
+      </button>
+    </form>
+    <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#zoteroImportModal">
+      {{ t('favorites.import_zotero') }}
+    </button>
+    {% endif %}
+    <a href="{{ url_for('favorites') }}" class="btn btn-sm btn-outline-secondary">{{ t('favorites.all') }}</a>
+  </div>
 </div>
 
-<!-- Barre dossiers -->
-<div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
+<!-- Modal confirmation import Zotero -->
+{% if current_user.zotero_api_key and current_user.zotero_user_id %}
+<div class="modal fade" id="zoteroImportModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title mb-0">Importer depuis Zotero</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-1">Ceci va importer tous vos articles de revue (<em>journalArticle</em>) depuis Zotero vers vos favoris Physara.</p>
+        <p class="text-muted small mb-0">Les articles déjà en favoris ne seront pas dupliqués. Les articles sans DOI ou introuvables sur PubMed seront ignorés.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
+        <form method="post" action="{{ url_for('zotero_import') }}" class="d-inline">
+          <button type="submit" class="btn btn-primary btn-sm">Lancer l'import</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Modal suppression dossier -->
+<div class="modal fade" id="deleteFolderModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title mb-0">Supprimer le dossier</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-1">Supprimer le dossier <strong id="delete-folder-name"></strong> ?</p>
+        <p class="text-muted small mb-0">Les articles qu'il contient ne seront pas supprimés de vos favoris.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
+        <button type="button" class="btn btn-danger btn-sm" id="delete-folder-confirm-btn" onclick="confirmDeleteFolder()">
+          Supprimer
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Grille dossiers -->
+<div class="folders-grid mb-4" id="folders-grid">
   {% for f in folders %}
-    <a href="{{ url_for('folder_view', folder_id=f.id) }}"
-       class="btn btn-sm {{ 'btn-primary' if active_folder and active_folder.id == f.id else 'btn-outline-primary' }}">
-      📁 {{ f.name }}
-    </a>
+  <div class="folder-tile {% if active_folder and active_folder.id == f.id %}folder-tile-active{% endif %}"
+       data-folder-id="{{ f.id }}"
+       data-color="{{ f.color or '#6366f1' }}"
+       onclick="window.location='{{ url_for('folder_view', folder_id=f.id) }}'">
+
+    <!-- Icône dossier CSS -->
+    <div class="folder-icon-wrap">
+      <div class="folder-icon" style="--folder-color: {{ f.color or '#6366f1' }};">
+        <div class="folder-tab"></div>
+        <div class="folder-body"></div>
+      </div>
+      <!-- Bouton palette -->
+      <button class="btn-palette" title="Changer la couleur"
+              onclick="event.stopPropagation(); openPalette({{ f.id }}, this)">
+        ✎
+      </button>
+    </div>
+
+    <div class="folder-name text-truncate">{{ f.name }}</div>
+    <div class="folder-count text-muted">
+      {% set count = folder_article_counts.get(f.id, 0) %}
+      {{ count }} article{{ 's' if count > 1 else '' }}
+    </div>
+    {% if current_user.zotero_api_key and current_user.zotero_user_id %}
+    <form method="post" action="{{ url_for('zotero_export_folder', folder_id=f.id) }}"
+          onclick="event.stopPropagation()" class="mt-1">
+      <button type="submit" class="btn btn-xs btn-outline-success folder-export-btn"
+              title="Exporter ce dossier vers Zotero" onclick="event.stopPropagation()">
+        ↑ Zotero
+      </button>
+    </form>
+    {% endif %}
+
+    <!-- Palette couleurs (cachée) -->
+    <div class="color-palette" id="palette-{{ f.id }}" style="display:none;" onclick="event.stopPropagation()">
+      {% for color in ['#6366f1','#3b82f6','#22c55e','#f59e0b','#ef4444','#ec4899','#8b5cf6','#64748b'] %}
+      <button class="color-swatch" style="background:{{ color }};"
+              onclick="setFolderColor({{ f.id }}, '{{ color }}', this.closest('.folder-tile'))">
+      </button>
+      {% endfor %}
+    </div>
+
+  </div>
   {% endfor %}
 
-  <!-- Bouton créer dossier -->
-  <button class="btn btn-sm btn-outline-success" onclick="showCreateFolder()">+ Nouveau dossier</button>
+  <!-- Tuile nouveau dossier -->
+  <div class="folder-tile folder-tile-new" onclick="openCreateFolder()">
+    <div class="folder-icon-wrap">
+      <div class="folder-new-icon">+</div>
+    </div>
+    <div class="folder-name text-muted">{{ t('folder.new') }}</div>
+  </div>
+</div>
 
-  <!-- Formulaire inline création -->
-  <div id="create-folder-form" style="display:none;" class="d-flex gap-2">
-    <input type="text" id="new-folder-name" class="form-control form-control-sm" placeholder="Nom du dossier" style="width:180px;">
-    <button class="btn btn-sm btn-success" onclick="createFolder()">Créer</button>
-    <button class="btn btn-sm btn-outline-secondary" onclick="hideCreateFolder()">Annuler</button>
+<!-- Modal création dossier -->
+<div class="modal fade" id="createFolderModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title mb-0">Nouveau dossier</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="text" id="new-folder-name" class="form-control mb-3" placeholder="Nom du dossier">
+        <div class="d-flex flex-wrap gap-2 justify-content-center">
+          {% for color in ['#6366f1','#3b82f6','#22c55e','#f59e0b','#ef4444','#ec4899','#8b5cf6','#64748b'] %}
+          <button class="color-swatch color-swatch-lg {% if loop.first %}swatch-selected{% endif %}"
+                  style="background:{{ color }};"
+                  data-color="{{ color }}"
+                  onclick="selectNewColor(this)">
+          </button>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
+        <button class="btn btn-primary btn-sm" onclick="createFolder()">Créer</button>
+      </div>
+    </div>
   </div>
 </div>
 
 {% if active_folder %}
 <!-- Vue dossier -->
 <div class="d-flex align-items-center gap-2 mb-3">
-  <h5 class="mb-0">📁 {{ active_folder.name }}</h5>
-
-  <!-- Visibilité du dossier -->
+  <h5 class="mb-0">{{ active_folder.name }}</h5>
   <button class="btn btn-sm {{ 'btn-success' if active_folder.is_public else 'btn-outline-secondary' }}"
           id="folder-vis-btn"
           onclick="toggleFolderVisibility({{ active_folder.id }}, this)"
-          title="{{ 'Public - cliquer pour rendre privé' if active_folder.is_public else 'Privé - cliquer pour rendre public' }}">
-    {{ '🌐' if active_folder.is_public else '🔒' }}
+          title="{{ 'Public' if active_folder.is_public else 'Privé' }}">
+    {{ 'Public' if active_folder.is_public else 'Privé' }}
   </button>
-
-  <form method="post" action="{{ url_for('folder_delete', folder_id=active_folder.id) }}"
-        onsubmit="return confirm('Supprimer ce dossier ?')">
-    <button class="btn btn-sm btn-outline-danger">Supprimer le dossier</button>
-  </form>
+  {% if active_folder.user_id == current_user.id %}
+  <button class="btn btn-sm btn-outline-danger"
+          id="delete-folder-btn"
+          data-folder-id="{{ active_folder.id }}"
+          data-folder-name="{{ active_folder.name }}"
+          onclick="openDeleteFolderModal(this.dataset.folderId, this.dataset.folderName)">
+    Supprimer
+  </button>
+  {% endif %}
 </div>
 
 {% if folder_articles %}
@@ -66,17 +245,62 @@
           {% if a.published_date %}<span>Paru le {{ a.published_date.strftime('%d %b %Y') }}</span>{% endif %}
         </div>
         {% if a.abstract %}
-          <p class="small line-clamp-3 mb-3">{{ (a.abstract|striptags)[:320] }}{% if a.abstract|length > 320 %}…{% endif %}</p>
+          {% set _abstract_text = a.clean_abstract or (a.abstract|striptags) %}
+          <p class="small line-clamp-3 mb-1">{{ _abstract_text[:320] }}{% if _abstract_text|length > 320 %}…{% endif %}</p>
         {% else %}
-          <p class="small text-muted mb-3 fst-italic">Résumé non disponible.</p>
+          <p class="small text-muted mb-3 fst-italic">{{ t('article.no_abstract') }}</p>
         {% endif %}
-        <div class="mt-auto d-flex align-items-center gap-2">
-          {% if a.url %}<a class="btn btn-sm btn-primary" href="{{ a.url }}" target="_blank" onclick="event.stopPropagation()">Ouvrir</a>{% endif %}
+        <div class="mt-auto d-flex align-items-center gap-2 flex-wrap">
+          {% if a.url %}<a class="btn btn-sm btn-primary" href="{{ a.url }}" target="_blank" onclick="event.stopPropagation()">{{ t('btn.open') }}</a>{% endif %}
           {% if a.doi %}<a class="btn btn-sm btn-outline-primary" href="https://doi.org/{{ a.doi }}" target="_blank" onclick="event.stopPropagation()">DOI</a>{% endif %}
-          <form method="post" action="{{ url_for('folder_remove_article', folder_id=active_folder.id, article_id=a.id) }}"
-                class="ms-auto" onclick="event.stopPropagation()">
-            <button class="btn btn-sm btn-outline-danger">Retirer</button>
-          </form>
+
+          <button class="btn btn-sm btn-outline-secondary"
+                  onclick="event.stopPropagation(); showCardCite(this, {{ a.id }})"
+                  data-article-id="{{ a.id }}">{{ t('btn.cite') }}</button>
+
+          {{ share_dropdown(a.id) }}
+
+          {% if active_folder.user_id == current_user.id %}
+          <button class="btn btn-sm btn-outline-danger ms-auto"
+                  onclick="event.stopPropagation(); removeFromFolder({{ active_folder.id }}, {{ a.id }}, this)">
+            Retirer
+          </button>
+          {% else %}
+          <!-- Ajouter aux favoris + dossier -->
+          <button class="btn btn-sm {{ 'btn-success' if a.id in favs else 'btn-outline-secondary' }}"
+                  id="fav-btn-{{ a.id }}"
+                  onclick="event.stopPropagation(); toggleFavorite({{ a.id }}, this)"
+                  title="{{ 'Dans vos favoris' if a.id in favs else 'Ajouter aux favoris' }}">
+            {{ 'Favori' if a.id in favs else '+ Favori' }}
+          </button>
+
+          <div class="dropdown ms-auto" onclick="event.stopPropagation()">
+            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" onclick="event.stopPropagation()">
+              Dossier
+            </button>
+            {% set fv_art_folder_ids = folders_by_article.get(a.id, []) | map(attribute='id') | list %}
+            <ul class="dropdown-menu">
+              {% if folders %}
+                {% for fd in folders %}
+                  {% set in_folder = fd.id in fv_art_folder_ids %}
+                  <li>
+                    <button class="dropdown-item {% if in_folder %}folder-item-active{% endif %}"
+                            data-folder-id="{{ fd.id }}"
+                            data-in-folder="{{ 'true' if in_folder else 'false' }}"
+                            onclick="event.stopPropagation(); toggleFolder({{ fd.id }}, {{ a.id }}, this)">
+                      <span class="folder-dot" style="background:{{ fd.color or '#6366f1' }};"></span>
+                      {% if in_folder %}<span class="folder-check">✓ </span>{% endif %}{{ fd.name }}
+                    </button>
+                  </li>
+                {% endfor %}
+              {% else %}
+                <li><span class="dropdown-item text-muted">Aucun dossier</span></li>
+              {% endif %}
+              <li><hr class="dropdown-divider"></li>
+              <li><button class="dropdown-item text-success" onclick="openCreateFolder()">+ Nouveau dossier</button></li>
+            </ul>
+          </div>
+          {% endif %}
         </div>
       </div>
     </div>
@@ -117,56 +341,62 @@
         </div>
 
         {% if a.abstract %}
-          <p class="small line-clamp-3 mb-3">{{ (a.abstract|striptags)[:320] }}{% if a.abstract|length > 320 %}…{% endif %}</p>
+          {% set _abstract_text = a.clean_abstract or (a.abstract|striptags) %}
+          <p class="small line-clamp-3 mb-1">{{ _abstract_text[:320] }}{% if _abstract_text|length > 320 %}…{% endif %}</p>
         {% else %}
-          <p class="small text-muted mb-3 fst-italic">Résumé non disponible.</p>
+          <p class="small text-muted mb-3 fst-italic">{{ t('article.no_abstract') }}</p>
         {% endif %}
 
-        <!-- Dossiers de cet article -->
         {% set art_folders = folders_by_article.get(a.id, []) %}
         <div class="d-flex flex-wrap gap-1 mb-2" id="folders-of-{{ a.id }}">
           {% for fd in art_folders %}
-            <span class="badge bg-secondary">📁 {{ fd.name }}</span>
+            <span class="badge" style="background:{{ fd.color or '#6366f1' }}; color:#fff;">{{ fd.name }}</span>
           {% endfor %}
         </div>
 
-        <!-- Note publique existante -->
         {% if f.public_note %}
-          <div class="alert alert-light py-2 px-3 small mb-2">
-            💬 {{ f.public_note }}
-          </div>
+          <div class="public-note-box mb-2">{{ f.public_note }}</div>
         {% endif %}
 
         <div class="mt-auto d-flex align-items-center gap-2 flex-wrap">
-          {% if a.url %}<a class="btn btn-sm btn-primary" href="{{ a.url }}" target="_blank" onclick="event.stopPropagation()">Ouvrir</a>{% endif %}
+          {% if a.url %}<a class="btn btn-sm btn-primary" href="{{ a.url }}" target="_blank" onclick="event.stopPropagation()">{{ t('btn.open') }}</a>{% endif %}
           {% if a.doi %}<a class="btn btn-sm btn-outline-primary" href="https://doi.org/{{ a.doi }}" target="_blank" onclick="event.stopPropagation()">DOI</a>{% endif %}
 
-          <!-- Public / Privé -->
           <button class="btn btn-sm {{ 'btn-success' if f.is_public else 'btn-outline-secondary' }}"
                   id="vis-btn-{{ a.id }}"
                   onclick="event.stopPropagation(); toggleVisibility({{ a.id }}, this)"
-                  title="{{ 'Public - cliquer pour rendre privé' if f.is_public else 'Privé - cliquer pour rendre public' }}">
-            {{ '🌐' if f.is_public else '🔒' }}
+                  title="{{ t('btn.public') if f.is_public else t('btn.private') }}">
+            {{ t('btn.public') if f.is_public else t('btn.private') }}
           </button>
 
-          <!-- Note publique -->
           <button class="btn btn-sm btn-outline-secondary"
                   onclick="event.stopPropagation(); togglePublicNote({{ a.id }})"
                   title="Note publique">
-            💬
+            Note
           </button>
 
-          <!-- Ajouter à un dossier -->
+          <button class="btn btn-sm btn-outline-secondary"
+                  onclick="event.stopPropagation(); showCardCite(this, {{ a.id }})"
+                  data-article-id="{{ a.id }}">{{ t('btn.cite') }}</button>
+
+          {{ share_dropdown(a.id) }}
+
           <div class="dropdown" onclick="event.stopPropagation()">
-            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
-              📁
+            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" onclick="event.stopPropagation()">
+              Dossier
             </button>
+            {% set art_folder_ids = art_folders | map(attribute='id') | list %}
             <ul class="dropdown-menu">
               {% if folders %}
                 {% for fd in folders %}
+                  {% set in_folder = fd.id in art_folder_ids %}
                   <li>
-                    <button class="dropdown-item" onclick="addToFolder({{ fd.id }}, {{ a.id }}, this)">
-                      {{ fd.name }}
+                    <button class="dropdown-item {% if in_folder %}folder-item-active{% endif %}"
+                            data-folder-id="{{ fd.id }}"
+                            data-in-folder="{{ 'true' if in_folder else 'false' }}"
+                            onclick="event.stopPropagation(); toggleFolder({{ fd.id }}, {{ a.id }}, this)">
+                      <span class="folder-dot" style="background:{{ fd.color or '#6366f1' }};"></span>
+                      {% if in_folder %}<span class="folder-check">✓ </span>{% endif %}{{ fd.name }}
                     </button>
                   </li>
                 {% endfor %}
@@ -174,18 +404,16 @@
                 <li><span class="dropdown-item text-muted">Aucun dossier</span></li>
               {% endif %}
               <li><hr class="dropdown-divider"></li>
-              <li><button class="dropdown-item text-success" onclick="showCreateFolder()">+ Nouveau dossier</button></li>
+              <li><button class="dropdown-item text-success" onclick="openCreateFolder()">+ Nouveau dossier</button></li>
             </ul>
           </div>
 
-          <!-- Retirer des favoris -->
           <form method="post" action="{{ url_for('unfavorite', article_id=a.id) }}"
                 class="ms-auto" onclick="event.stopPropagation()">
-            <button class="btn btn-sm btn-outline-danger">Retirer</button>
+            <button class="btn btn-sm btn-outline-danger">{{ t('btn.remove') }}</button>
           </form>
         </div>
 
-        <!-- Zone note publique (cachée par défaut) -->
         <div id="public-note-{{ a.id }}" class="w-100 mt-2" style="display:none;" onclick="event.stopPropagation()">
           <div class="input-group input-group-sm">
             <input type="text" class="form-control"
@@ -200,7 +428,7 @@
     </div>
   {% endif %}
   {% else %}
-    <div class="col-12"><p class="text-muted">Aucun favori pour le moment.</p></div>
+    <div class="col-12"><p class="text-muted">{{ t('favorites.empty') }}</p></div>
   {% endfor %}
 </div>
 {% endif %}
@@ -240,10 +468,18 @@
         <h6 class="mb-2">Résumé</h6>
         <div id="am-abstract" class="mb-0"></div>
       </div>
-      <div class="modal-footer">
-        <a id="am-url" href="#" target="_blank" class="btn btn-primary" style="display:none;">Ouvrir</a>
+      <div class="modal-footer d-flex align-items-center flex-wrap gap-2">
+        <a id="am-url" href="#" target="_blank" class="btn btn-primary" style="display:none;">{{ t('btn.open') }}</a>
         <a id="am-doi" href="#" target="_blank" class="btn btn-outline-primary" style="display:none;">DOI</a>
-        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fermer</button>
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">{{ t('btn.close') }}</button>
+        <button type="button" class="btn btn-outline-secondary" id="am-cite-btn" style="display:none;" onclick="toggleCiteBox()">{{ t('btn.cite') }}</button>
+        <div id="am-cite-box" style="display:none; width:100%;">
+          <div class="cite-box">
+            <div class="cite-box-label">Vancouver</div>
+            <div id="am-cite-text" class="cite-box-text"></div>
+            <button class="cite-copy-btn" onclick="copyCite()">Copier</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -253,39 +489,269 @@
 
 {% block scripts %}
 <style>
-  .badge-ifs { background: var(--bs-warning-bg-subtle,#fff3cd); color:#6c4b00; border:1px solid rgba(0,0,0,.08); }
+.cite-box-card {
+  background: var(--bs-body-bg);
+  border: 1px solid #6366f1;
+  border-radius: 8px;
+  padding: 10px 14px;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0; right: 0;
+  z-index: 1050;
+  box-shadow: 0 8px 32px rgba(99,102,241,.18);
+}
+/* Grille dossiers */
+.folders-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  position: relative;
+  z-index: 100;
+}
+
+/* Tuile dossier */
+.folder-tile {
+  width: 130px;
+  cursor: pointer;
+  padding: 12px 10px 10px;
+  border-radius: 12px;
+  border: 2px solid transparent;
+  transition: border-color .15s, transform .12s;
+  position: relative;
+  text-align: center;
+  background: var(--bs-body-bg);
+  z-index: 1;
+}
+.folder-tile:hover { transform: translateY(-2px); border-color: var(--bs-border-color); z-index: 1000; }
+.folder-tile-active { border-color: #6366f1 !important; background: var(--bs-secondary-bg); }
+.folder-tile-new { border: 2px dashed var(--bs-border-color); }
+.folder-tile-new:hover { border-color: #6366f1; }
+
+/* Icône dossier CSS */
+.folder-icon-wrap { position: relative; display: inline-block; margin-bottom: 8px; }
+.folder-icon { position: relative; width: 64px; height: 52px; display: inline-block; }
+.folder-tab { position: absolute; top: 0; left: 0; width: 28px; height: 10px; background: var(--folder-color); border-radius: 4px 4px 0 0; opacity: 0.85; }
+.folder-body { position: absolute; bottom: 0; left: 0; width: 64px; height: 44px; background: var(--folder-color); border-radius: 0 6px 6px 6px; }
+
+/* Bouton palette */
+.btn-palette {
+  position: absolute;
+  top: -6px; right: -6px;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: var(--bs-body-bg);
+  border: 1px solid var(--bs-border-color);
+  font-size: 0.65rem;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0;
+  transition: opacity .15s;
+}
+.folder-tile:hover .btn-palette { opacity: 1; }
+
+/* Palette couleurs */
+.color-palette {
+  position: absolute;
+  top: calc(100% + 4px); left: 50%;
+  transform: translateX(-50%);
+  background: var(--bs-body-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: 10px;
+  padding: 8px;
+  display: flex; flex-wrap: wrap; gap: 6px;
+  width: 120px;
+  z-index: 9999;
+  box-shadow: 0 4px 16px rgba(0,0,0,.12);
+}
+.color-swatch { width: 22px; height: 22px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; transition: transform .1s; }
+.color-swatch:hover { transform: scale(1.2); }
+.color-swatch-lg { width: 28px; height: 28px; }
+.swatch-selected { border-color: var(--bs-body-color) !important; }
+
+/* Icône nouveau dossier */
+.folder-new-icon { width: 64px; height: 52px; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; color: var(--bs-secondary-color); }
+
+/* Nom et compte */
+.folder-name { font-size: 0.82rem; font-weight: 600; margin-bottom: 2px; }
+.folder-count { font-size: 0.72rem; }
+
+/* Point couleur dans dropdown */
+.folder-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.folder-item-active { color: #6366f1 !important; font-weight: 500; }
+.folder-check { color: #6366f1; }
+
+/* Autres */
+.col-md-6, .col-lg-4 { overflow: visible !important; }
+.article-card { overflow: visible !important; }
+.dropdown-menu { z-index: 9999 !important; }
+.article-card:hover { transform: none !important; }
+.public-note-box { background: var(--bs-secondary-bg); border-left: 3px solid #6366f1; border-radius: 0 6px 6px 0; padding: 6px 10px; font-size: 0.82rem; color: var(--bs-body-color); }
+.badge-ifs { background: var(--bs-warning-bg-subtle,#fff3cd); color:#6c4b00; border:1px solid rgba(0,0,0,.08); }
+
+/* Drag & Drop */
+.card[data-article-id] { cursor: grab; }
+.card[data-article-id]:active { cursor: grabbing; }
+.folder-tile-drop {
+  border-color: #6366f1 !important;
+  background: rgba(99,102,241,0.08) !important;
+  transform: scale(1.05);
+}
+.folder-tile-success {
+  border-color: #22c55e !important;
+  background: rgba(34,197,94,0.12) !important;
+  transition: all 0.2s;
+}
+.folder-tile-already {
+  border-color: #f59e0b !important;
+  background: rgba(245,158,11,0.10) !important;
+  transition: all 0.2s;
+}
+.btn-xs { font-size: 0.68rem; padding: 1px 7px; border-radius: 4px; }
+.folder-export-btn { opacity: 0; transition: opacity .15s; }
+.folder-tile:hover .folder-export-btn { opacity: 1; }
+.share-dropdown .dropdown-item { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; }
+.share-icon { width: 18px; height: 18px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem; flex-shrink: 0; }
 </style>
 <script>
-// --- Dossiers ---
-function showCreateFolder() {
-  document.getElementById('create-folder-form').style.display = 'flex';
-  document.getElementById('new-folder-name').focus();
+// --- Palette couleurs ---
+let createFolderModal = null;
+let selectedNewColor = '#6366f1';
+
+function openPalette(folderId, btn) {
+  document.querySelectorAll('.color-palette').forEach(p => p.style.display = 'none');
+  const palette = document.getElementById(`palette-${folderId}`);
+  palette.style.display = palette.style.display === 'none' ? 'flex' : 'none';
 }
-function hideCreateFolder() {
-  document.getElementById('create-folder-form').style.display = 'none';
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.folder-tile')) {
+    document.querySelectorAll('.color-palette').forEach(p => p.style.display = 'none');
+  }
+});
+
+async function setFolderColor(folderId, color, tile) {
+  const res = await fetch(`/folder/${folderId}/color`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({color})
+  });
+  const data = await res.json();
+  if (data.ok) {
+    const icon = tile.querySelector('.folder-icon');
+    if (icon) icon.style.setProperty('--folder-color', color);
+    document.querySelectorAll('.color-palette').forEach(p => p.style.display = 'none');
+  }
+}
+
+function selectNewColor(btn) {
+  document.querySelectorAll('.color-swatch-lg').forEach(s => s.classList.remove('swatch-selected'));
+  btn.classList.add('swatch-selected');
+  selectedNewColor = btn.dataset.color;
+}
+
+function openCreateFolder() {
+  if (!createFolderModal) {
+    createFolderModal = new bootstrap.Modal(document.getElementById('createFolderModal'));
+  }
   document.getElementById('new-folder-name').value = '';
+  createFolderModal.show();
 }
+
 async function createFolder() {
   const name = document.getElementById('new-folder-name').value.trim();
   if (!name) return;
   const res = await fetch('/folders/create', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({name})
+    body: JSON.stringify({name, color: selectedNewColor})
   });
   const data = await res.json();
-  if (data.ok) {
-    location.reload();
+  if (data.ok) { location.reload(); } else { alert(data.error || 'Erreur'); }
+}
+
+// --- Dossiers ---
+async function toggleFolder(folderId, articleId, btn) {
+  const inFolder = btn.dataset.inFolder === 'true';
+  const dot = btn.querySelector('.folder-dot');
+  const folderColor = dot ? dot.style.background : '#6366f1';
+  const folderName = (btn.textContent || '').replace(/✓\s*/, '').trim();
+
+  if (inFolder) {
+    // --- Retirer du dossier ---
+    const res = await fetch(`/folders/${folderId}/remove/${articleId}`, {method: 'POST'});
+    const data = await res.json();
+    if (data.ok) {
+      btn.dataset.inFolder = 'false';
+      btn.classList.remove('folder-item-active');
+      btn.innerHTML = `<span class="folder-dot" style="background:${folderColor};"></span>${folderName}`;
+
+      const badgesContainer = document.getElementById(`folders-of-${articleId}`);
+      if (badgesContainer) {
+        Array.from(badgesContainer.querySelectorAll('.badge'))
+          .filter(b => b.textContent.trim() === folderName)
+          .forEach(b => b.remove());
+      }
+
+      const tile = document.querySelector(`.folder-tile[data-folder-id="${folderId}"]`);
+      if (tile) {
+        const countEl = tile.querySelector('.folder-count');
+        if (countEl) {
+          const n = Math.max(0, (parseInt(countEl.textContent) || 0) - 1);
+          countEl.textContent = `${n} article${n !== 1 ? 's' : ''}`;
+        }
+      }
+    }
   } else {
-    alert(data.error || 'Erreur');
+    // --- Ajouter au dossier ---
+    const res = await fetch(`/folders/${folderId}/add/${articleId}`, {method: 'POST'});
+    const data = await res.json();
+    if (data.ok || data.error === 'already_in_folder') {
+      btn.dataset.inFolder = 'true';
+      btn.classList.add('folder-item-active');
+      btn.innerHTML = `<span class="folder-dot" style="background:${folderColor};"></span><span class="folder-check">✓ </span>${folderName}`;
+
+      if (data.ok) {
+        const badgesContainer = document.getElementById(`folders-of-${articleId}`);
+        if (badgesContainer) {
+          const alreadyThere = Array.from(badgesContainer.querySelectorAll('.badge'))
+            .some(b => b.textContent.trim() === folderName);
+          if (!alreadyThere) {
+            const badge = document.createElement('span');
+            badge.className = 'badge';
+            badge.style.background = folderColor;
+            badge.style.color = '#fff';
+            badge.textContent = folderName;
+            badgesContainer.appendChild(badge);
+          }
+        }
+
+        const tile = document.querySelector(`.folder-tile[data-folder-id="${folderId}"]`);
+        if (tile) {
+          const countEl = tile.querySelector('.folder-count');
+          if (countEl) {
+            const n = (parseInt(countEl.textContent) || 0) + 1;
+            countEl.textContent = `${n} article${n !== 1 ? 's' : ''}`;
+          }
+        }
+      }
+    }
   }
 }
-async function addToFolder(folderId, articleId, btn) {
-  const res = await fetch(`/folders/${folderId}/add/${articleId}`, {method: 'POST'});
+// --- Favoris ---
+async function toggleFavorite(articleId, btn) {
+  const isFav = btn.classList.contains('btn-success');
+  const url = isFav ? `/unfavorite/${articleId}` : `/favorite/${articleId}`;
+  const res = await fetch(url, {method: 'POST'});
   const data = await res.json();
   if (data.ok) {
-    btn.classList.add('text-success');
-    btn.textContent = '✓ ' + btn.textContent;
+    if (!isFav) {
+      btn.classList.replace('btn-outline-secondary', 'btn-success');
+      btn.textContent = 'Favori';
+    } else {
+      btn.classList.replace('btn-success', 'btn-outline-secondary');
+      btn.textContent = '+ Favori';
+    }
   }
 }
 
@@ -294,9 +760,39 @@ async function toggleVisibility(articleId, btn) {
   const res = await fetch(`/favorite/${articleId}/visibility`, {method: 'POST'});
   const data = await res.json();
   if (data.ok) {
-    btn.textContent = data.is_public ? '🌐' : '🔒';
+    btn.textContent = data.is_public ? 'Public' : 'Privé';
     btn.className = `btn btn-sm ${data.is_public ? 'btn-success' : 'btn-outline-secondary'}`;
-    btn.title = data.is_public ? 'Public - cliquer pour rendre privé' : 'Privé - cliquer pour rendre public';
+  }
+}
+
+// --- Suppression dossier ---
+let _deleteFolderId = null;
+function openDeleteFolderModal(folderId, folderName) {
+  _deleteFolderId = folderId;
+  document.getElementById('delete-folder-name').textContent = folderName;
+  const btn = document.getElementById('delete-folder-confirm-btn');
+  btn.disabled = false;
+  btn.textContent = 'Supprimer';
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('deleteFolderModal')).show();
+}
+async function confirmDeleteFolder() {
+  if (!_deleteFolderId) return;
+  const btn = document.getElementById('delete-folder-confirm-btn');
+  btn.disabled = true;
+  btn.textContent = 'Suppression…';
+  try {
+    const res = await fetch(`/folders/delete/${_deleteFolderId}`, {method: 'POST'});
+    const data = await res.json();
+    if (data.ok) {
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('deleteFolderModal')).hide();
+      window.location.href = '{{ url_for("favorites") }}';
+    } else {
+      btn.textContent = 'Erreur';
+      setTimeout(() => { btn.disabled = false; btn.textContent = 'Supprimer'; }, 2000);
+    }
+  } catch(e) {
+    btn.textContent = 'Erreur réseau';
+    setTimeout(() => { btn.disabled = false; btn.textContent = 'Supprimer'; }, 2000);
   }
 }
 
@@ -305,9 +801,8 @@ async function toggleFolderVisibility(folderId, btn) {
   const res = await fetch(`/folder/${folderId}/visibility`, {method: 'POST'});
   const data = await res.json();
   if (data.ok) {
-    btn.textContent = data.is_public ? '🌐' : '🔒';
+    btn.textContent = data.is_public ? 'Public' : 'Privé';
     btn.className = `btn btn-sm ${data.is_public ? 'btn-success' : 'btn-outline-secondary'}`;
-    btn.title = data.is_public ? 'Public - cliquer pour rendre privé' : 'Privé - cliquer pour rendre public';
   }
 }
 
@@ -324,13 +819,10 @@ async function savePublicNote(articleId) {
     body: JSON.stringify({note})
   });
   const data = await res.json();
-  if (data.ok) {
-    togglePublicNote(articleId);
-    location.reload();
-  }
+  if (data.ok) { togglePublicNote(articleId); location.reload(); }
 }
 
-// --- Modal ---
+// --- Modal article ---
 document.getElementById('articleModal').addEventListener('hidden.bs.modal', () => {
   ['am-journal','am-ifs','am-source','am-domain','am-pathology','am-studytype','am-authors','am-pubdate','am-sitedate','am-rel-score','am-rel-level']
     .forEach(id => { const el=document.getElementById(id); if(el) el.textContent=''; });
@@ -338,7 +830,12 @@ document.getElementById('articleModal').addEventListener('hidden.bs.modal', () =
   document.getElementById('am-rel-reasons').innerHTML='';
   const bar=document.getElementById('am-rel-bar');
   bar.style.width='0%'; bar.className='progress-bar';
+  const citeBox = document.getElementById('am-cite-box');
+  if (citeBox) citeBox.style.display = 'none';
+  const citeBtn = document.getElementById('am-cite-btn');
+  if (citeBtn) citeBtn.style.display = 'none';
 });
+
 function cap(s){ return s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : s; }
 function formatAbstract(raw) {
   if (!raw) return "<p class='text-muted fst-italic'>Résumé non disponible.</p>";
@@ -377,6 +874,7 @@ function formatAbstract(raw) {
   }
   return `<p>${text}</p>`;
 }
+
 let articleModalInstance = null;
 async function openArticleModal(id) {
   try {
@@ -402,6 +900,13 @@ async function openArticleModal(id) {
     document.getElementById('am-abstract').innerHTML = formatAbstract(data.abstract);
     const urlBtn = document.getElementById('am-url'); if (data.url) { urlBtn.href = data.url; urlBtn.style.display=""; } else urlBtn.style.display="none";
     const doiBtn = document.getElementById('am-doi'); if (data.doi) { doiBtn.href = `https://doi.org/${data.doi}`; doiBtn.style.display=""; } else doiBtn.style.display="none";
+    const citeBtn = document.getElementById('am-cite-btn');
+    const citeText = document.getElementById('am-cite-text');
+    if (citeBtn && citeText) {
+      citeText.textContent = formatVancouver(data);
+      citeBtn.style.display = '';
+      document.getElementById('am-cite-box').style.display = 'none';
+    }
     const bar = document.getElementById('am-rel-bar');
     bar.style.width = `${sc||0}%`; bar.className='progress-bar';
     if (sc>=80) bar.classList.add('bg-success'); else if (sc>=60) bar.classList.add('bg-primary'); else if (sc>=40) bar.classList.add('bg-warning'); else bar.classList.add('bg-danger');
@@ -413,10 +918,208 @@ async function openArticleModal(id) {
     articleModalInstance.show();
   } catch(e){ console.error(e); }
 }
+
+const _citeCache = {};
+async function showCardCite(btn, articleId) {
+  const card = btn.closest('.card');
+  const existing = card.querySelector('.cite-box-card');
+  if (existing) { existing.remove(); card.style.zIndex = ''; return; }
+  document.querySelectorAll('.cite-box-card').forEach(b => {
+    b.closest('.card').style.zIndex = '';
+    b.remove();
+  });
+  if (!_citeCache[articleId]) {
+    const res = await fetch(`/api/article/${articleId}`);
+    _citeCache[articleId] = await res.json();
+  }
+  const data = _citeCache[articleId];
+  const box = document.createElement('div');
+  box.className = 'cite-box-card';
+  box.addEventListener('click', e => e.stopPropagation());
+  box.innerHTML = `
+    <div class="cite-box-label">Vancouver</div>
+    <div class="cite-box-text">${formatVancouver(data)}</div>
+    <button class="cite-copy-btn" onclick="event.stopPropagation(); _fallbackCopy(this.previousElementSibling.textContent, this)">Copier</button>
+  `;
+  card.style.zIndex = '10';
+  card.appendChild(box);
+}
+function _fallbackCopy(text, btn) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.focus(); ta.select();
+  try {
+    document.execCommand('copy');
+    btn.textContent = 'Copié !';
+    setTimeout(() => btn.textContent = 'Copier', 2000);
+  } catch(e) { btn.textContent = 'Erreur'; }
+  document.body.removeChild(ta);
+}
+
 document.querySelectorAll('.card[data-article-id]').forEach(card => {
   card.querySelectorAll('a,button,input,textarea,select,form').forEach(el => el.addEventListener('click', e => e.stopPropagation()));
-  card.addEventListener('click', () => { const id=card.getAttribute('data-article-id'); if(id) openArticleModal(id); });
-  card.addEventListener('keydown', e => { if (e.key==='Enter'||e.key===' ') { e.preventDefault(); const id=card.getAttribute('data-article-id'); if(id) openArticleModal(id); }});
+  card.addEventListener('click', (e) => {
+    if (e.target.closest('.dropdown') || e.target.closest('.dropdown-menu')) return;
+    const id = card.getAttribute('data-article-id');
+    if (id) openArticleModal(id);
+  });
+  card.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.key==='Enter'||e.key===' ') {
+      e.preventDefault();
+      const id = card.getAttribute('data-article-id');
+      if (id) openArticleModal(id);
+    }
+  });
 });
+
+// --- Drag & Drop ---
+document.querySelectorAll('.card[data-article-id]').forEach(card => {
+  card.setAttribute('draggable', 'true');
+  card.addEventListener('dragstart', e => {
+    e.dataTransfer.setData('article_id', card.getAttribute('data-article-id'));
+    card.style.opacity = '0.5';
+  });
+  card.addEventListener('dragend', e => { card.style.opacity = '1'; });
+});
+
+document.querySelectorAll('.folder-tile:not(.folder-tile-new)').forEach(tile => {
+  const folderId = tile.getAttribute('data-folder-id');
+  if (!folderId) return;
+
+  tile.addEventListener('dragover', e => { e.preventDefault(); tile.classList.add('folder-tile-drop'); });
+  tile.addEventListener('dragleave', e => { tile.classList.remove('folder-tile-drop'); });
+  tile.addEventListener('drop', async e => {
+    e.preventDefault();
+    tile.classList.remove('folder-tile-drop');
+    const articleId = e.dataTransfer.getData('article_id');
+    if (!articleId) return;
+
+    // Ajouter aux favoris si pas déjà favori
+    const favBtn = document.getElementById(`fav-btn-${articleId}`);
+    if (favBtn && !favBtn.classList.contains('btn-success')) {
+      await fetch(`/favorite/${articleId}`, {
+        method: 'POST',
+        headers: {'Accept': 'application/json', 'Content-Type': 'application/json'}
+      });
+      favBtn.classList.replace('btn-outline-secondary', 'btn-success');
+      favBtn.textContent = 'Favori';
+    }
+
+    // Ajouter au dossier
+    const res = await fetch(`/folders/${folderId}/add/${articleId}`, {method: 'POST'});
+    const data = await res.json();
+    if (data.ok) {
+      tile.classList.add('folder-tile-success');
+      setTimeout(() => tile.classList.remove('folder-tile-success'), 800);
+
+      // Injecte le badge sur la carte
+      const folderColor = tile.dataset.color || '#6366f1';
+      const folderName = tile.querySelector('.folder-name')?.textContent?.trim() || '';
+      const badgesContainer = document.getElementById(`folders-of-${articleId}`);
+      if (badgesContainer && folderName) {
+        const alreadyThere = Array.from(badgesContainer.querySelectorAll('.badge'))
+          .some(b => b.textContent.trim() === folderName);
+        if (!alreadyThere) {
+          const badge = document.createElement('span');
+          badge.className = 'badge';
+          badge.style.background = folderColor;
+          badge.style.color = '#fff';
+          badge.textContent = folderName;
+          badgesContainer.appendChild(badge);
+        }
+      }
+
+      // Synchronise l'état du bouton dropdown correspondant
+      const card = document.querySelector(`.card[data-article-id="${articleId}"]`);
+      if (card) {
+        const dropBtn = card.querySelector(`.dropdown-item[data-folder-id="${folderId}"]`);
+        if (dropBtn && dropBtn.dataset.inFolder === 'false') {
+          dropBtn.dataset.inFolder = 'true';
+          dropBtn.classList.add('folder-item-active');
+          const dot = dropBtn.querySelector('.folder-dot');
+          const color = dot ? dot.style.background : folderColor;
+          dropBtn.innerHTML = `<span class="folder-dot" style="background:${color};"></span><span class="folder-check">✓ </span>${folderName}`;
+        }
+      }
+
+      const countEl = tile.querySelector('.folder-count');
+      if (countEl) {
+        const n = (parseInt(countEl.textContent) || 0) + 1;
+        countEl.textContent = `${n} article${n > 1 ? 's' : ''}`;
+      }
+    } else if (data.error === 'already_in_folder') {
+      tile.classList.add('folder-tile-already');
+      setTimeout(() => tile.classList.remove('folder-tile-already'), 800);
+    }
+  });
+});
+async function removeFromFolder(folderId, articleId, btn) {
+  const res = await fetch(`/folders/${folderId}/remove/${articleId}`, {method: 'POST'});
+  const data = await res.json();
+  if (data.ok) {
+    // Supprimer la carte de la page
+    const card = btn.closest('.col-md-6');
+    if (card) card.remove();
+    // Décrémenter le compteur sur la tuile dossier
+    const tile = document.querySelector(`.folder-tile[data-folder-id="${folderId}"]`);
+    if (tile) {
+      const countEl = tile.querySelector('.folder-count');
+      if (countEl) {
+        const current = parseInt(countEl.textContent) || 0;
+        const next = Math.max(0, current - 1);
+        countEl.textContent = `${next} article${next > 1 ? 's' : ''}`;
+      }
+    }
+  }
+}
+function getShareUrl(articleId) {
+  const cache = _citeCache[articleId];
+  if (cache && cache.doi) return `https://doi.org/${cache.doi}`;
+  if (cache && cache.url) return cache.url;
+  return window.location.href;
+}
+
+function getShareText(articleId) {
+  const cache = _citeCache[articleId];
+  if (!cache) return "Article scientifique";
+  const title = (cache.title || "Article scientifique").slice(0, 120);
+  return title;
+}
+
+async function openShare(platform, articleId) {
+  // Charge les données si pas en cache
+  if (!_citeCache[articleId]) {
+    const res = await fetch(`/api/article/${articleId}`);
+    _citeCache[articleId] = await res.json();
+  }
+  const url = encodeURIComponent(getShareUrl(articleId));
+  const text = encodeURIComponent(getShareText(articleId));
+  const full = encodeURIComponent(getShareText(articleId) + ' — ' + getShareUrl(articleId));
+
+  const links = {
+    whatsapp:  `https://wa.me/?text=${full}`,
+    telegram:  `https://t.me/share/url?url=${url}&text=${text}`,
+    twitter:   `https://twitter.com/intent/tweet?text=${text}&url=${url}`,
+    facebook:  `https://www.facebook.com/sharer/sharer.php?u=${url}`,
+    linkedin:  `https://www.linkedin.com/sharing/share-offsite/?url=${url}`,
+    email:     `mailto:?subject=${text}&body=${full}`,
+    sms:       `sms:?body=${full}`,
+  };
+
+  if (platform === 'copy') {
+    const raw = getShareUrl(articleId);
+    navigator.clipboard.writeText(raw).then(() => {
+      // Feedback visuel sur le bouton copier
+      const btn = document.querySelector(`[data-copy-id="${articleId}"]`);
+      if (btn) { btn.textContent = '✓ Copié'; setTimeout(() => btn.textContent = '🔗 Copier le lien', 1500); }
+    });
+    return;
+  }
+
+  window.open(links[platform], '_blank', 'noopener,noreferrer');
+}
 </script>
 {% endblock %}

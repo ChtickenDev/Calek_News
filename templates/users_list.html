@@ -3,17 +3,50 @@
 
 <div class="d-flex align-items-center justify-content-between mb-1 flex-wrap gap-2">
   <div>
-    <h3 class="mb-0">👥 Trouver des profils</h3>
+    <h3 class="mb-0">{{ t('users.title') }}</h3>
     <p class="text-muted small mb-0">{{ users|length }} membre{{ 's' if users|length > 1 else '' }} sur la plateforme</p>
   </div>
 </div>
 
 <hr class="mb-4">
 
+{% if top_contributors %}
+<div class="top-contributors mb-4">
+  <h6 class="section-label mb-3">🏆 Top contributeurs du mois</h6>
+  <div class="d-flex gap-3 flex-wrap">
+    {% for u in top_contributors %}
+    {% set rank = loop.index %}
+    {% set score = top_scores[u.id] %}
+    <div class="top-contrib-card" onclick="window.location='{{ url_for('user_profile', user_id=u.id) }}'">
+      <div class="top-contrib-rank rank-{{ rank }}">{{ ['🥇','🥈','🥉'][rank-1] }}</div>
+      {% if u.photo_filename %}
+        <img src="{{ url_for('static', filename='uploads/avatars/' + u.photo_filename) }}"
+             class="top-contrib-avatar" alt="">
+      {% else %}
+        <div class="top-contrib-avatar avatar-initials-dynamic" data-seed="{{ u.email }}">
+          {{ (u.name or u.email)[0].upper() }}
+        </div>
+      {% endif %}
+      <div class="top-contrib-name text-truncate">{{ u.name or u.email.split('@')[0] }}</div>
+      <div class="top-contrib-score">
+        <span title="Favoris partagés ce mois">{{ score.favs }} 📎</span>
+        <span title="Likes reçus ce mois">{{ score.likes }} ♥</span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
 <!-- Recherche -->
 <div class="mb-4" style="max-width: 420px;">
   <div class="input-group">
-    <span class="input-group-text bg-white border-end-0">🔍</span>
+    <span class="input-group-text border-end-0" style="background:transparent;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+    </span>
     <input type="text" id="search-input" class="form-control border-start-0 ps-0"
            placeholder="Rechercher par nom ou email..."
            oninput="filterUsers(this.value)">
@@ -24,41 +57,61 @@
 <div class="row gy-3" id="users-grid">
   {% for u in users %}
   {% set s = stats[u.id] %}
+  {% set la = last_active[u.id] %}
   <div class="col-md-6 col-lg-4 user-card-col"
        data-name="{{ (u.name or '')|lower }}"
        data-email="{{ u.email|lower }}">
-    <div class="card p-3 h-100 d-flex flex-row align-items-center gap-3">
+    <div class="card p-3 h-100" style="cursor:pointer;" onclick="window.location='{{ url_for('user_profile', user_id=u.id) }}'">
 
-      <!-- Avatar -->
-      <div class="avatar-circle-lg flex-shrink-0">
-        {{ (u.name or u.email)[0].upper() }}
-      </div>
+      <div class="d-flex align-items-center gap-3 mb-2">
+        <!-- Avatar -->
+        {% if u.photo_filename %}
+          <img src="{{ url_for('static', filename='uploads/avatars/' + u.photo_filename) }}"
+               class="avatar-circle-lg flex-shrink-0"
+               style="object-fit:cover;"
+               alt="{{ (u.name or u.email)[0].upper() }}">
+        {% else %}
+          <div class="avatar-circle-lg flex-shrink-0 avatar-initials-dynamic" data-seed="{{ u.email }}">
+            {{ (u.name or u.email)[0].upper() }}
+          </div>
+        {% endif %}
 
-      <!-- Infos -->
-      <div class="flex-grow-1 min-w-0">
-        <div class="fw-semibold text-truncate">{{ u.name or u.email.split('@')[0] }}</div>
-        <div class="text-muted small text-truncate mb-2">{{ u.email }}</div>
-        <div class="d-flex gap-3 small text-muted">
-          <span>📄 <strong>{{ s.pub_favs }}</strong> favori{{ 's' if s.pub_favs > 1 else '' }}</span>
-          <span>👥 <strong>{{ s.followers }}</strong> abonn{{ 'és' if s.followers > 1 else 'é' }}</span>
+        <!-- Infos -->
+        <div class="flex-grow-1 min-w-0">
+          <div class="fw-semibold text-truncate">{{ u.name or u.email.split('@')[0] }}</div>
+          <div class="text-muted small text-truncate">{{ u.email }}</div>
         </div>
       </div>
 
+      <!-- Stats -->
+      <div class="d-flex gap-3 small text-muted mb-2">
+        <span><strong>{{ s.pub_favs }}</strong> favori{{ 's' if s.pub_favs > 1 else '' }}</span>
+        <span><strong>{{ s.followers }}</strong> abonn{{ 'és' if s.followers > 1 else 'é' }}</span>
+      </div>
+
+      <!-- Indicateur d'activité -->
+      <div class="small mb-3">
+        {% if la %}
+          {% set now = now() if now is defined else none %}
+          <span class="activity-indicator" data-date="{{ la.isoformat() }}"></span>
+        {% else %}
+          <span class="text-muted fst-italic">{{ t('users.no_share') }}</span>
+        {% endif %}
+      </div>
+
       <!-- Actions -->
-      <div class="flex-shrink-0 d-flex flex-column gap-2 align-items-end">
-        <a href="{{ url_for('user_profile', user_id=u.id) }}"
-           class="btn btn-sm btn-outline-secondary">Profil</a>
+      <div class="d-flex flex-row gap-2 align-items-center mt-auto">
         {% if u.id in followed_ids %}
           <button class="btn btn-sm btn-success unfollow-btn"
                   data-user-id="{{ u.id }}"
-                  onclick="unfollowUser({{ u.id }}, this)">
-            ✓ Abonné·e
+                  onclick="event.stopPropagation(); unfollowUser({{ u.id }}, this)">
+            {{ t('users.unfollow') }}
           </button>
         {% else %}
           <button class="btn btn-sm btn-primary follow-btn"
                   data-user-id="{{ u.id }}"
-                  onclick="followUser({{ u.id }}, this)">
-            + Suivre
+                  onclick="event.stopPropagation(); followUser({{ u.id }}, this)">
+            {{ t('users.follow') }}
           </button>
         {% endif %}
       </div>
@@ -69,7 +122,7 @@
 </div>
 
 <div id="no-results" class="text-muted text-center py-5" style="display:none;">
-  Aucun résultat pour cette recherche.
+  {{ t('users.no_results') }}
 </div>
 
 {% endblock %}
@@ -78,12 +131,81 @@
 <style>
 .avatar-circle-lg {
   width: 46px; height: 46px; border-radius: 50%;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  color: #fff; font-weight: 700; font-size: 1.1rem;
+  background: #6366f1;
+  color: #fff !important; font-weight: 700; font-size: 1.1rem;
   display: flex; align-items: center; justify-content: center;
+  min-width: 46px;
 }
+.activity-dot {
+  display: inline-block;
+  width: 8px; height: 8px; border-radius: 50%;
+  margin-right: 5px; vertical-align: middle;
+}
+.activity-recent { background: #22c55e; }
+.activity-mid    { background: #f59e0b; }
+.activity-old    { background: #ef4444; }
+.activity-none   { background: #94a3b8; }
+
+.section-label {
+  font-size: .75rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .08em;
+  color: #6366f1;
+}
+.top-contributors {
+  padding: 1.25rem 1.5rem;
+  border-radius: 1rem;
+  border: 1px solid var(--bs-border-color);
+  background: var(--bs-body-bg);
+}
+.top-contrib-card {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 6px; padding: 12px 16px;
+  border-radius: 12px; cursor: pointer;
+  border: 1px solid var(--bs-border-color);
+  transition: border-color .15s, transform .12s;
+  min-width: 110px; text-align: center;
+  background: var(--bs-body-bg);
+  position: relative;
+}
+.top-contrib-card:hover { border-color: #6366f1; transform: translateY(-2px); }
+.top-contrib-rank { font-size: 1.4rem; line-height: 1; }
+.top-contrib-avatar {
+  width: 52px; height: 52px; border-radius: 50%;
+  object-fit: cover;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 1.2rem; color: #fff;
+}
+.top-contrib-name { font-size: .82rem; font-weight: 600; max-width: 100px; }
+.top-contrib-score { font-size: .72rem; color: var(--bs-secondary-color); display: flex; gap: 8px; }
 </style>
 <script>
+// Calcul indicateur d'activité côté JS
+document.querySelectorAll('.activity-indicator').forEach(el => {
+  const date = new Date(el.dataset.date);
+  const now = new Date();
+  const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+
+  let dotClass, label;
+  if (diffDays <= 7) {
+    dotClass = 'activity-recent';
+    label = 'Actif cette semaine';
+  } else if (diffDays <= 30) {
+    dotClass = 'activity-mid';
+    label = `Actif il y a ${Math.floor(diffDays / 7)} semaine${diffDays >= 14 ? 's' : ''}`;
+  } else if (diffDays <= 90) {
+    dotClass = 'activity-old';
+    label = `Actif il y a ${Math.floor(diffDays / 30)} mois`;
+  } else {
+    dotClass = 'activity-none';
+    const months = Math.floor(diffDays / 30);
+    label = months >= 12
+      ? `Inactif depuis ${Math.floor(months / 12)} an${Math.floor(months/12) > 1 ? 's' : ''}`
+      : `Inactif depuis ${months} mois`;
+  }
+
+  el.innerHTML = `<span class="activity-dot ${dotClass}"></span><span class="text-muted">${label}</span>`;
+});
+
 function filterUsers(query) {
   const q = query.toLowerCase().trim();
   const cols = document.querySelectorAll('.user-card-col');
@@ -98,12 +220,15 @@ function filterUsers(query) {
   document.getElementById('no-results').style.display = visible === 0 ? 'block' : 'none';
 }
 
+const _followLabel = {{ t('users.follow')|tojson }};
+const _unfollowLabel = {{ t('users.unfollow')|tojson }};
+
 async function followUser(userId, btn) {
   const res = await fetch(`/follow/${userId}`, {method: 'POST'});
   const data = await res.json();
   if (data.ok) {
     btn.className = 'btn btn-sm btn-success unfollow-btn';
-    btn.textContent = '✓ Abonné·e';
+    btn.textContent = _unfollowLabel;
     btn.onclick = function() { unfollowUser(userId, this); };
   }
 }
@@ -113,7 +238,7 @@ async function unfollowUser(userId, btn) {
   const data = await res.json();
   if (data.ok) {
     btn.className = 'btn btn-sm btn-primary follow-btn';
-    btn.textContent = '+ Suivre';
+    btn.textContent = _followLabel;
     btn.onclick = function() { followUser(userId, this); };
   }
 }

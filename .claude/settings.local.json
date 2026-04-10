@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install:*)",
+      "Bash(python -c \"import app\")",
+      "Bash(python -m pip show flask-limiter)",
+      "Bash(where python:*)",
+      "Bash(python -c \"import sys; print\\(sys.executable\\)\")",
+      "Bash(python -c \"import flask_limiter; print\\(''ok''\\)\")",
+      "Bash(python -c \"import flask; print\\(flask.__file__\\)\")",
+      "Bash(.venv/Scripts/python.exe -m pip install flask-limiter cryptography)",
+      "Bash(.venv/Scripts/python.exe -c \"import app\")"
+    ]
+  }
+}

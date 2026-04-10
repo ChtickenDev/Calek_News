@@ -1,11 +1,364 @@
 {% extends "layout.html" %}
 {% block content %}
-<h3>Mon profil</h3>
-<ul class="list-group mb-3">
-  <li class="list-group-item bg-dark text-light d-flex justify-content-between"><span>Email</span><span>{{ current_user.email }}</span></li>
-  <li class="list-group-item bg-dark text-light d-flex justify-content-between"><span>Nom</span><span>{{ current_user.name or '—' }}</span></li>
-  <li class="list-group-item bg-dark text-light d-flex justify-content-between"><span>Inscrit le</span><span>{{ current_user.created_at.date() }}</span></li>
-  <li class="list-group-item bg-dark text-light d-flex justify-content-between"><span>Favoris</span><span>{{ current_user.favorites.count() }}</span></li>
-</ul>
-<a class="btn btn-outline-light" href="{{ url_for('favorites') }}">Voir mes favoris</a>
+
+<div class="profile-edit-wrap">
+
+  <!-- En-tête profil -->
+  <div class="profile-header mb-4">
+    <div class="d-flex align-items-center gap-4 flex-wrap">
+      <!-- Avatar -->
+      <div class="avatar-wrap" id="avatar-wrap">
+        {% if current_user.photo_filename %}
+          <img src="{{ url_for('static', filename='uploads/avatars/' + current_user.photo_filename) }}"
+               class="avatar-img" id="avatar-preview" alt="Photo de profil">
+        {% else %}
+          <div class="avatar-initials avatar-initials-dynamic" id="avatar-initials" data-seed="{{ current_user.email }}">
+            {{ (current_user.name or current_user.email)[0].upper() }}
+          </div>
+          <img src="" class="avatar-img d-none" id="avatar-preview" alt="Photo de profil">
+        {% endif %}
+        <label class="avatar-edit-btn" for="photo-input" title="Changer la photo">✎</label>
+      </div>
+
+      <div>
+        <h3 class="mb-1">{{ current_user.name or current_user.email.split('@')[0] }}</h3>
+        <p class="text-muted mb-0 small">{{ current_user.email }}</p>
+        {% if current_user.profession %}
+          <p class="text-muted mb-0 small">
+            {{ current_user.profession }}{% if current_user.profession == 'Autre' and current_user.profession_autre %} — {{ current_user.profession_autre }}{% endif %}
+            {% if current_user.specialite %} · {{ current_user.specialite }}{% if current_user.specialite == 'Autre' and current_user.specialite_autre %} ({{ current_user.specialite_autre }}){% endif %}{% endif %}
+          </p>
+        {% endif %}
+        {% if current_user.ville %}<p class="text-muted mb-0 small">📍 {{ current_user.ville }}</p>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Formulaire -->
+  <form method="post" enctype="multipart/form-data" id="profile-form">
+    <input type="file" id="photo-input" name="photo" accept="image/*" class="d-none" onchange="previewPhoto(this)">
+
+    <!-- Sections -->
+    <div class="profile-sections">
+
+      <!-- Informations générales -->
+      <div class="profile-section">
+        <h6 class="section-title">Informations générales</h6>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold">Nom complet</label>
+            <input type="text" name="name" class="form-control" value="{{ current_user.name or '' }}" placeholder="Votre nom">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold">Ville</label>
+            <input type="text" name="ville" class="form-control" value="{{ current_user.ville or '' }}" placeholder="Ex : Lille">
+          </div>
+          <div class="col-12">
+            <label class="form-label small fw-semibold">Biographie</label>
+            <textarea name="bio" class="form-control" rows="3" placeholder="Quelques mots sur vous...">{{ current_user.bio or '' }}</textarea>
+          </div>
+          <div class="col-12">
+            <label class="form-label small fw-semibold">Adresse du cabinet <span class="text-muted fw-normal">(optionnel — visible publiquement)</span></label>
+            <input type="text" name="adresse_cabinet" class="form-control" value="{{ current_user.adresse_cabinet or '' }}" placeholder="Ex : 12 rue de la Paix, 75001 Paris">
+          </div>
+        </div>
+      </div>
+
+      <!-- Profession -->
+      <div class="profile-section">
+        <h6 class="section-title">Profession</h6>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold">Profession</label>
+            <select name="profession" class="form-select" id="profession-select" onchange="toggleProfessionFields()">
+              <option value="">— Sélectionner —</option>
+              <optgroup label="Rééducation & Réadaptation">
+                <option value="Kinésithérapeute" {% if current_user.profession == 'Kinésithérapeute' %}selected{% endif %}>Kinésithérapeute</option>
+                <option value="Ergothérapeute" {% if current_user.profession == 'Ergothérapeute' %}selected{% endif %}>Ergothérapeute</option>
+                <option value="Orthophoniste" {% if current_user.profession == 'Orthophoniste' %}selected{% endif %}>Orthophoniste</option>
+                <option value="Psychomotricien" {% if current_user.profession == 'Psychomotricien' %}selected{% endif %}>Psychomotricien</option>
+                <option value="Pédicure-podologue" {% if current_user.profession == 'Pédicure-podologue' %}selected{% endif %}>Pédicure-podologue</option>
+                <option value="Orthoptiste" {% if current_user.profession == 'Orthoptiste' %}selected{% endif %}>Orthoptiste</option>
+                <option value="Audioprothésiste" {% if current_user.profession == 'Audioprothésiste' %}selected{% endif %}>Audioprothésiste</option>
+                <option value="Opticien-lunetier" {% if current_user.profession == 'Opticien-lunetier' %}selected{% endif %}>Opticien-lunetier</option>
+              </optgroup>
+              <optgroup label="Médical">
+                <option value="Médecin généraliste" {% if current_user.profession == 'Médecin généraliste' %}selected{% endif %}>Médecin généraliste</option>
+                <option value="Médecin spécialiste" {% if current_user.profession == 'Médecin spécialiste' %}selected{% endif %}>Médecin spécialiste</option>
+                <option value="Chirurgien" {% if current_user.profession == 'Chirurgien' %}selected{% endif %}>Chirurgien</option>
+                <option value="Sage-femme" {% if current_user.profession == 'Sage-femme' %}selected{% endif %}>Sage-femme</option>
+                <option value="Chirurgien-dentiste" {% if current_user.profession == 'Chirurgien-dentiste' %}selected{% endif %}>Chirurgien-dentiste</option>
+                <option value="Pharmacien" {% if current_user.profession == 'Pharmacien' %}selected{% endif %}>Pharmacien</option>
+              </optgroup>
+              <optgroup label="Soins infirmiers">
+                <option value="Infirmier(e)" {% if current_user.profession == 'Infirmier(e)' %}selected{% endif %}>Infirmier(e)</option>
+                <option value="IADE" {% if current_user.profession == 'IADE' %}selected{% endif %}>IADE</option>
+                <option value="IBODE" {% if current_user.profession == 'IBODE' %}selected{% endif %}>IBODE</option>
+                <option value="IPA" {% if current_user.profession == 'IPA' %}selected{% endif %}>IPA</option>
+                <option value="Puériculteur(rice)" {% if current_user.profession == 'Puériculteur(rice)' %}selected{% endif %}>Puériculteur(rice)</option>
+              </optgroup>
+              <optgroup label="Autres professions de santé">
+                <option value="Ostéopathe" {% if current_user.profession == 'Ostéopathe' %}selected{% endif %}>Ostéopathe</option>
+                <option value="Chiropracteur" {% if current_user.profession == 'Chiropracteur' %}selected{% endif %}>Chiropracteur</option>
+                <option value="Psychologue" {% if current_user.profession == 'Psychologue' %}selected{% endif %}>Psychologue</option>
+                <option value="Diététicien-nutritionniste" {% if current_user.profession == 'Diététicien-nutritionniste' %}selected{% endif %}>Diététicien-nutritionniste</option>
+                <option value="Préparateur physique" {% if current_user.profession == 'Préparateur physique' %}selected{% endif %}>Préparateur physique</option>
+                <option value="Chercheur en sciences de la santé" {% if current_user.profession == 'Chercheur en sciences de la santé' %}selected{% endif %}>Chercheur en sciences de la santé</option>
+              </optgroup>
+              <option value="Autre" {% if current_user.profession == 'Autre' %}selected{% endif %}>Autre</option>
+            </select>
+          </div>
+
+          <div class="col-md-6 d-flex align-items-end">
+            <label class="etudiant-toggle {% if current_user.est_etudiant %}active{% endif %}">
+              <input type="checkbox" name="est_etudiant" id="est-etudiant"
+                     {% if current_user.est_etudiant %}checked{% endif %}
+                     onchange="toggleAnneeEtudes()" class="d-none">
+              <span>En formation</span>
+              <span class="etudiant-toggle-check ms-auto">✓</span>
+            </label>
+          </div>
+
+          <div class="col-md-6" id="field-annee-etudes" {% if not current_user.est_etudiant %}style="display:none;"{% endif %}>
+            <label class="form-label small fw-semibold">Année d'études</label>
+            <div class="input-group">
+              <input type="number" name="annee_etudes" class="form-control" min="1" max="12"
+                     value="{{ current_user.annee_etudes or '' }}" placeholder="Ex : 3">
+              <span class="input-group-text small">e année</span>
+            </div>
+          </div>
+
+          <div class="col-md-6" id="field-profession-autre" style="display:none;">
+            <label class="form-label small fw-semibold">Précisez votre profession</label>
+            <input type="text" name="profession_autre" class="form-control" value="{{ current_user.profession_autre or '' }}" placeholder="Votre profession">
+          </div>
+
+          <div class="col-md-6" id="field-annees-experience">
+            <label class="form-label small fw-semibold">Années d'expérience</label>
+            <input type="number" name="annees_experience" class="form-control" min="0" max="60"
+                   value="{{ current_user.annees_experience or '' }}" placeholder="Ex : 5">
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold">Spécialité</label>
+            <select name="specialite" class="form-select" id="specialite-select" onchange="toggleSpecialiteAutre()">
+              <option value="">— Sélectionner —</option>
+              <option value="Musculo-squelettique" {% if current_user.specialite == 'Musculo-squelettique' %}selected{% endif %}>Musculo-squelettique</option>
+              <option value="Sport" {% if current_user.specialite == 'Sport' %}selected{% endif %}>Sport</option>
+              <option value="Neurologie" {% if current_user.specialite == 'Neurologie' %}selected{% endif %}>Neurologie</option>
+              <option value="Pédiatrie" {% if current_user.specialite == 'Pédiatrie' %}selected{% endif %}>Pédiatrie</option>
+              <option value="Gériatrie" {% if current_user.specialite == 'Gériatrie' %}selected{% endif %}>Gériatrie</option>
+              <option value="Cardiologie" {% if current_user.specialite == 'Cardiologie' %}selected{% endif %}>Cardiologie</option>
+              <option value="Respiratoire" {% if current_user.specialite == 'Respiratoire' %}selected{% endif %}>Respiratoire</option>
+              <option value="Oncologie" {% if current_user.specialite == 'Oncologie' %}selected{% endif %}>Oncologie</option>
+              <option value="Rhumatologie" {% if current_user.specialite == 'Rhumatologie' %}selected{% endif %}>Rhumatologie</option>
+              <option value="Médecine du travail" {% if current_user.specialite == 'Médecine du travail' %}selected{% endif %}>Médecine du travail</option>
+              <option value="Santé mentale" {% if current_user.specialite == 'Santé mentale' %}selected{% endif %}>Santé mentale</option>
+              <option value="Urologie / Périnée" {% if current_user.specialite == 'Urologie / Périnée' %}selected{% endif %}>Urologie / Périnée</option>
+              <option value="Vestibulaire" {% if current_user.specialite == 'Vestibulaire' %}selected{% endif %}>Vestibulaire</option>
+              <option value="Autre" {% if current_user.specialite == 'Autre' %}selected{% endif %}>Autre</option>
+            </select>
+          </div>
+
+          <div class="col-md-6" id="field-specialite-autre" style="display:none;">
+            <label class="form-label small fw-semibold">Précisez votre spécialité</label>
+            <input type="text" name="specialite_autre" class="form-control" value="{{ current_user.specialite_autre or '' }}" placeholder="Votre spécialité">
+          </div>
+
+          <div class="col-12">
+            <label class="form-label small fw-semibold">Formations complémentaires</label>
+            <textarea name="formations_complementaires" class="form-control" rows="2"
+                      placeholder="Ex : DU thérapie manuelle, Master EBP, DIU douleur...">{{ current_user.formations_complementaires or '' }}</textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- Réseaux sociaux -->
+      <div class="profile-section">
+        <h6 class="section-title">Réseaux sociaux</h6>
+        <div class="row g-3">
+          {% for network, icon, prefix, placeholder in [
+            ('linkedin',  'LinkedIn',  'linkedin.com/in/', 'votre-profil'),
+            ('instagram', 'Instagram', 'instagram.com/',   'pseudo'),
+            ('facebook',  'Facebook',  'facebook.com/',    'pseudo'),
+            ('tiktok',    'TikTok',    'tiktok.com/@',     'pseudo'),
+            ('youtube',   'YouTube',   'youtube.com/@',    'pseudo')
+          ] %}
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold">{{ icon }}</label>
+            <div class="input-group">
+              <span class="input-group-text small text-muted" style="font-size:0.75rem;">{{ prefix }}</span>
+              <input type="text" name="{{ network }}" class="form-control"
+                     value="{{ current_user|attr(network) or '' }}"
+                     placeholder="{{ placeholder }}">
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Connexion Zotero -->
+      <div class="profile-section">
+        <h6 class="section-title">Connexion Zotero</h6>
+        <p class="small text-muted mb-3">
+          Connectez votre bibliothèque Zotero pour importer automatiquement vos articles en favoris.
+          Vous trouverez votre User ID et votre clé API sur
+          <a href="https://www.zotero.org/settings/keys" target="_blank" rel="noopener">zotero.org/settings/keys</a>.
+        </p>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold">User ID Zotero <span class="text-muted fw-normal">(ex : 12345678)</span></label>
+            <input type="text" name="zotero_user_id" class="form-control"
+                   value="{{ current_user.zotero_user_id or '' }}"
+                   placeholder="12345678">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold">Clé API Zotero</label>
+            <input type="text" name="zotero_api_key" class="form-control"
+                   value="{{ '•' * 24 if current_user.zotero_api_key else '' }}"
+                   placeholder="{{ 'Clé configurée — laisser vide pour conserver' if current_user.zotero_api_key else 'Votre clé API privée' }}">
+          </div>
+        </div>
+      </div>
+
+      <!-- Confidentialité -->
+      <div class="profile-section">
+        <h6 class="section-title">Confidentialité</h6>
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" name="abonnements_publics" id="abonnements-publics"
+                 {% if current_user.abonnements_publics %}checked{% endif %}>
+          <label class="form-check-label small" for="abonnements-publics">
+            Rendre mes abonnements visibles publiquement
+          </label>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="d-flex gap-2 mt-4">
+      <button type="submit" class="btn btn-primary">Enregistrer</button>
+      <a href="{{ url_for('favorites') }}" class="btn btn-outline-secondary">Mes favoris</a>
+      <a href="{{ url_for('user_profile', user_id=current_user.id) }}" class="btn btn-outline-secondary">Voir mon profil public</a>
+    </div>
+  </form>
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<style>
+.profile-edit-wrap { max-width: 860px; margin: 0 auto; }
+
+.profile-header {
+  padding: 1.5rem;
+  border-radius: 1rem;
+  background: var(--bs-body-bg);
+  border: 1px solid var(--bs-border-color);
+}
+
+.avatar-wrap {
+  position: relative;
+  width: 80px; height: 80px;
+  flex-shrink: 0;
+}
+.avatar-img {
+  width: 80px; height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid var(--bs-border-color);
+}
+.avatar-initials {
+  width: 80px; height: 80px;
+  border-radius: 50%;
+  background: #6366f1;
+  color: #fff;
+  font-size: 2rem;
+  font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  border: 3px solid var(--bs-border-color);
+}
+.avatar-edit-btn {
+  position: absolute;
+  bottom: 0; right: 0;
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  background: var(--bs-body-bg);
+  border: 1px solid var(--bs-border-color);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  font-size: 0.75rem;
+  transition: background .15s;
+}
+.avatar-edit-btn:hover { background: #6366f1; color: #fff; }
+
+.profile-sections { display: flex; flex-direction: column; gap: 1.5rem; }
+
+.profile-section {
+  padding: 1.25rem 1.5rem;
+  border-radius: .875rem;
+  border: 1px solid var(--bs-border-color);
+  background: var(--bs-body-bg);
+}
+
+.section-title {
+  font-size: .8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: #6366f1;
+  margin-bottom: 1rem;
+}
+
+.etudiant-toggle {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 14px; border-radius: 8px; cursor: pointer;
+  border: 1.5px solid var(--bs-border-color);
+  font-size: 0.875rem; font-weight: 500;
+  transition: border-color .15s, background .15s;
+  width: 100%; margin-bottom: 0;
+  user-select: none;
+}
+.etudiant-toggle:hover { border-color: #6366f1; }
+.etudiant-toggle.active { border-color: #6366f1; background: rgba(99,102,241,.08); color: #6366f1; }
+.etudiant-toggle-check { opacity: 0; font-size: 0.8rem; transition: opacity .15s; }
+.etudiant-toggle.active .etudiant-toggle-check { opacity: 1; }
+</style>
+
+<script>
+function previewPhoto(input) {
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const preview = document.getElementById('avatar-preview');
+      const initials = document.getElementById('avatar-initials');
+      preview.src = e.target.result;
+      preview.classList.remove('d-none');
+      if (initials) initials.style.display = 'none';
+    };
+    reader.readAsDataURL(input.files[0]);
+  }
+}
+
+function toggleProfessionFields() {
+  const val = document.getElementById('profession-select').value;
+  document.getElementById('field-profession-autre').style.display = val === 'Autre' ? '' : 'none';
+}
+function toggleAnneeEtudes() {
+  const cb = document.getElementById('est-etudiant');
+  cb.closest('label').classList.toggle('active', cb.checked);
+  document.getElementById('field-annee-etudes').style.display = cb.checked ? '' : 'none';
+  document.getElementById('field-annees-experience').style.display = cb.checked ? 'none' : '';
+}
+
+function toggleSpecialiteAutre() {
+  const val = document.getElementById('specialite-select').value;
+  document.getElementById('field-specialite-autre').style.display = val === 'Autre' ? '' : 'none';
+}
+
+// Init au chargement
+toggleProfessionFields();
+toggleSpecialiteAutre();
+toggleAnneeEtudes();
+</script>
 {% endblock %}

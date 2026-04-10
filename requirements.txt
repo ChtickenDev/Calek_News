@@ -4,3 +4,5 @@ flask_login==0.6.3
 werkzeug==3.0.1
 requests==2.31.0
 python-dotenv
+flask-limiter
+cryptography

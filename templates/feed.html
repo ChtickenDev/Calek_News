@@ -3,91 +3,137 @@
 
 <div class="d-flex align-items-center justify-content-between mb-1 flex-wrap gap-2">
   <div>
-    <h3 class="mb-0">{% if discovery %}Découverte{% else %}Mon feed{% endif %}</h3>
+    <h3 class="mb-0">{% if discovery %}{{ t('feed.discovery_title') }}{% else %}{{ t('feed.title') }}{% endif %}</h3>
     <p class="text-muted small mb-0">
-      {% if discovery %}
-        Tu ne suis personne encore — voici ce que la communauté partage.
-      {% else %}
-        Les favoris publics des personnes que tu suis.
-      {% endif %}
+      {% if discovery %}{{ t('feed.discovery_sub') }}{% else %}{{ t('feed.follow_sub') }}{% endif %}
     </p>
   </div>
-  <a href="{{ url_for('users_list') }}" class="btn btn-outline-primary btn-sm">👥 Trouver des profils</a>
+  <a href="{{ url_for('users_list') }}" class="btn btn-outline-primary btn-sm">{{ t('feed.find_profiles') }}</a>
 </div>
 
 <hr class="mb-4">
 
 {% if not items %}
   <div class="text-center py-5 text-muted">
-    <p class="fs-5">Aucun contenu partagé pour le moment.</p>
-    <a href="{{ url_for('users_list') }}" class="btn btn-primary mt-2">Trouver des profils à suivre</a>
+    <p class="fs-5">{{ t('feed.empty') }}</p>
+    <a href="{{ url_for('users_list') }}" class="btn btn-primary mt-2">{{ t('feed.find_profiles_cta') }}</a>
   </div>
 {% else %}
 <div class="row gy-3">
-  {% for f in items %}
-  {% set a = f.article %}
-  {% set u = f.user %}
-    {% set sc = (reliability_score(a)[0]) if reliability_score is defined else None %}
-    {% set ifs_cls = 'badge-ifs-success' if sc is not none and sc>=80
-                      else ('badge-ifs-primary' if sc is not none and sc>=60
-                      else ('badge-ifs-warning' if sc is not none and sc>=40 else 'badge-ifs-danger')) %}
-    <div class="col-md-6 col-lg-4">
-      <div class="card h-100 article-card p-3" data-article-id="{{ a.id }}" role="button" tabindex="0">
+  {% for item in items %}
+  {% set a = item.article %}
+  {% set sharers = item.sharers %}
+  {% set total = item.total_sharers %}
+  {% set first = sharers[0] if sharers else None %}
+  {% set like_count = like_counts.get(a.id, 0) %}
+  {% set user_liked = a.id in liked_ids %}
+  {% set sc = (reliability_score(a)[0]) if reliability_score is defined else None %}
+  {% set ifs_cls = 'badge-ifs-success' if sc is not none and sc>=80
+                    else ('badge-ifs-primary' if sc is not none and sc>=60
+                    else ('badge-ifs-warning' if sc is not none and sc>=40 else 'badge-ifs-danger')) %}
 
-        <!-- Auteur -->
-        <div class="d-flex align-items-center gap-2 mb-3" onclick="event.stopPropagation()">
-          <div class="avatar-circle">{{ (u.name or u.email)[0].upper() }}</div>
-          <div class="flex-grow-1 min-w-0">
-            <a href="{{ url_for('user_profile', user_id=u.id) }}"
-               class="text-decoration-none fw-semibold text-dark d-block text-truncate">
-              {{ u.name or u.email.split('@')[0] }}
-            </a>
-            <span class="text-muted" style="font-size:0.72rem;">{{ f.created_at.strftime('%d %b %Y') }}</span>
-          </div>
-          {% if u.id not in followed_ids and u.id != current_user.id %}
-            <button class="btn btn-sm btn-outline-primary follow-btn flex-shrink-0"
-                    data-user-id="{{ u.id }}"
-                    onclick="event.stopPropagation(); followUser({{ u.id }}, this)">
-              + Suivre
-            </button>
-          {% elif u.id in followed_ids %}
-            <span class="badge bg-success-subtle text-success flex-shrink-0" style="font-size:0.7rem;">Abonné·e</span>
-          {% endif %}
-        </div>
+  <div class="col-md-6 col-lg-4">
+    <div class="card h-100 article-card p-3" data-article-id="{{ a.id }}" role="button" tabindex="0">
 
-        <div class="d-flex flex-wrap gap-2 mb-2 align-items-center">
-          {% if sc is not none %}<span class="badge badge-ifs {{ ifs_cls }}">IFS: {{ sc }}</span>{% endif %}
-          {% if a.domain %}<span class="badge badge-soft">{{ a.domain }}</span>{% endif %}
-          {% if a.study_type %}<span class="badge badge-soft">{{ a.study_type }}</span>{% endif %}
-        </div>
-
-        <h6 class="fw-bold line-clamp-2 mb-1">{{ a.title }}</h6>
-        {% if a.authors %}<p class="text-muted small mb-1">{{ a.authors }}</p>{% endif %}
-
-        <div class="small text-muted mb-2 d-flex flex-wrap gap-2">
-          {% if a.journal %}<span class="badge badge-soft badge-journal">{{ a.journal }}</span>{% endif %}
-          {% if a.published_date %}<span>Paru le {{ a.published_date.strftime('%d %b %Y') }}</span>{% endif %}
-        </div>
-
-        {% if f.public_note %}
-          <div class="public-note-box mb-2">
-            💬 {{ f.public_note }}
-          </div>
-        {% endif %}
-
-        {% if a.abstract %}
-          <p class="small line-clamp-3 mb-3">{{ (a.abstract|striptags)[:320] }}{% if a.abstract|length > 320 %}…{% endif %}</p>
-        {% else %}
-          <p class="small text-muted mb-3 fst-italic">Résumé non disponible.</p>
-        {% endif %}
-
-        <div class="mt-auto d-flex gap-2" onclick="event.stopPropagation()">
-          {% if a.url %}<a class="btn btn-sm btn-primary" href="{{ a.url }}" target="_blank">Ouvrir</a>{% endif %}
-          {% if a.doi %}<a class="btn btn-sm btn-outline-primary" href="https://doi.org/{{ a.doi }}" target="_blank">DOI</a>{% endif %}
-        </div>
-
+      {% if item.suggested %}
+      <!-- Badge suggéré -->
+      <div class="mb-3">
+        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle suggested-badge">
+          ✦ Suggéré pour vous
+        </span>
       </div>
+      {% else %}
+      <!-- Premier sharer -->
+      <div class="d-flex align-items-center gap-2 mb-3" onclick="event.stopPropagation()">
+        {% if first.user.photo_filename %}
+          <img src="{{ url_for('static', filename='uploads/avatars/' + first.user.photo_filename) }}"
+               class="avatar-circle {% if first.is_followed %}avatar-followed{% endif %}"
+               style="object-fit:cover;"
+               alt="{{ (first.user.name or first.user.email)[0].upper() }}">
+        {% else %}
+          <div class="avatar-circle avatar-initials-dynamic" data-seed="{{ first.user.email }}">
+            {{ (first.user.name or first.user.email)[0].upper() }}
+          </div>
+        {% endif %}
+        <div class="flex-grow-1 min-w-0">
+          <a href="{{ url_for('user_profile', user_id=first.user.id) }}"
+             class="text-decoration-none fw-semibold text-body d-block text-truncate" style="font-size:0.85rem;">
+            {{ first.user.name or first.user.email.split('@')[0] }}
+            {% if first.is_followed %}
+              <span class="badge bg-success-subtle text-success ms-1" style="font-size:0.65rem;">Abonné·e</span>
+            {% endif %}
+          </a>
+          <span class="text-muted" style="font-size:0.7rem;">{{ first.fav.created_at.strftime('%d %b %Y') }}</span>
+          <span class="badge bg-secondary ms-1" style="font-size:0.6rem; cursor:help;"
+                title="Social:{{ item.score_detail.social }} | Pertinence:{{ item.score_detail.pertinence }} | Qualité:{{ item.score_detail.qualite }} | Fraîcheur:{{ item.score_detail.fraicheur }} | Pénalités:{{ item.score_detail.penalites }}">
+            ⚡ {{ item.score }}
+          </span>
+        </div>
+        {% if total > 1 %}
+          <button class="btn btn-link btn-sm p-0 text-muted flex-shrink-0"
+                  style="font-size:0.75rem; white-space:nowrap;"
+                  onclick="event.stopPropagation(); openArticleModal({{ a.id }}, true)">
+            +{{ total - 1 }} autre{{ 's' if total - 1 > 1 else '' }}
+          </button>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      {% if first and first.fav.public_note %}
+        <div class="public-note-box mb-2" style="font-size:0.78rem;" onclick="event.stopPropagation()">
+          {{ first.fav.public_note }}
+        </div>
+      {% endif %}
+
+      <hr class="my-2">
+
+      <!-- Badges article -->
+      <div class="d-flex flex-wrap gap-2 mb-2 align-items-center">
+        {% if sc is not none %}<span class="badge badge-ifs {{ ifs_cls }}">IFS: {{ sc }}</span>{% endif %}
+        {% if a.domain %}<span class="badge badge-soft">{{ a.domain }}</span>{% endif %}
+        {% if a.study_type %}<span class="badge badge-soft">{{ a.study_type }}</span>{% endif %}
+      </div>
+
+      <h6 class="fw-bold line-clamp-2 mb-1">{{ a.title }}</h6>
+      {% if a.authors %}<p class="text-muted small mb-1">{{ a.authors }}</p>{% endif %}
+
+      <div class="small text-muted mb-2 d-flex flex-wrap gap-2">
+        {% if a.journal %}<span class="badge badge-soft badge-journal">{{ a.journal }}</span>{% endif %}
+        {% if a.published_date %}<span>Paru le {{ a.published_date.strftime('%d %b %Y') }}</span>{% endif %}
+      </div>
+
+      {% if a.abstract %}
+        {% set _abstract_text = a.clean_abstract or (a.abstract|striptags) %}
+        <p class="small line-clamp-3 mb-1">{{ _abstract_text[:320] }}{% if _abstract_text|length > 320 %}…{% endif %}</p>
+      {% else %}
+        <p class="small text-muted mb-3 fst-italic">{{ t('article.no_abstract') }}</p>
+      {% endif %}
+
+      <!-- Actions -->
+      <div class="mt-auto d-flex gap-2 align-items-center flex-wrap" onclick="event.stopPropagation()">
+        {% if a.url %}<a class="btn btn-sm btn-primary" href="{{ a.url }}" target="_blank">{{ t('btn.open') }}</a>{% endif %}
+        {% if a.doi %}<a class="btn btn-sm btn-outline-primary" href="https://doi.org/{{ a.doi }}" target="_blank">DOI</a>{% endif %}
+        <button class="btn btn-sm btn-outline-secondary"
+                onclick="event.stopPropagation(); showCardCite(this, {{ a.id }})"
+                data-article-id="{{ a.id }}">{{ t('btn.cite') }}</button>
+        {% set is_fav = a.id in fav_ids %}
+        <button class="btn btn-sm fav-btn {% if is_fav %}btn-warning{% else %}btn-outline-secondary{% endif %}"
+                data-article-id="{{ a.id }}"
+                data-faved="{{ 'true' if is_fav else 'false' }}"
+                onclick="event.stopPropagation(); toggleFav({{ a.id }}, this)"
+                title="{{ 'Retirer des favoris' if is_fav else 'Ajouter aux favoris' }}">
+          {{ '★' if is_fav else '☆' }}
+        </button>
+        <button class="btn btn-sm like-btn ms-auto {% if user_liked %}btn-danger{% else %}btn-outline-secondary{% endif %}"
+                data-article-id="{{ a.id }}"
+                data-liked="{{ 'true' if user_liked else 'false' }}"
+                onclick="event.stopPropagation(); toggleLike({{ a.id }}, this)">
+          ♥ <span class="like-count">{{ like_count }}</span>
+        </button>
+      </div>
+
     </div>
+  </div>
   {% endfor %}
 </div>
 {% endif %}
@@ -101,6 +147,16 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
+
+        <!-- Section sharers scrollable -->
+        <div id="am-sharers-section" class="mb-3" style="display:none;">
+          <div class="fw-semibold small mb-2">Partagé par</div>
+          <div id="am-sharers-list"
+               style="max-height:200px; overflow-y:auto; border:1px solid var(--bs-border-color); border-radius:8px; padding:8px;">
+            <div class="text-muted text-center small py-2">Chargement...</div>
+          </div>
+        </div>
+
         <div class="d-flex flex-wrap gap-2 mb-2">
           <span id="am-journal" class="badge badge-soft badge-journal"></span>
           <span id="am-ifs" class="badge badge-ifs"></span>
@@ -122,10 +178,15 @@
         <h6 class="mb-2">Résumé</h6>
         <div id="am-abstract" class="mb-0"></div>
       </div>
-      <div class="modal-footer">
-        <a id="am-url" href="#" target="_blank" class="btn btn-primary" style="display:none;">Ouvrir</a>
-        <a id="am-doi" href="#" target="_blank" class="btn btn-outline-primary" style="display:none;">DOI</a>
-        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fermer</button>
+      <div class="modal-footer d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-2">
+          <a id="am-url" href="#" target="_blank" class="btn btn-primary" style="display:none;">Ouvrir</a>
+          <a id="am-doi" href="#" target="_blank" class="btn btn-outline-primary" style="display:none;">DOI</a>
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fermer</button>
+        </div>
+        <button id="am-like-btn" class="btn btn-sm btn-outline-secondary" onclick="toggleLikeModal()">
+          ♥ <span id="am-like-count">0</span>
+        </button>
       </div>
     </div>
   </div>
@@ -136,37 +197,203 @@
 {% block scripts %}
 <style>
 .avatar-circle {
-  width: 34px; height: 34px; border-radius: 50%;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  color: #fff; font-weight: 700; font-size: 0.85rem;
+  width: 32px; height: 32px; border-radius: 50%;
+  background: #94a3b8;
+  color: #fff !important; font-weight: 700; font-size: 0.8rem;
   display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
+  flex-shrink: 0; min-width: 32px;
 }
+.avatar-circle-sm {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: #94a3b8;
+  color: #fff !important; font-weight: 700; font-size: 0.72rem;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; min-width: 28px;
+}
+
 .public-note-box {
-  background: #f8f9fa; border-left: 3px solid #6366f1;
-  border-radius: 0 6px 6px 0; padding: 8px 12px;
-  font-size: 0.82rem; color: #444;
+  background: var(--bs-secondary-bg);
+  border-left: 3px solid #6366f1;
+  border-radius: 0 6px 6px 0;
+  padding: 6px 10px;
+  color: var(--bs-body-color);
 }
 .badge-ifs { background: var(--bs-warning-bg-subtle,#fff3cd); color:#6c4b00; border:1px solid rgba(0,0,0,.08); }
+.like-btn { transition: all 0.15s ease; }
+.sharer-row { padding: 7px 4px; border-bottom: 1px solid var(--bs-border-color); }
+.sharer-row:last-child { border-bottom: none; }
+
+.suggested-badge { font-size: 0.72rem; font-weight: 500; border-radius: 20px; padding: 3px 10px; }
+
+.cite-box-card {
+  background: var(--bs-body-bg);
+  border: 1px solid #6366f1;
+  border-radius: 8px;
+  padding: 10px 14px;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0; right: 0;
+  z-index: 1050;
+  box-shadow: 0 8px 32px rgba(99,102,241,.18);
+}
 </style>
 <script>
+function cap(s){ return s ? s.charAt(0).toUpperCase()+s.slice(1).toLowerCase() : s; }
+function formatAbstract(raw){
+  if(!raw) return "<p class='text-muted fst-italic'>Résumé non disponible.</p>";
+  try{
+    const html = raw.replace(/<\s*\/?\s*jats:/gi, m=>m.replace(/jats:/gi,''));
+    const div = document.createElement('div'); div.innerHTML = html;
+    const secs = div.querySelectorAll('sec, section');
+    if(secs.length){
+      const out=[];
+      secs.forEach(sec=>{
+        const t = sec.querySelector('title')?.textContent?.trim();
+        const ps = sec.querySelectorAll('p');
+        const txt = Array.from(ps).map(p=>p.textContent.trim()).join(' ');
+        if(t||txt) out.push(`<p><strong>${t ? (t.replace(/[:.]\s*$/,'') + '.</strong> ') : ''}${txt}</p>`);
+      });
+      if(out.length) return out.join('');
+    }
+    const ps = div.querySelectorAll('p');
+    if(ps.length) return Array.from(ps).map(p=>`<p>${p.textContent.trim()}</p>`).join('');
+  }catch(_){}
+  const strip = s => { try { const d=document.createElement('div'); d.innerHTML=s; return (d.textContent||d.innerText||'').replace(/\s+/g,' ').trim(); } catch { return String(s).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim(); } };
+  const text = strip(raw); if (!text) return "<p class='text-muted fst-italic'>Résumé non disponible.</p>";
+  const HEAD = ['abstract','background','purpose','objective','aim','aims','methods','materials and methods','patients and methods','method','results','findings','discussion','conclusion','conclusions','interpretation','clinical implications'];
+  const re = new RegExp(`(^|[.!?]\\s+)(${HEAD.join('|')})\\b`, 'gi');
+  const marker='§§§MARK§§§';
+  const marked = text.replace(re,(m,lead,head)=>`${lead}${marker}${head}`);
+  const chunks = marked.split(marker).map(s=>s.trim()).filter(Boolean);
+  if(chunks.length>1){
+    const out=[];
+    for(const ch of chunks){
+      const m = ch.match(new RegExp(`^(${HEAD.join('|')})\\b`,'i'));
+      if(m){ const title=cap(m[1]); const body=ch.slice(m[0].length).trim(); out.push(`<p><strong>${title}.</strong> ${body}</p>`); }
+      else out.push(`<p>${ch}</p>`);
+    }
+    return out.join('');
+  }
+  return `<p>${text}</p>`;
+}
 async function followUser(userId, btn) {
   const res = await fetch(`/follow/${userId}`, {method: 'POST'});
   const data = await res.json();
   if (data.ok) {
-    btn.outerHTML = `<span class="badge bg-success-subtle text-success flex-shrink-0" style="font-size:0.7rem;">Abonné·e</span>`;
+    btn.outerHTML = `<span class="badge bg-success-subtle text-success flex-shrink-0" style="font-size:0.65rem;">Abonné·e</span>`;
+  }
+}
+
+async function toggleFav(articleId, btn) {
+  const faved = btn.dataset.faved === 'true';
+  const url = faved ? `/unfavorite/${articleId}` : `/favorite/${articleId}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {'Accept': 'application/json'}
+  });
+  if (res.ok) {
+    const nowFaved = !faved;
+    btn.dataset.faved = nowFaved ? 'true' : 'false';
+    btn.className = `btn btn-sm fav-btn ${nowFaved ? 'btn-warning' : 'btn-outline-secondary'}`;
+    btn.textContent = nowFaved ? '★' : '☆';
+    btn.title = nowFaved ? 'Retirer des favoris' : 'Ajouter aux favoris';
+  }
+}
+
+async function toggleLike(articleId, btn) {
+  const liked = btn.dataset.liked === 'true';
+  const url = liked ? `/unlike/${articleId}` : `/like/${articleId}`;
+  const res = await fetch(url, {method: 'POST'});
+  const data = await res.json();
+  if (data.ok) {
+    btn.dataset.liked = data.liked ? 'true' : 'false';
+    btn.className = `btn btn-sm like-btn ms-auto ${data.liked ? 'btn-danger' : 'btn-outline-secondary'}`;
+    btn.querySelector('.like-count').textContent = data.count;
+    if (currentModalArticleId === articleId) updateModalLike(data.liked, data.count);
+  }
+}
+
+let currentModalArticleId = null;
+
+function updateModalLike(liked, count) {
+  const btn = document.getElementById('am-like-btn');
+  btn.className = `btn btn-sm ${liked ? 'btn-danger' : 'btn-outline-secondary'}`;
+  btn.dataset.liked = liked ? 'true' : 'false';
+  document.getElementById('am-like-count').textContent = count;
+}
+
+async function toggleLikeModal() {
+  if (!currentModalArticleId) return;
+  const btn = document.getElementById('am-like-btn');
+  const liked = btn.dataset.liked === 'true';
+  const url = liked ? `/unlike/${currentModalArticleId}` : `/like/${currentModalArticleId}`;
+  const res = await fetch(url, {method: 'POST'});
+  const data = await res.json();
+  if (data.ok) {
+    updateModalLike(data.liked, data.count);
+    const cardBtn = document.querySelector(`.like-btn[data-article-id="${currentModalArticleId}"]`);
+    if (cardBtn) {
+      cardBtn.dataset.liked = data.liked ? 'true' : 'false';
+      cardBtn.className = `btn btn-sm like-btn ms-auto ${data.liked ? 'btn-danger' : 'btn-outline-secondary'}`;
+      cardBtn.querySelector('.like-count').textContent = data.count;
+    }
+  }
+}
+
+async function loadSharers(articleId, scrollTo) {
+  const section = document.getElementById('am-sharers-section');
+  const list = document.getElementById('am-sharers-list');
+  section.style.display = '';
+  list.innerHTML = '<div class="text-muted text-center small py-2">Chargement...</div>';
+
+  try {
+    const res = await fetch(`/api/article/${articleId}/sharers`);
+    const sharers = await res.json();
+
+    if (!sharers || sharers.length === 0) {
+      section.style.display = 'none';
+      return;
+    }
+
+    list.innerHTML = sharers.map(s => `
+      <div class="sharer-row d-flex align-items-start gap-2">
+        ${s.photo
+          ? `<img src="/static/uploads/avatars/${s.photo}" class="avatar-circle-sm mt-1" style="object-fit:cover;" alt="">`
+          : `<div class="avatar-circle-sm mt-1" style="background:${avatarColor(s.email)}">${s.initial}</div>`
+        }
+        <div class="flex-grow-1 min-w-0">
+          <div class="d-flex align-items-center gap-2 flex-wrap">
+            <a href="${s.profile_url}" class="fw-semibold text-body text-decoration-none" style="font-size:0.82rem;">${s.name}</a>
+            ${s.is_followed ? '<span class="badge bg-success-subtle text-success" style="font-size:0.6rem;">Abonné·e</span>' : ''}
+            <span class="text-muted" style="font-size:0.7rem;">${s.date}</span>
+          </div>
+          ${s.note ? `<div class="public-note-box mt-1" style="font-size:0.75rem;">${s.note}</div>` : ''}
+        </div>
+      </div>
+    `).join('');
+
+    if (scrollTo) {
+      setTimeout(() => section.scrollIntoView({behavior: 'smooth', block: 'nearest'}), 300);
+    }
+  } catch(e) {
+    list.innerHTML = '<div class="text-muted text-center small py-2">Erreur de chargement.</div>';
   }
 }
 
 let articleModalInstance = null;
-async function openArticleModal(id) {
+async function openArticleModal(id, showSharers = false) {
   try {
     document.querySelectorAll('.modal-backdrop').forEach(bd => bd.remove());
     const res = await fetch(`/api/article/${id}`);
     const data = await res.json();
+    currentModalArticleId = id;
+
+    // Charger les sharers via API
+    await loadSharers(id, showSharers);
+
     document.getElementById('am-title').textContent = data.title || "Sans titre";
     document.getElementById('am-authors').textContent = data.authors || "";
-    const setBadge = (id, val) => { const el=document.getElementById(id); if(val){el.textContent=val;el.style.display="";}else el.style.display="none"; };
+    const setBadge = (elId, val) => { const el=document.getElementById(elId); if(val){el.textContent=val;el.style.display="";}else el.style.display="none"; };
     setBadge('am-journal', data.journal);
     setBadge('am-domain', data.domain);
     setBadge('am-studytype', data.study_type);
@@ -177,7 +404,8 @@ async function openArticleModal(id) {
     if (sc!==null){ ifs.textContent=`IFS: ${sc}`; ifs.style.display=''; } else { ifs.style.display='none'; }
     const fmt = iso => { if(!iso) return null; try{ const d=new Date(iso); return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'});}catch{return null;} };
     document.getElementById('am-pubdate').textContent = fmt(data.published_date) ? `Paru le ${fmt(data.published_date)}` : "";
-    document.getElementById('am-abstract').innerHTML = data.abstract ? `<p>${data.abstract}</p>` : "<p class='text-muted fst-italic'>Résumé non disponible.</p>";
+    document.getElementById('am-abstract').innerHTML = formatAbstract(data.abstract);
+    _injectModalTranslateBtn(data.abstract);
     const urlBtn = document.getElementById('am-url'); if(data.url){urlBtn.href=data.url;urlBtn.style.display="";}else urlBtn.style.display="none";
     const doiBtn = document.getElementById('am-doi'); if(data.doi){doiBtn.href=`https://doi.org/${data.doi}`;doiBtn.style.display="";}else doiBtn.style.display="none";
     const bar = document.getElementById('am-rel-bar');
@@ -186,14 +414,69 @@ async function openArticleModal(id) {
     document.getElementById('am-rel-level').textContent = lv;
     document.getElementById('am-rel-score').textContent = `${sc||0}/100`;
     document.getElementById('am-rel-reasons').innerHTML = rs.map(r=>`<li>${r}</li>`).join('') || '<li>Aucune raison listée</li>';
+
+    const cardBtn = document.querySelector(`.like-btn[data-article-id="${id}"]`);
+    if (cardBtn) updateModalLike(cardBtn.dataset.liked === 'true', cardBtn.querySelector('.like-count').textContent);
+
     const modalEl = document.getElementById('articleModal');
     if(!articleModalInstance) articleModalInstance = new bootstrap.Modal(modalEl);
     articleModalInstance.show();
   } catch(e){ console.error(e); }
 }
+
 document.querySelectorAll('.card[data-article-id]').forEach(card => {
   card.querySelectorAll('a,button,form').forEach(el => el.addEventListener('click', e => e.stopPropagation()));
-  card.addEventListener('click', () => { const id=card.getAttribute('data-article-id'); if(id) openArticleModal(id); });
+  card.addEventListener('click', () => { const id=card.getAttribute('data-article-id'); if(id) openArticleModal(parseInt(id)); });
+  card.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.key==='Enter'||e.key===' ') { e.preventDefault(); const id=card.getAttribute('data-article-id'); if(id) openArticleModal(parseInt(id)); }
+  });
 });
+const _citeCache = {};
+
+async function showCardCite(btn, articleId) {
+  // Toggle — si déjà ouvert, ferme
+  const card = btn.closest('.card');
+  const existing = card.querySelector('.cite-box-card');
+  if (existing) { existing.remove(); card.style.zIndex = ''; return; }
+
+  // Ferme les autres
+  document.querySelectorAll('.cite-box-card').forEach(b => {
+    b.closest('.card').style.zIndex = '';
+    b.remove();
+  });
+
+  // Récupère les données (cache)
+  if (!_citeCache[articleId]) {
+    const res = await fetch(`/api/article/${articleId}`);
+    _citeCache[articleId] = await res.json();
+  }
+  const data = _citeCache[articleId];
+  const citation = formatVancouver(data);
+
+  const box = document.createElement('div');
+  box.className = 'cite-box-card';
+  box.addEventListener('click', e => e.stopPropagation());
+  box.innerHTML = `
+    <div class="cite-box-label">Vancouver</div>
+    <div class="cite-box-text">${citation}</div>
+    <button class="cite-copy-btn" onclick="event.stopPropagation(); _fallbackCopy(this.previousElementSibling.textContent, this)">Copier</button>
+  `;
+  card.style.zIndex = '10';
+  card.appendChild(box);
+}
+function _fallbackCopy(text, btn) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.focus(); ta.select();
+  try {
+    document.execCommand('copy');
+    btn.textContent = 'Copié !';
+    setTimeout(() => btn.textContent = 'Copier', 2000);
+  } catch(e) { btn.textContent = 'Erreur'; }
+  document.body.removeChild(ta);
+}
 </script>
 {% endblock %}

@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CALEK NEWS</title>
+  <title>Physara</title>
 
   <!-- Favicon -->
-  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/calek-logo.png') }}">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/physara-logo.png') }}">
 
   <!-- Bootstrap CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -52,6 +52,62 @@
     /* Modale : résumé plus lisible */
     #am-abstract p { margin-bottom: .5rem; }
     #am-abstract p strong { color: var(--bs-emphasis-color); }
+    .avatar-nav {
+      width: 26px; height: 26px; border-radius: 50%;
+      background: #6366f1;
+      color: #fff !important; font-weight: 700; font-size: 0.75rem;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; min-width: 26px;
+    }
+
+    .navbar-toggler {
+      border: var(--bs-border-width) solid var(--bs-border-color) !important;
+      border-radius: var(--bs-border-radius) !important;
+    }
+    #theme-toggle, #theme-toggle-mobile {
+      border: var(--bs-border-width) solid var(--bs-border-color) !important;
+      border-radius: var(--bs-border-radius) !important;
+    }
+    .navbar-toggler {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.25rem 0.5rem;
+    }
+
+    @media (max-width: 991px) {
+      .navbar-collapse .dropdown-menu {
+        position: static !important;
+        box-shadow: none;
+        border: 1px solid var(--bs-border-color);
+        margin-top: 4px;
+      }
+    }
+    .cite-box {
+  background: var(--bs-secondary-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: 8px;
+  padding: 10px 14px;
+  position: relative;
+  margin-top: 8px;
+  }
+  .cite-box-label {
+    font-size: 0.7rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .07em;
+    color: #6366f1; margin-bottom: 6px;
+  }
+  .cite-box-text {
+    font-size: 0.82rem; line-height: 1.5;
+    color: var(--bs-body-color);
+  }
+  .cite-copy-btn {
+    position: absolute; top: 10px; right: 10px;
+    font-size: 0.75rem; padding: 2px 10px;
+    border-radius: 6px; border: 1px solid var(--bs-border-color);
+    background: var(--bs-body-bg); cursor: pointer;
+    transition: background .15s;
+  }
+  .cite-copy-btn:hover { background: #6366f1; color: #fff; border-color: #6366f1; }
   </style>
 </head>
 <body>
@@ -59,45 +115,68 @@
 <nav class="navbar navbar-expand-lg sticky-top shadow-sm bg-body border-bottom">
   <div class="container-fluid">
     <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="{{ url_for('index') }}">
-      <img src="{{ url_for('static', filename='img/calek-logo.png') }}" alt="CALEK" class="logo-img" style="height:34px;width:auto;object-fit:contain">
-      <span>CALEK NEWS</span>
+      <img src="{{ url_for('static', filename='img/physara-logo.png') }}" alt="Physara" class="logo-img" style="height:34px;width:auto;object-fit:contain">
+      <span>Physara</span>
     </a>
 
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
-            aria-controls="navbarNav" aria-expanded="false" aria-label="Ouvrir la navigation">
-      <span class="navbar-toggler-icon"></span>
-    </button>
+    <div class="d-flex align-items-center gap-2 d-lg-none">
+      <button id="theme-toggle-mobile" class="btn btn-sm btn-outline-secondary" title="Basculer le thème">🌞</button>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+              aria-controls="navbarNav" aria-expanded="false" aria-label="Ouvrir la navigation">
+        ☰
+      </button>
+    </div>
 
     <div class="collapse navbar-collapse" id="navbarNav">
       <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-        <li class="nav-item"><a class="nav-link{% if request.endpoint == 'index' %} active{% endif %}" href="{{ url_for('index') }}">Accueil</a></li>
         {% if current_user.is_authenticated %}
-          <li class="nav-item"><a class="nav-link{% if request.endpoint == 'feed' %} active{% endif %}" href="{{ url_for('feed') }}">Feed</a></li>
-          <li class="nav-item"><a class="nav-link{% if request.endpoint == 'users_list' %} active{% endif %}" href="{{ url_for('users_list') }}">Profils</a></li>
-          <li class="nav-item"><a class="nav-link{% if request.endpoint == 'favorites' %} active{% endif %}" href="{{ url_for('favorites') }}">Favoris</a></li>
-          <li class="nav-item">
-            <a class="nav-link{% if request.endpoint == 'my_drafts' %} active{% endif %}" href="{{ url_for('my_drafts') }}">Mes recherches</a>
-          </li>
-          <li class="nav-item"><a class="nav-link{% if request.endpoint == 'me' %} active{% endif %}" href="{{ url_for('me') }}">Profil</a></li>
-          {% if current_user.role == 'admin' %}
-            <li class="nav-item"><a class="nav-link{% if request.endpoint and request.endpoint.startswith('admin_') %} active{% endif %}" href="{{ url_for('admin_dashboard') }}">Admin</a></li>
-          {% endif %}
-          {% if current_user.is_authenticated and current_user.role == 'admin' %}
-            <li class="nav-item"><a class="nav-link" href="{{ url_for('admin_proposals') }}">Propositions</a></li>
-          {% endif %}
-
+          <li class="nav-item"><a class="nav-link{% if request.endpoint == 'feed' %} active{% endif %}" href="{{ url_for('feed') }}">{{ t('nav.feed') }}</a></li>
+          <li class="nav-item"><a class="nav-link{% if request.endpoint == 'favorites' %} active{% endif %}" href="{{ url_for('favorites') }}">{{ t('nav.favorites') }}</a></li>
+          <li class="nav-item"><a class="nav-link{% if request.endpoint == 'my_drafts' %} active{% endif %}" href="{{ url_for('my_drafts') }}">{{ t('nav.search') }}</a></li>
+          <li class="nav-item"><a class="nav-link{% if request.endpoint == 'users_list' %} active{% endif %}" href="{{ url_for('users_list') }}">{{ t('nav.users') }}</a></li>
         {% endif %}
       </ul>
 
-      <div class="d-flex align-items-center gap-3">
+      <div class="d-flex align-items-center gap-2">
         {% if current_user.is_authenticated %}
-          <span class="user-email text-nowrap">{{ current_user.email }}</span>
-          <a href="{{ url_for('logout') }}" class="btn btn-sm btn-outline-primary">Déconnexion</a>
+           <div class="dropdown">
+            <button class="btn btn-sm btn-outline-secondary dropdown-toggle d-flex align-items-center gap-2"
+                    data-bs-toggle="dropdown" aria-expanded="false" data-bs-offset="0,4">
+              {% if current_user.photo_filename %}
+                <img src="{{ url_for('static', filename='uploads/avatars/' + current_user.photo_filename) }}"
+                    class="avatar-nav" style="object-fit:cover;" alt="">
+              {% else %}
+                <span class="avatar-nav avatar-initials-dynamic" data-seed="{{ current_user.email }}">{{ (current_user.name or current_user.email)[0].upper() }}</span>
+              {% endif %}
+              <span class="d-none d-md-inline text-truncate" style="max-width:140px;">{{ current_user.name or current_user.email.split('@')[0] }}</span>
+            </button>
+            <ul class="dropdown-menu" style="min-width:160px;">
+              <li><a class="dropdown-item{% if request.endpoint == 'me' %} active{% endif %}" href="{{ url_for('me') }}">👤 {{ t('nav.profile') }}</a></li>
+              {% if current_user.role == 'admin' %}
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item" href="{{ url_for('admin_dashboard') }}">⚙️ {{ t('admin.dashboard') }}</a></li>
+              {% endif %}
+              <li><hr class="dropdown-divider"></li>
+              <li><a class="dropdown-item text-danger" href="{{ url_for('logout') }}">{{ t('nav.logout') }}</a></li>
+            </ul>
+          </div>
         {% else %}
-          <a href="{{ url_for('login') }}" class="btn btn-sm btn-outline-primary">Connexion</a>
-          <a href="{{ url_for('signup') }}" class="btn btn-sm btn-primary">Inscription</a>
+          <a href="{{ url_for('login') }}" class="btn btn-sm btn-outline-primary">{{ t('nav.login') }}</a>
+          <a href="{{ url_for('signup') }}" class="btn btn-sm btn-primary">{{ t('nav.signup') }}</a>
         {% endif %}
-        <button id="theme-toggle" class="btn btn-sm btn-outline-secondary" title="Basculer le thème" aria-label="Basculer le thème">🌞</button>
+
+        <div class="d-flex align-items-center gap-1 ms-2">
+          <a href="{{ url_for('set_lang', lang='fr') }}"
+             class="btn btn-sm {% if current_lang() == 'fr' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+            FR
+          </a>
+          <a href="{{ url_for('set_lang', lang='en') }}"
+             class="btn btn-sm {% if current_lang() == 'en' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+            EN
+          </a>
+        </div>
+
+        <button id="theme-toggle" class="btn btn-sm btn-outline-secondary d-none d-lg-inline-flex" title="Basculer le thème" aria-label="Basculer le thème">🌞</button>
       </div>
     </div>
   </div>
@@ -161,6 +240,14 @@
           <a id="am-url" href="#" target="_blank" class="btn btn-primary" style="display:none;">Ouvrir</a>
           <a id="am-doi" href="#" target="_blank" class="btn btn-outline-primary" style="display:none;">DOI</a>
           <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fermer</button>
+          <button type="button" class="btn btn-outline-secondary" id="am-cite-btn" style="display:none;" onclick="toggleCiteBox()">Citer</button>
+          <div id="am-cite-box" style="display:none; width:100%;">
+          <div class="cite-box">
+            <div class="cite-box-label">Vancouver</div>
+            <div id="am-cite-text" class="cite-box-text"></div>
+            <button class="cite-copy-btn" onclick="copyCite()">Copier</button>
+          </div>
+        </div>
         </div>
 
         {# ---- Formulaire "Proposer la publication" ---- #}
@@ -199,14 +286,20 @@
   const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
   const initial = saved || (prefersDark ? 'dark' : 'light');
   document.documentElement.setAttribute('data-bs-theme', initial);
+  const icon = (initial === 'dark') ? '🌙' : '🌞';
   const btn = document.getElementById('theme-toggle');
-  if (btn) btn.textContent = (initial === 'dark') ? '🌙' : '🌞';
+  const btnM = document.getElementById('theme-toggle-mobile');
+  if (btn) btn.textContent = icon;
+  if (btnM) btnM.textContent = icon;
 })();
 function setTheme(mode){
   document.documentElement.setAttribute('data-bs-theme', mode);
   localStorage.setItem('theme', mode);
+  const icon = (mode === 'dark') ? '🌙' : '🌞';
   const btn = document.getElementById('theme-toggle');
-  if (btn) btn.textContent = (mode === 'dark') ? '🌙' : '🌞';
+  const btnM = document.getElementById('theme-toggle-mobile');
+  if (btn) btn.textContent = icon;
+  if (btnM) btnM.textContent = icon;
 }
 document.getElementById('theme-toggle')?.addEventListener('click', ()=>{
   const current = document.documentElement.getAttribute('data-bs-theme') || 'light';
@@ -306,12 +399,22 @@ async function openArticleModal(id) {
     // --------- Résumé ----------
     document.getElementById('am-abstract').innerHTML = formatAbstract(data.abstract);
 
+    // --------- Bouton traduction dans le modal ----------
+    _injectModalTranslateBtn(data.abstract);
+
     // --------- Liens ----------
     const urlBtn = document.getElementById('am-url');
     if (urlBtn) { if (data.url) { urlBtn.href = data.url; urlBtn.style.display=""; } else { urlBtn.style.display="none"; } }
     const doiBtn = document.getElementById('am-doi');
     if (doiBtn) { if (data.doi) { doiBtn.href = `https://doi.org/${data.doi}`; doiBtn.style.display=""; } else { doiBtn.style.display="none"; } }
-
+    // Citation Vancouver
+    const citeBtn = document.getElementById('am-cite-btn');
+    const citeText = document.getElementById('am-cite-text');
+    if (citeBtn && citeText) {
+      citeText.textContent = formatVancouver(data);
+      citeBtn.style.display = '';
+      document.getElementById('am-cite-box').style.display = 'none';
+    }
     // --------- Indice de fiabilité ----------
     const bar = document.getElementById('am-rel-bar');
     const level = document.getElementById('am-rel-level');
@@ -456,6 +559,152 @@ document.addEventListener('click', (e) => {
   const id = card.getAttribute('data-article-id');
   if (id) openArticleModal(id);
 });
+
+document.getElementById('theme-toggle-mobile')?.addEventListener('click', () => {
+  const current = document.documentElement.getAttribute('data-bs-theme') || 'light';
+  setTheme(current === 'dark' ? 'light' : 'dark');
+});
+function avatarColor(seed) {
+  const colors = [
+    '#6366f1','#8b5cf6','#ec4899','#f59e0b',
+    '#10b981','#3b82f6','#ef4444','#14b8a6'
+  ];
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) hash = seed.charCodeAt(i) + ((hash << 5) - hash);
+  return colors[Math.abs(hash) % colors.length];
+}
+
+function applyAvatarColors() {
+  document.querySelectorAll('.avatar-initials-dynamic').forEach(el => {
+    el.style.background = avatarColor(el.dataset.seed);
+  });
+}
+document.addEventListener('DOMContentLoaded', applyAvatarColors);
+
+function formatVancouver(data) {
+  const authors = data.authors
+    ? data.authors.split(',').slice(0, 6).map(a => a.trim()).join(', ') +
+      (data.authors.split(',').length > 6 ? ', et al.' : '')
+    : 'Auteur inconnu';
+  const year = data.published_date ? new Date(data.published_date).getFullYear() : 's.d.';
+  const title = data.title || 'Sans titre';
+  const journal = data.journal || '';
+  const doi = data.doi ? ` doi:${data.doi}` : '';
+  return `${authors}. ${title}. ${journal}. ${year};${doi}`;
+}
+
+function toggleCiteBox() {
+  const box = document.getElementById('am-cite-box');
+  box.style.display = box.style.display === 'none' ? '' : 'none';
+}
+
+function copyCite() {
+  const text = document.getElementById('am-cite-text').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.querySelector('.cite-copy-btn');
+    btn.textContent = 'Copié !';
+    setTimeout(() => btn.textContent = 'Copier', 2000);
+  });
+}
+</script>
+
+<script>
+window._translations = {{ {
+  'btn.translate': t('btn.translate'),
+  'btn.translating': t('btn.translating'),
+  'btn.show_original': t('btn.show_original')
+} | tojson }};
+
+function t_js(key) {
+  return (window._translations && window._translations[key]) || null;
+}
+
+function _injectModalTranslateBtn(rawAbstract) {
+  const existingTransBtn = document.getElementById('am-translate-btn');
+  if (existingTransBtn) existingTransBtn.remove();
+
+  const abstractEl = document.getElementById('am-abstract');
+  const textToTranslate = (rawAbstract || '').trim();
+  if (!abstractEl || textToTranslate.length <= 20) return;
+
+  const frMarkers = ['les ', 'des ', 'une ', 'dans ', 'cette ', 'avec ',
+                     'sont ', 'pour ', 'sur ', 'est ', 'que ', 'qui '];
+  const sample = textToTranslate.slice(0, 300).toLowerCase();
+  const matches = frMarkers.filter(m => sample.includes(m)).length;
+  if (matches >= 3) return;
+
+  const transBtn = document.createElement('button');
+  transBtn.id = 'am-translate-btn';
+  transBtn.className = 'btn btn-sm btn-outline-secondary mt-3 w-100';
+  transBtn.textContent = t_js('btn.translate') || 'Traduire en français';
+  transBtn.onclick = function() {
+    translateAbstract(this, textToTranslate, abstractEl);
+  };
+  abstractEl.insertAdjacentElement('afterend', transBtn);
+}
+
+async function translateAbstract(btn, text, targetEl) {
+  // Toggle retour à l'original
+  if (btn.dataset.translated === '1') {
+    targetEl.innerHTML = btn.dataset.originalHtml || '';
+    btn.dataset.translated = '0';
+    btn.textContent = t_js('btn.translate') || 'Traduire en français';
+    return;
+  }
+
+  btn.textContent = t_js('btn.translating') || 'Traduction...';
+  btn.disabled = true;
+
+  try {
+    const originalHtml = targetEl.innerHTML;
+    const paragraphs = Array.from(targetEl.querySelectorAll('p'));
+    let newHtml;
+
+    if (paragraphs.length > 0) {
+      // Mode paragraphes : préserve la structure
+      const texts = paragraphs.map(p => p.innerText.trim()).filter(Boolean);
+      const res = await fetch('/api/translate', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({texts})
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'Erreur');
+
+      newHtml = data.texts.map((translated, i) => {
+        // Réinjecte le <strong> de titre de section si présent dans l'original
+        const strong = paragraphs[i]?.querySelector('strong');
+        if (strong) {
+          const dotIdx = translated.indexOf('. ');
+          if (dotIdx > 0 && dotIdx < 40) {
+            return `<p><strong>${translated.slice(0, dotIdx + 1)}</strong> ${translated.slice(dotIdx + 2)}</p>`;
+          }
+        }
+        return `<p>${translated}</p>`;
+      }).join('');
+    } else {
+      // Fallback texte brut
+      const res = await fetch('/api/translate', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({text})
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'Erreur');
+      newHtml = `<p>${data.text}</p>`;
+    }
+
+    btn.dataset.originalHtml = originalHtml;
+    targetEl.innerHTML = newHtml;
+    btn.dataset.translated = '1';
+    btn.textContent = t_js('btn.show_original') || "Voir l'original";
+  } catch(e) {
+    btn.textContent = 'Erreur réseau';
+    setTimeout(() => { btn.textContent = t_js('btn.translate') || 'Traduire en français'; btn.disabled = false; }, 2000);
+    return;
+  }
+  btn.disabled = false;
+}
 </script>
 
 {% block scripts %}{% endblock %}
