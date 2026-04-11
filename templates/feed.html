@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% from '_macros.html' import ifs_badge %}
 {% block content %}
 
 <div class="d-flex align-items-center justify-content-between mb-1 flex-wrap gap-2">
@@ -28,9 +29,6 @@
   {% set like_count = like_counts.get(a.id, 0) %}
   {% set user_liked = a.id in liked_ids %}
   {% set sc = (reliability_score(a)[0]) if reliability_score is defined else None %}
-  {% set ifs_cls = 'badge-ifs-success' if sc is not none and sc>=80
-                    else ('badge-ifs-primary' if sc is not none and sc>=60
-                    else ('badge-ifs-warning' if sc is not none and sc>=40 else 'badge-ifs-danger')) %}
 
   <div class="col-md-6 col-lg-4">
     <div class="card h-100 article-card p-3" data-article-id="{{ a.id }}" role="button" tabindex="0">
@@ -89,7 +87,7 @@
 
       <!-- Badges article -->
       <div class="d-flex flex-wrap gap-2 mb-2 align-items-center">
-        {% if sc is not none %}<span class="badge badge-ifs {{ ifs_cls }}">IFS: {{ sc }}</span>{% endif %}
+        {{ ifs_badge(sc) }}
         {% if a.domain %}<span class="badge badge-soft">{{ a.domain }}</span>{% endif %}
         {% if a.study_type %}<span class="badge badge-soft">{{ a.study_type }}</span>{% endif %}
       </div>
@@ -218,7 +216,7 @@
   padding: 6px 10px;
   color: var(--bs-body-color);
 }
-.badge-ifs { background: var(--bs-warning-bg-subtle,#fff3cd); color:#6c4b00; border:1px solid rgba(0,0,0,.08); }
+/* badge-ifs — styles injectés en inline via _ifsColor() / macro ifs_badge */
 .like-btn { transition: all 0.15s ease; }
 .sharer-row { padding: 7px 4px; border-bottom: 1px solid var(--bs-border-color); }
 .sharer-row:last-child { border-bottom: none; }
@@ -238,6 +236,16 @@
 }
 </style>
 <script>
+/* Miroir JS de la macro ifs_badge — utilisé pour les badges de modales */
+function _ifsColor(sc) {
+  if (sc >= 100) return { bg: '#2980b9', fg: '#fff' };
+  if (sc >= 80)  return { bg: '#27ae60', fg: '#fff' };
+  if (sc >= 60)  return { bg: '#2ecc71', fg: '#1a5a33' };
+  if (sc >= 40)  return { bg: '#f1c40f', fg: '#6b4c00' };
+  if (sc >= 20)  return { bg: '#e67e22', fg: '#fff' };
+  return           { bg: '#e74c3c', fg: '#fff' };
+}
+
 function cap(s){ return s ? s.charAt(0).toUpperCase()+s.slice(1).toLowerCase() : s; }
 function formatAbstract(raw){
   if(!raw) return "<p class='text-muted fst-italic'>Résumé non disponible.</p>";
@@ -401,7 +409,12 @@ async function openArticleModal(id, showSharers = false) {
     const lv = (data.reliability && data.reliability.level) || "—";
     const rs = (data.reliability && data.reliability.reasons) || [];
     const ifs = document.getElementById('am-ifs');
-    if (sc!==null){ ifs.textContent=`IFS: ${sc}`; ifs.style.display=''; } else { ifs.style.display='none'; }
+    if (sc !== null) {
+      ifs.textContent = `IFS: ${sc}`;
+      const {bg, fg} = _ifsColor(sc);
+      ifs.style.background = bg; ifs.style.color = fg; ifs.style.border = 'none';
+      ifs.style.display = '';
+    } else { ifs.style.display = 'none'; }
     const fmt = iso => { if(!iso) return null; try{ const d=new Date(iso); return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'});}catch{return null;} };
     document.getElementById('am-pubdate').textContent = fmt(data.published_date) ? `${t_js('article.published')||'{{ t("article.published") }}'} ${fmt(data.published_date)}` : "";
     document.getElementById('am-abstract').innerHTML = formatAbstract(data.abstract);

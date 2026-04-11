@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% from '_macros.html' import ifs_badge %}
 {% block content %}
 
 <style>
@@ -155,12 +156,7 @@
         {% if a.journal %}<span class="badge badge-soft badge-journal">{{ a.journal }}</span>{% endif %}
         {% if a.published_date %}<span>{{ t('article.published') }} {{ a.published_date.strftime('%d %b %Y') }}</span>{% endif %}
         {% set sc = (reliability_score(a)[0]) %}
-        {% set ifs_color =
-            'bg-success' if sc>=80 else
-            'bg-primary' if sc>=60 else
-            'bg-warning' if sc>=40 else
-            'bg-danger' %}
-        <span class="badge {{ ifs_color }}">IFS: {{ sc }}</span>
+        {{ ifs_badge(sc) }}
       </div>
 
       {% if a.abstract %}

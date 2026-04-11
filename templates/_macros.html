@@ -1,0 +1,28 @@
+{#
+  _macros.html — macros Jinja2 partagées entre tous les templates.
+  Usage : {% from '_macros.html' import ifs_badge %}
+#}
+
+{#
+  ifs_badge(sc) — badge IFS avec dégradé progressif de couleur.
+  Palettes :
+    0–19   rouge vif  #e74c3c
+    20–39  orange     #e67e22
+    40–59  jaune      #f1c40f  (texte sombre)
+    60–79  vert clair #2ecc71  (texte sombre)
+    80–99  vert foncé #27ae60
+    100+   bleu       #2980b9  (score exceptionnel)
+  Retourne une chaîne vide si sc est None.
+#}
+{% macro ifs_badge(sc) -%}
+{%- if sc is not none -%}
+  {%- set ns = namespace(bg='#e74c3c', fg='#fff') -%}
+  {%- if   sc >= 100 -%}{%- set ns.bg = '#2980b9' -%}
+  {%- elif sc >= 80  -%}{%- set ns.bg = '#27ae60' -%}
+  {%- elif sc >= 60  -%}{%- set ns.bg = '#2ecc71' %}{%- set ns.fg = '#1a5a33' -%}
+  {%- elif sc >= 40  -%}{%- set ns.bg = '#f1c40f' %}{%- set ns.fg = '#6b4c00' -%}
+  {%- elif sc >= 20  -%}{%- set ns.bg = '#e67e22' -%}
+  {%- endif -%}
+<span class="badge" style="background:{{ ns.bg }};color:{{ ns.fg }};border:none;">IFS: {{ sc }}</span>
+{%- endif -%}
+{%- endmacro %}
