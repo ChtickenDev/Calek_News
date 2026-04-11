@@ -49,7 +49,7 @@ except Exception:
 # App & Config
 # -----------------------------------------------------------------------------
 app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///physio.db"
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///physio.db")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "local-secret-key")
 app.url_map.strict_slashes = False  # évite les redirections 308/301
