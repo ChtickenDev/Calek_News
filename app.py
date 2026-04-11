@@ -2224,10 +2224,10 @@ def set_lang(lang):
         session['lang'] = lang
     return redirect(request.referrer or url_for('index'))
 
-@app.route(‘/’)
+@app.route('/')
 def index():
     if current_user.is_authenticated:
-        return redirect(url_for(‘feed’))
+        return redirect(url_for('feed'))
 
     now = datetime.utcnow()
 
