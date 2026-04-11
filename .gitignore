@@ -7,4 +7,5 @@ instance/
 *.sqlite
 logs/
 .DS_Store
-Thumbs.db
+Thumbs.db"physio.db" 
+"*.db" 
