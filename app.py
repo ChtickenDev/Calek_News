@@ -588,7 +588,7 @@ def delete_article_and_dependents(article):
 
 def ensure_article_columns():
     """Ajoute les colonnes manquantes sur la table article (migration légère)."""
-    rows = db.session.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='article'")).mappings().all()
+    rows = db.session.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='article' AND table_schema='public'")).mappings().all()
     cols = {r["column_name"] for r in rows}
     sqls = []
     if "domain" not in cols:
@@ -646,7 +646,7 @@ def ensure_proposal_schema():
 
     # 2) Migration légère si la table existe
     cols = {r["column_name"] for r in db.session.execute(
-        text("SELECT column_name FROM information_schema.columns WHERE table_name='proposal'")
+        text("SELECT column_name FROM information_schema.columns WHERE table_name='proposal' AND table_schema='public'")
     ).mappings().all()}
 
     def addcol(sql):
@@ -711,7 +711,7 @@ def ensure_favorite_columns():
         db.session.commit()
         return
 
-    cols = {r["column_name"] for r in db.session.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='favorite'")).mappings().all()}
+    cols = {r["column_name"] for r in db.session.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='favorite' AND table_schema='public'")).mappings().all()}
 
     if "user_id" not in cols:
         db.session.execute(text("ALTER TABLE favorite ADD COLUMN user_id INTEGER"))
@@ -762,7 +762,7 @@ def ensure_userdraft_schema():
         db.session.commit()
         return
 
-    cols = {r["column_name"] for r in db.session.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='user_draft'")).mappings().all()}
+    cols = {r["column_name"] for r in db.session.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='user_draft' AND table_schema='public'")).mappings().all()}
 
     if "search_query" not in cols:
         db.session.execute(text("ALTER TABLE user_draft ADD COLUMN search_query VARCHAR(500)"))
@@ -788,14 +788,14 @@ def ensure_folder_schema():
     db.create_all()
 
     # Migration table folder
-    cols = {r["column_name"] for r in db.session.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='folder'")).mappings().all()}
+    cols = {r["column_name"] for r in db.session.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='folder' AND table_schema='public'")).mappings().all()}
     if "is_public" not in cols:
         db.session.execute(text("ALTER TABLE folder ADD COLUMN is_public BOOLEAN NOT NULL DEFAULT 1"))
     if "color" not in cols:
         db.session.execute(text("ALTER TABLE folder ADD COLUMN color VARCHAR(20) NOT NULL DEFAULT '#6366f1'"))
 
     # Migration table user
-    user_cols = {r["column_name"] for r in db.session.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='user'")).mappings().all()}
+    user_cols = {r["column_name"] for r in db.session.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='user' AND table_schema='public'")).mappings().all()}
     new_user_cols = {
         "bio": "TEXT",
         "photo_filename": "VARCHAR(255)",
@@ -820,7 +820,7 @@ def ensure_folder_schema():
     }
     for col, coltype in new_user_cols.items():
         if col not in user_cols:
-            db.session.execute(text(f"ALTER TABLE user ADD COLUMN {col} {coltype}"))
+            db.session.execute(text(f'ALTER TABLE "user" ADD COLUMN {col} {coltype}'))
 
     db.session.commit()
 
@@ -830,9 +830,9 @@ def ensure_event_schema():
 
 def ensure_google_schema():
     """Ajoute la colonne google_id à la table user si absente."""
-    user_cols = {r["column_name"] for r in db.session.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='user'")).mappings().all()}
+    user_cols = {r["column_name"] for r in db.session.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='user' AND table_schema='public'")).mappings().all()}
     if "google_id" not in user_cols:
-        db.session.execute(text("ALTER TABLE user ADD COLUMN google_id VARCHAR(100)"))
+        db.session.execute(text('ALTER TABLE "user" ADD COLUMN google_id VARCHAR(100)'))
         db.session.commit()
 
 
