@@ -203,7 +203,7 @@ class Article(db.Model):
     # Date ORIGINALE de parution (revue / PubMed / Crossref)
     published_date = db.Column(db.DateTime)
 
-    # Date d’AJOUT sur TON site (quand tu publies dans l’accueil)
+    # Date d'AJOUT sur TON site (quand tu publies dans l'accueil)
     published_at = db.Column(db.DateTime)
 
     source = db.Column(db.String(50))  # 'pubmed' | 'crossref' | 'manual'
@@ -216,7 +216,7 @@ class Article(db.Model):
     study_type = db.Column(db.String(80))
 
 
-    # ordre de récupération PubMed (pour caler sur l’ordre PubMed)
+    # ordre de récupération PubMed (pour caler sur l'ordre PubMed)
     source_order = db.Column(db.Integer)
 
     posted_by_id = db.Column(db.Integer, db.ForeignKey("user.id"))
@@ -1374,7 +1374,7 @@ def api_article(article_id):
         "pathology": a.pathology,
         "study_type": a.study_type,
 
-        # >>> pour l’affichage "Proposé par …" (modal + cartes si tu veux)
+        # >>> pour l'affichage "Proposé par …" (modal + cartes si tu veux)
         "share_name": share_name,
         "credit_name": credit_name,
 
@@ -1437,7 +1437,7 @@ def _parse_pubmed_date(s: str) -> datetime:
     month = month_map.get(m.group(1), 1) if m else 1
 
     # 4) Jour : gère '12' ou '12-15' → prend 12
-    # Attention : si c’est 'YYYY' seul, pas de jour
+    # Attention : si c'est 'YYYY' seul, pas de jour
     day = 1
     mday = re.search(r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)\s+(\d{1,2})", low)
     if mday:
@@ -2119,7 +2119,7 @@ def fetch_pubmed_best_date_by_pmid(pmid: str) -> datetime | None:
     return candidates[0]
 
 def extract_pmid_from_article(a: Article) -> str | None:
-    # Essaye depuis l’URL PubMed
+    # Essaye depuis l'URL PubMed
     if a.url:
         m = re.search(r"/pubmed\.ncbi\.nlm\.nih\.gov/(\d+)/?", a.url)
         if m: return m.group(1)
@@ -2423,7 +2423,7 @@ def index():
     candidates = (Article.query
         .filter(Article.is_published.is_(True),
                 Article.title.isnot(None),
-                Article.title != ‘’)
+                Article.title != '')
         .all())
 
     def public_score(a):
@@ -2443,7 +2443,7 @@ def index():
                 .group_by(Like.article_id).all())
         like_counts = {r[0]: r[1] for r in rows}
 
-    return render_template(‘index.html’, articles=articles, like_counts=like_counts)
+    return render_template('index.html', articles=articles, like_counts=like_counts)
 
 # -----------------------------------------------------------------------------
 # Favoris
@@ -3596,7 +3596,7 @@ def drafts_delete_mine():
         deleted_links += 1
 
     # --- Supprime les legacy Articles (sauf proposés)
-    # ⚠️ Ici on supprime réellement l'article legacy car il est “propriété” d’un seul user.
+    # ⚠️ Ici on supprime réellement l'article legacy car il est “propriété” d'un seul user.
     for a in legacy_articles:
         if a.id in proposed_ids:
             continue
@@ -3623,7 +3623,7 @@ def drafts_delete_mine():
 def drafts_delete_one(article_id):
     a = Article.query.get_or_404(article_id)
 
-    # sécurité : seul l’admin ou le propriétaire peut supprimer
+    # sécurité : seul l'admin ou le propriétaire peut supprimer
     if not (current_user.role == 'admin' or a.posted_by_id == current_user.id):
         flash("Action non autorisée.", "warning")
         return redirect(url_for('my_drafts'))
@@ -3806,7 +3806,7 @@ def admin_unpublish(article_id):
         a.is_published = False
         a.featured = False
         db.session.commit()
-        flash("✅ Article retiré de l’accueil (dé-publié).", "success")
+        flash("✅ Article retiré de l'accueil (dé-publié).", "success")
     return redirect(request.referrer or url_for('admin_dashboard'))
 
 @app.route("/admin/pull_pubmed", methods=["POST"])
@@ -3847,7 +3847,7 @@ def admin_pull_pubmed():
         added += 1
 
     flash(f"Recherche PubMed « {q} » : {len(results)} trouvés, {added} ajoutés en brouillons.", "info")
-    # Reviens sur le dashboard, on repasse le q dans l’URL pour retrouver visuellement
+    # Reviens sur le dashboard, on repasse le q dans l'URL pour retrouver visuellement
     return redirect(url_for("admin_dashboard", q=q))
 
 @app.route("/admin/reset-drafts-everyone", methods=["POST"], endpoint="admin_reset_drafts_everyone")
@@ -4003,7 +4003,7 @@ def admin_proposals_approve(pid):
         a.proposer_display_name = None
         print("[DEBUG approve] proposer_display_name set to None (not shared)")
     db.session.commit()
-    flash("✅ Proposition acceptée : l’article est publié.", "success")
+    flash("✅ Proposition acceptée : l'article est publié.", "success")
     return redirect(url_for('admin_proposals'))
 
 
@@ -4039,7 +4039,7 @@ def pubmed_search():
     rows = int(request.args.get('rows', request.args.get('max', '100')) or 100)
     sort = request.args.get('sort', 'date_desc')
 
-    # Si une requête est saisie, on interroge PubMed et on persiste pour l’utilisateur
+    # Si une requête est saisie, on interroge PubMed et on persiste pour l'utilisateur
     if q:
         results = fetch_pubmed(q, days=days, max_results=rows)
         for d in results:
@@ -4159,7 +4159,7 @@ def my_drafts():
             display_pool.sort(key=lambda a: (a.published_date or a.created_at or datetime.min))
         elif sort == 'date_desc':
             display_pool.sort(key=lambda a: (a.published_date or a.created_at or datetime.min), reverse=True)
-        # sinon: garde l’ordre PubMed (pubmed_rank asc)
+        # sinon: garde l'ordre PubMed (pubmed_rank asc)
 
         draft_ids = [a.id for a in display_pool]
 
@@ -4227,7 +4227,7 @@ def my_drafts():
         has_next=False,
     )
 
-# --- suppression d’un brouillon par l’utilisateur (ou admin) ---
+# --- suppression d'un brouillon par l'utilisateur (ou admin) ---
 @app.route('/propose', methods=['POST'])
 @login_required
 def propose_article():
