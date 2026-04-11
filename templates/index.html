@@ -1,516 +1,130 @@
 {% extends "layout.html" %}
 {% block content %}
 
-{# ---------- Barre de recherche (locale) ---------- #}
-<form class="card side-card p-3 mb-4" method="get" action="{{ url_for('index') }}">
-  <div class="row g-2 align-items-center">
-    <div class="col-md-9">
-      <input
-        type="search"
-        name="q"
-        value="{{ q or '' }}"
-        class="form-control form-control-lg"
-        placeholder="Rechercher titre / auteurs / journal / DOI" />
-    </div>
-    <div class="col-md-3 d-flex gap-2">
-      <button class="btn btn-lg btn-primary w-100" type="submit">Rechercher</button>
-      {% if q %}
-      <a class="btn btn-lg btn-outline-secondary" href="{{ url_for('index') }}" title="Réinitialiser la recherche">✕</a>
-      {% endif %}
-    </div>
-  </div>
-  {% if q %}
-    <div class="small text-muted mt-2">Résultats pour : « <strong>{{ q }}</strong> »</div>
-  {% endif %}
-</form>
-
-{# ---------- Import PubMed (ajoute des brouillons) ---------- #}
-{% if current_user.is_authenticated %}
-<form class="card side-card p-3 mb-4" method="post" action="{{ url_for('pubmed_search') }}">
-  <div class="row g-2 align-items-center">
-    <div class="col-lg-9">
-      <input type="search" name="q_pubmed" class="form-control"
-             placeholder="Rechercher sur PubMed (ex: ACL, stroke rehab, etc.)">
-    </div>
-    <div class="col-lg-2">
-      <input type="number" name="max" class="form-control" min="1" max="500" value="50"
-             title="Nombre max de résultats">
-    </div>
-    <div class="col-lg-1 d-grid">
-      <button class="btn btn-outline-info" type="submit">PubMed</button>
-    </div>
-  </div>
-  <div class="small text-muted mt-2">
-    Les résultats seront ajoutés à votre espace <strong>"Mes recherches"</strong>.
-  </div>
-</form>
-{% endif %}
-
-{# ---------- Bloc "Article du mois" + stats ----------- #}
-{% if featured %}
-<div class="row gy-3 mb-4">
-  <div class="col-md-8">
-    <div class="card side-card" data-article-id="{{ featured.id }}" role="button" tabindex="0">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center">
-          <h5 class="m-0">📌 Article du mois</h5>
-          <span class="badge bg-warning text-dark">Mis en avant</span>
-        </div>
-
-        <h4 class="mt-2 line-clamp-2">{{ featured.title }}</h4>
-
-        {# --- Proposé par (si connu) --- #}
-        {% if featured.proposer_display_name %}
-          <p class="small text-muted mb-1">
-            Proposé par : <strong>{{ featured.proposer_display_name }}</strong>
-          </p>
-        {% endif %}
-
-        {# --- IFS --- #}
-        {% set scf = reliability_score(featured)[0] %}
-        {% set ifs_cls_f = 'badge-ifs-success' if scf>=80
-                           else ('badge-ifs-primary' if scf>=60
-                           else ('badge-ifs-warning' if scf>=40 else 'badge-ifs-danger')) %}
-        <span class="badge badge-ifs {{ ifs_cls_f }}">IFS: {{ scf }}</span>
-
-        {% if featured.authors %}
-          <p class="m-0 text-muted">{{ featured.authors }}</p>
-        {% endif %}
-
-        <p class="small text-muted mb-3 d-flex flex-wrap gap-2 align-items-center">
-          {% if featured.journal %}
-            <span class="badge badge-soft badge-journal">{{ featured.journal }}</span>
-          {% endif %}
-          {% if featured.published_date %}
-            <span>Paru le {{ featured.published_date.strftime('%d %b %Y') }}</span>
-          {% endif %}
-          {% if featured.published_at %}
-            <span>• Ajouté le {{ featured.published_at.strftime('%d %b %Y') }}</span>
-          {% endif %}
-        </p>
-
-        <div class="d-flex gap-2 align-items-center">
-          {% if featured.url %}
-            <a class="btn btn-sm btn-primary" target="_blank" rel="noopener" href="{{ featured.url }}" onclick="event.stopPropagation()">Ouvrir</a>
-          {% endif %}
-          {% if featured.doi %}
-            <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" href="https://doi.org/{{ featured.doi }}" onclick="event.stopPropagation()">DOI</a>
-          {% endif %}
-
-          {% if current_user.is_authenticated and current_user.role == 'admin' %}
-            <form method="post"
-                  action="{{ url_for('admin_unpublish', article_id=featured.id) }}"
-                  onsubmit="return confirm('Retirer cet article de l’accueil ?');"
-                  class="ms-auto" onclick="event.stopPropagation()">
-              <button type="submit" class="btn btn-sm btn-outline-danger">Retirer</button>
-            </form>
-          {% endif %}
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-md-4">
-    <div class="card side-card h-100">
-      <div class="card-body">
-        <h6 class="text-muted">Résumé</h6>
-        <div class="d-flex flex-column gap-1">
-          <div><span class="badge badge-soft">Total publiés</span> {{ total }}</div>
-          <div><span class="badge badge-soft">Ajouts (30 jours)</span> {{ last30 }}</div>
-        </div>
-      </div>
-    </div>
+{# ── Hero ──────────────────────────────────────────────────────────── #}
+<div class="text-center py-5 mb-2">
+  <img src="{{ url_for('static', filename='img/physara-logo.png') }}"
+       alt="Physara" style="height:56px;width:auto;object-fit:contain" class="mb-3">
+  <h1 class="fw-bold mb-2">Physara</h1>
+  <p class="lead text-muted mb-4">La veille scientifique pour les professionnels de santé</p>
+  <div class="d-flex justify-content-center gap-3">
+    <a href="{{ url_for('login') }}" class="btn btn-outline-primary btn-lg">Se connecter</a>
+    <a href="{{ url_for('signup') }}" class="btn btn-primary btn-lg">S'inscrire</a>
   </div>
 </div>
-{% endif %}
 
-<h4 class="mb-4 text-center">Derniers articles publiés</h4>
+<hr class="mb-4">
+<h4 class="mb-4">Articles récents</h4>
 
-{# ---------- Grille des articles publiés ---------- #}
-<div class="row g-3">
+{% if not articles %}
+  <p class="text-center text-muted py-5">Aucun article publié pour l'instant.</p>
+{% else %}
+<div class="row gy-3">
   {% for a in articles %}
-  <div class="col-md-4">
+  {% set sc = reliability_score(a)[0] %}
+  {% set ifs_cls = 'badge-ifs-success' if sc>=80
+                    else ('badge-ifs-primary' if sc>=60
+                    else ('badge-ifs-warning' if sc>=40 else 'badge-ifs-danger')) %}
+  {% set like_count = like_counts.get(a.id, 0) %}
+
+  <div class="col-md-6 col-lg-4">
     <div class="card h-100 article-card p-3" data-article-id="{{ a.id }}" role="button" tabindex="0">
-      <h6 class="fw-bold line-clamp-2 mb-2">{{ a.title }}</h6>
 
-      {% set sc = reliability_score(a)[0] %}
-      {% set ifs_cls = 'badge-ifs-success' if sc>=80
-                        else ('badge-ifs-primary' if sc>=60
-                        else ('badge-ifs-warning' if sc>=40 else 'badge-ifs-danger')) %}
-
+      {# Badges #}
       <div class="d-flex flex-wrap gap-2 mb-2 align-items-center">
-        {% if a.journal %}<span class="badge badge-soft badge-journal">{{ a.journal }}</span>{% endif %}
         <span class="badge badge-ifs {{ ifs_cls }}">IFS: {{ sc }}</span>
+        {% if a.domain %}<span class="badge badge-soft">{{ a.domain }}</span>{% endif %}
+        {% if a.study_type %}<span class="badge badge-soft">{{ a.study_type }}</span>{% endif %}
       </div>
 
-      {% if a.authors %}
-        <p class="mb-1 small text-muted">{{ a.authors }}</p>
-      {% endif %}
+      <h6 class="fw-bold line-clamp-2 mb-1">{{ a.title }}</h6>
+      {% if a.authors %}<p class="text-muted small mb-1">{{ a.authors }}</p>{% endif %}
 
-      {% if a.journal %}
-        <div class="mb-2">
-          <span class="badge badge-soft badge-journal w-100">{{ a.journal }}</span>
-        </div>
-      {% endif %}
-
-      {% if a.published_date %}
-        <div class="small text-muted">Paru le {{ a.published_date.strftime('%d %b %Y') }}</div>
-      {% endif %}
-      {% if a.published_at %}
-        <div class="small text-muted mb-2">Ajouté le {{ a.published_at.strftime('%d %b %Y') }}</div>
-      {% endif %}
-
-      {# ---- Proposé par (logique proposals.html) ---- #}
-      {% set p = proposals[a.id] if proposals and a.id in proposals else None %}
-      <div class="small text-muted mb-2">
-        Proposé par :
-        {% if p and p.share_name and p.credit_name %}
-          <strong>{{ p.credit_name }}</strong>
-        {% elif p and not p.share_name %}
-          <em>anonyme</em>
-        {% endif %}
+      <div class="small text-muted mb-2 d-flex flex-wrap gap-2">
+        {% if a.journal %}<span class="badge badge-soft badge-journal">{{ a.journal }}</span>{% endif %}
+        {% if a.published_date %}<span>Paru le {{ a.published_date.strftime('%d %b %Y') }}</span>{% endif %}
       </div>
 
-      {# ---------- Résumé formaté (injecté par JS) ---------- #}
-      <div class="abstract-render small line-clamp-3 mb-3"
-           data-abstract="{{ (a.abstract or '') | replace('\n', ' ') | e }}">
-        <!-- Rendu injecté par JS -->
+      {% if a.abstract %}
+        {% set _abstract_text = a.clean_abstract or (a.abstract|striptags) %}
+        <p class="small line-clamp-3 mb-1">{{ _abstract_text[:320] }}{% if _abstract_text|length > 320 %}…{% endif %}</p>
+      {% else %}
+        <p class="small text-muted mb-3 fst-italic">Résumé non disponible.</p>
+      {% endif %}
+
+      {# Actions #}
+      <div class="mt-auto d-flex gap-2 align-items-center flex-wrap" onclick="event.stopPropagation()">
+        {% if a.url %}<a class="btn btn-sm btn-primary" href="{{ a.url }}" target="_blank" rel="noopener">Ouvrir</a>{% endif %}
+        {% if a.doi %}<a class="btn btn-sm btn-outline-primary" href="https://doi.org/{{ a.doi }}" target="_blank" rel="noopener">DOI</a>{% endif %}
+        <button class="btn btn-sm btn-outline-secondary"
+                onclick="event.stopPropagation(); showCardCite(this, {{ a.id }})"
+                data-article-id="{{ a.id }}">Citer</button>
+        <span class="btn btn-sm btn-outline-secondary ms-auto disabled" style="pointer-events:none;">
+          ♥ {{ like_count }}
+        </span>
       </div>
 
-      <div class="mt-auto d-flex justify-content-between align-items-center gap-2">
-        <div class="btn-group" onclick="event.stopPropagation()">
-          {% if a.url %}
-            <a href="{{ a.url }}" target="_blank" class="btn btn-sm btn-primary">Ouvrir</a>
-          {% endif %}
-          {% if a.doi %}
-            <a href="https://doi.org/{{ a.doi }}" target="_blank" class="btn btn-sm btn-outline-primary">DOI</a>
-          {% endif %}
-        </div>
-
-        {% if current_user.is_authenticated and current_user.role == 'admin' %}
-          <form method="post"
-                action="{{ url_for('admin_unpublish', article_id=a.id) }}"
-                onsubmit="return confirm('Retirer cet article de l’accueil ?');"
-                onclick="event.stopPropagation()">
-            <button type="submit" class="btn btn-sm btn-outline-danger">Retirer</button>
-          </form>
-        {% endif %}
-
-        <form class="d-flex gap-2 align-items-center ms-auto favorite-form"
-              data-id="{{ a.id }}"
-              method="post"
-              action="{{ url_for('favorite', article_id=a.id) }}"
-              onclick="event.stopPropagation()">
-          <input class="form-control form-control-sm" name="note" placeholder="Note perso…" style="max-width: 140px;">
-          <button type="submit" class="btn btn-sm btn-outline-warning">★ Favori</button>
-        </form>
-      </div>
     </div>
   </div>
   {% endfor %}
 </div>
-
-</div>
-
-{# Pagination simple : Précédent / Suivant (48 par page) #}
-<nav class="d-flex justify-content-center my-4">
-  {% if page and page > 1 %}
-    <a class="btn btn-outline-secondary me-2" href="{{ url_for('index', q=q, domain=domain, pathology=pathology, study_type=study_type, page=page-1) }}">← Précédent</a>
-  {% endif %}
-  {% if has_next %}
-    <a class="btn btn-primary" href="{{ url_for('index', q=q, domain=domain, pathology=pathology, study_type=study_type, page=page+1) }}">Suivant →</a>
-  {% endif %}
-</nav>
-
-{% if not articles %}
-  <p class="text-center mt-5">Aucun article publié pour l’instant.</p>
 {% endif %}
 
-{# ---------- Modal fiche article ---------- #}
-<div class="modal fade" id="articleModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-xl modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 id="am-title" class="modal-title"></h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
-      </div>
-
-      <div class="modal-body">
-        <div class="d-flex flex-wrap gap-2 mb-2">
-          <span id="am-journal" class="badge badge-soft badge-journal"></span>
-          <span id="am-source" class="badge badge-soft"></span>
-          <span id="am-domain" class="badge badge-soft"></span>
-          <span id="am-pathology" class="badge badge-soft"></span>
-          <span id="am-studytype" class="badge badge-soft"></span>
-        </div>
-
-        <p id="am-authors" class="small text-muted mb-2"></p>
-
-        <div class="small text-muted mb-2">
-          <span id="am-pubdate"></span>
-          <span id="am-sitedate" class="ms-2"></span>
-        </div>
-
-        <!-- Proposé par (renseigné par /api/article/<id>) -->
-        <p id="am-credit" class="small text-muted mb-3" style="display:none;"></p>
-
-        <div class="mb-3">
-          <div class="d-flex align-items-center justify-content-between">
-            <strong>Indice de fiabilité : <span id="am-rel-level">—</span></strong>
-            <span id="am-rel-score" class="small text-muted"></span>
-          </div>
-          <div class="progress mt-2" style="height:10px;">
-            <div id="am-rel-bar" class="progress-bar" role="progressbar" style="width:0%;" aria-valuemin="0" aria-valuemax="100"></div>
-          </div>
-          <ul id="am-rel-reasons" class="small mt-2 mb-0"></ul>
-        </div>
-
-        <h6 class="mb-2">Résumé</h6>
-        <div id="am-abstract" class="mb-0"></div>
-      </div>
-
-      <div class="modal-footer">
-        <a id="am-url" href="#" target="_blank" class="btn btn-primary" style="display:none;">Ouvrir</a>
-        <a id="am-doi" href="#" target="_blank" class="btn btn-outline-primary" style="display:none;">DOI</a>
-        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fermer</button>
-      </div>
-    </div>
+{# ── Bandeau CTA ───────────────────────────────────────────────────── #}
+<div class="card mt-5 p-4 text-center border-0 bg-body-secondary">
+  <p class="fs-5 mb-3">Rejoignez Physara pour personnaliser votre feed, sauvegarder des articles et suivre des collègues.</p>
+  <div>
+    <a href="{{ url_for('signup') }}" class="btn btn-primary btn-lg">Créer un compte</a>
   </div>
 </div>
 
 {% endblock %}
 
 {% block scripts %}
+<style>
+.badge-ifs         { background:var(--bs-warning-bg-subtle,#fff3cd); color:#6c4b00; border:1px solid rgba(0,0,0,.08); }
+.badge-ifs-success { background:#d1fae5; color:#065f46; border:1px solid rgba(0,0,0,.08); }
+.badge-ifs-primary { background:#dbeafe; color:#1e40af; border:1px solid rgba(0,0,0,.08); }
+.badge-ifs-warning { background:#fef3c7; color:#92400e; border:1px solid rgba(0,0,0,.08); }
+.badge-ifs-danger  { background:#fee2e2; color:#991b1b; border:1px solid rgba(0,0,0,.08); }
+.cite-box-card {
+  background: var(--bs-body-bg);
+  border: 1px solid #6366f1;
+  border-radius: 8px;
+  padding: 10px 14px;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0; right: 0;
+  z-index: 1050;
+  box-shadow: 0 8px 32px rgba(99,102,241,.18);
+}
+</style>
 <script>
-/* ---------- Favoris (AJAX) ---------- */
-document.querySelectorAll('.favorite-form')?.forEach(form => {
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-
-    const btn = form.querySelector('button');
-    const noteInput = form.querySelector('input[name="note"]');
-    const action = form.getAttribute('action');
-    const fd = new FormData(form);
-
-    btn.disabled = true;
-    if (noteInput) noteInput.disabled = true;
-
-    try {
-      const res = await fetch(action, {
-        method: 'POST',
-        body: fd,
-        redirect: 'follow',
-        headers: { 'Accept': 'application/json' }
-      });
-
-      const ct = res.headers.get('content-type') || '';
-      const redirectedToLogin = res.status === 401 || (res.url && res.url.includes('/login'));
-      const isHtml = ct.includes('text/html');
-
-      if (redirectedToLogin || isHtml) {
-        btn.textContent = '🔒 Connecte-toi';
-        return;
-      }
-
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.status === 'ok') {
-        btn.textContent = '✓ Enregistré';
-      } else {
-        btn.textContent = '⚠️ Erreur';
-      }
-    } catch (err) {
-      btn.textContent = '⚠️ Réseau';
-    } finally {
-      setTimeout(() => {
-        btn.textContent = '★ Favori';
-        btn.disabled = false;
-        if (noteInput) noteInput.disabled = false;
-      }, 1200);
-    }
+const _citeCache = {};
+async function showCardCite(btn, articleId) {
+  const card = btn.closest('.card');
+  const existing = card.querySelector('.cite-box-card');
+  if (existing) { existing.remove(); card.style.zIndex = ''; return; }
+  document.querySelectorAll('.cite-box-card').forEach(b => {
+    b.closest('.card').style.zIndex = '';
+    b.remove();
   });
-});
-
-/* ---------- Formatage d'abstract ---------- */
-function cap(s){ return s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : s; }
-function formatAbstract(raw) {
-  if (!raw) return "<p class='text-muted fst-italic'>Résumé non disponible.</p>";
-  try {
-    const html = raw.replace(/<\s*\/?\s*jats:/gi, m => m.replace(/jats:/gi, ''));
-    const div = document.createElement('div');
-    div.innerHTML = html;
-
-    const secs = div.querySelectorAll('sec, section');
-    if (secs.length) {
-      const out = [];
-      secs.forEach(sec => {
-        const t = sec.querySelector('title')?.textContent?.trim();
-        const ps = sec.querySelectorAll('p');
-        const text = Array.from(ps).map(p => p.textContent.trim()).join(' ');
-        if (t || text) out.push(`<p><strong>${t ? (t.replace(/[:.]\s*$/,'') + '.</strong> ') : ''}${text}</p>`);
-      });
-      if (out.length) return out.join('');
-    }
-
-    const ps = div.querySelectorAll('p');
-    if (ps.length) return Array.from(ps).map(p => `<p>${p.textContent.trim()}</p>`).join('');
-  } catch (_) {}
-
-  const text = (() => {
-    try {
-      const div = document.createElement('div');
-      const safe = raw.replace(/<\s*\/?\s*jats:/gi, m => m.replace(/jats:/gi, ''));
-      div.innerHTML = safe;
-      return (div.textContent || div.innerText || '').replace(/\s+/g,' ').trim();
-    } catch { return String(raw).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim(); }
-  })();
-
-  if (!text) return "<p class='text-muted fst-italic'>Résumé non disponible.</p>";
-
-  const HEADINGS = [
-    'abstract','background','purpose','objective','aim','aims',
-    'methods','materials and methods','patients and methods','method',
-    'results','findings','discussion',
-    'conclusion','conclusions','interpretation','clinical implications'
-  ];
-  const re = new RegExp(`(^|[.!?]\\s+)(` + HEADINGS.join('|') + `)\\b`, 'gi');
-  const marker = '§§§MARK§§§';
-  const marked = text.replace(re, (m, lead, head) => `${lead}${marker}${head}`);
-  const chunks = marked.split(marker).map(s => s.trim()).filter(Boolean);
-
-  if (chunks.length > 1) {
-    const out = [];
-    for (const ch of chunks) {
-      const m = ch.match(new RegExp(`^(${HEADINGS.join('|')})\\b`, 'i'));
-      if (m) {
-        const title = cap(m[1]);
-        const body = ch.slice(m[0].length).trim();
-        out.push(`<p><strong>${title}.</strong> ${body}</p>`);
-      } else {
-        out.push(`<p>${ch}</p>`);
-      }
-    }
-    return out.join('');
+  if (!_citeCache[articleId]) {
+    const res = await fetch(`/api/article/${articleId}`);
+    _citeCache[articleId] = await res.json();
   }
-
-  return `<p>${text}</p>`;
+  const data = _citeCache[articleId];
+  const citation = formatVancouver(data);
+  const box = document.createElement('div');
+  box.className = 'cite-box-card';
+  box.addEventListener('click', e => e.stopPropagation());
+  box.innerHTML = `
+    <div class="cite-box-label">Vancouver</div>
+    <div class="cite-box-text">${citation}</div>
+    <button class="cite-copy-btn" onclick="event.stopPropagation(); _fallbackCopy(this.previousElementSibling.textContent, this)">Copier</button>
+  `;
+  card.style.zIndex = '10';
+  card.appendChild(box);
 }
-
-/* ---------- Rendu des abstracts sur les cartes ---------- */
-function renderCardAbstracts() {
-  document.querySelectorAll('.abstract-render[data-abstract]').forEach(node => {
-    const raw = node.getAttribute('data-abstract') || '';
-    node.innerHTML = formatAbstract(raw);
-  });
-}
-document.addEventListener('DOMContentLoaded', renderCardAbstracts);
-
-/* ---------- Modal Article (fetch + rendu) ---------- */
-let articleModalInstance = null;
-async function openArticleModal(id) {
-  try {
-    // Nettoie les backdrops Bootstrap orphelins
-    document.querySelectorAll('.modal-backdrop').forEach(bd => bd.remove());
-
-    const res = await fetch(`/api/article/${id}`);
-    const data = await res.json();
-
-    // Titre / auteurs
-    document.getElementById('am-title').textContent = data.title || "Sans titre";
-    document.getElementById('am-authors').textContent = data.authors || "";
-
-    // Badges
-    const setBadge = (id, val) => {
-      const el = document.getElementById(id);
-      if (val) { el.textContent = val; el.style.display = ""; } else { el.style.display = "none"; }
-    };
-    setBadge('am-journal', data.journal);
-    setBadge('am-source', data.source ? `Source: ${data.source}` : "");
-    setBadge('am-domain', data.domain);
-    setBadge('am-pathology', data.pathology);
-    setBadge('am-studytype', data.study_type);
-
-    // Dates
-    const fmt = (iso) => {
-      if (!iso) return null;
-      try {
-        const d = new Date(iso);
-        return d.toLocaleDateString('fr-FR', { day:'2-digit', month:'short', year:'numeric' });
-      } catch (_) { return null; }
-    };
-    document.getElementById('am-pubdate').textContent  = (fmt(data.published_date) ? `Paru le ${fmt(data.published_date)}` : "");
-    document.getElementById('am-sitedate').textContent = (fmt(data.published_at)   ? `Ajouté le ${fmt(data.published_at)}` : "");
-
-    // Crédit "Proposé par ..."
-    const creditEl = document.getElementById('am-credit');
-    if (creditEl) {
-      if (data && data.share_name && data.credit_name) {
-        creditEl.textContent = `Proposé par ${data.credit_name}`;
-        creditEl.style.display = '';
-      } else {
-        creditEl.textContent = '';
-        creditEl.style.display = 'none';
-      }
-    }
-
-    // Résumé
-    document.getElementById('am-abstract').innerHTML =
-      formatAbstract(data.abstract) || "<p class='text-muted fst-italic'>Résumé non disponible.</p>";
-
-    // Liens
-    const urlBtn = document.getElementById('am-url');
-    if (data.url) { urlBtn.href = data.url; urlBtn.style.display = ""; } else { urlBtn.style.display = "none"; }
-    const doiBtn = document.getElementById('am-doi');
-    if (data.doi) { doiBtn.href = `https://doi.org/${data.doi}`; doiBtn.style.display = ""; } else { doiBtn.style.display = "none"; }
-
-    // Fiabilité
-    const bar = document.getElementById('am-rel-bar');
-    const level = document.getElementById('am-rel-level');
-    const score = document.getElementById('am-rel-score');
-    const reasons = document.getElementById('am-rel-reasons');
-
-    const sc = (data.reliability && data.reliability.score) || 0;
-    const lv = (data.reliability && data.reliability.level) || "—";
-    const rs = (data.reliability && data.reliability.reasons) || [];
-
-    bar.style.width = `${sc}%`;
-    bar.classList.remove('bg-danger','bg-warning','bg-success','bg-primary');
-    if (sc >= 80) bar.classList.add('bg-success');
-    else if (sc >= 60) bar.classList.add('bg-primary');
-    else if (sc >= 40) bar.classList.add('bg-warning');
-    else bar.classList.add('bg-danger');
-
-    level.textContent = lv;
-    score.textContent = `${sc}/100`;
-    reasons.innerHTML = rs.map(r => `<li>${r}</li>`).join('') || '<li>Aucune raison listée</li>';
-
-    // Ouvrir le modal (réutilise l'instance)
-    const modalEl = document.getElementById('articleModal');
-    if (!articleModalInstance) {
-      articleModalInstance = new bootstrap.Modal(modalEl);
-    }
-    articleModalInstance.show();
-
-  } catch (e) {
-    console.error(e);
-  }
-}
-
-// Attache les handlers aux cartes (ouverture modal + accessibilité clavier)
-document.querySelectorAll('.card[data-article-id]').forEach(card => {
-  card.querySelectorAll('a,button,input,textarea,select,form').forEach(el => {
-    el.addEventListener('click', e => e.stopPropagation());
-  });
-  card.addEventListener('click', () => {
-    const id = card.getAttribute('data-article-id');
-    if (id) openArticleModal(id);
-  });
-  card.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      const id = card.getAttribute('data-article-id');
-      if (id) openArticleModal(id);
-    }
-  });
-});
 </script>
 {% endblock %}

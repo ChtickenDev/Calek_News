@@ -9,7 +9,8 @@
       "Bash(python -c \"import flask_limiter; print\\(''ok''\\)\")",
       "Bash(python -c \"import flask; print\\(flask.__file__\\)\")",
       "Bash(.venv/Scripts/python.exe -m pip install flask-limiter cryptography)",
-      "Bash(.venv/Scripts/python.exe -c \"import app\")"
+      "Bash(.venv/Scripts/python.exe -c \"import app\")",
+      "Bash(ls C:/Users/baske/Desktop/Physara/*.py)"
     ]
   }
 }

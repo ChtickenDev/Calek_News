@@ -2224,109 +2224,38 @@ def set_lang(lang):
         session['lang'] = lang
     return redirect(request.referrer or url_for('index'))
 
-@app.route('/')
+@app.route(‘/’)
 def index():
-    print("[DEBUG index route] Appel de la route / (page d'accueil)", flush=True)
     if current_user.is_authenticated:
-        return redirect(url_for('feed'))
-    q = request.args.get('q', '').strip()
-    domain = request.args.get('domain', '')
-    pathology = request.args.get('pathology', '')
-    study_type = request.args.get('study_type', '')
+        return redirect(url_for(‘feed’))
 
-    # Facettes
-    domains = [r[0] for r in db.session.query(Article.domain)
-               .filter(Article.domain.isnot(None))
-               .distinct().order_by(Article.domain.asc()).all()]
-    pathologies = [r[0] for r in db.session.query(Article.pathology)
-                   .filter(Article.pathology.isnot(None))
-                   .distinct().order_by(Article.pathology.asc()).all()]
-    study_types = [r[0] for r in db.session.query(Article.study_type)
-                   .filter(Article.study_type.isnot(None))
-                   .distinct().order_by(Article.study_type.asc()).all()]
+    now = datetime.utcnow()
 
-    # Article du mois
-    featured = (Article.query
-        .filter(Article.is_published.is_(True), Article.featured.is_(True))
-        .order_by(Article.published_at.desc().nullslast(), Article.id.desc())
-        .first())
+    # Articles publiés avec titre
+    candidates = (Article.query
+        .filter(Article.is_published.is_(True),
+                Article.title.isnot(None),
+                Article.title != ‘’)
+        .all())
 
-    # Requête principale (publiés)
-    qry = Article.query.filter(Article.is_published.is_(True))
-    if q:
-        like = f"%{q}%"
-        qry = qry.filter(db.or_(
-            Article.title.ilike(like),
-            Article.authors.ilike(like),
-            Article.journal.ilike(like),
-            Article.abstract.ilike(like),
-            Article.doi.ilike(like),
-        ))
-    if domain:    qry = qry.filter(Article.domain == domain)
-    if pathology: qry = qry.filter(Article.pathology == pathology)
-    if study_type:qry = qry.filter(Article.study_type == study_type)
+    def public_score(a):
+        sc = reliability_score(a)[0]
+        ref_date = a.published_at or a.created_at
+        age_days = (now - ref_date).total_seconds() / 86400 if ref_date else 365
+        return sc * 0.4 + max(0, 30 - age_days)
 
-    # Tri + liste limitée
-    articles = (qry.order_by(
-                    Article.published_at.desc().nullslast(),
-                    Article.id.desc())
-                .limit(200).all())
+    articles = sorted(candidates, key=public_score, reverse=True)[:30]
 
-    total = Article.query.filter(Article.is_published.is_(True)).count()
-    last30 = Article.query.filter(
-        Article.is_published.is_(True),
-        Article.created_at >= datetime.utcnow() - timedelta(days=30)
-    ).count()
-
-    # ---------- AJOUT : carte des propositions par article ----------
-    proposals = {}
+    # Compteurs de likes
+    like_counts = {}
     ids = [a.id for a in articles]
     if ids:
-        # on prend la proposition la plus récente par article
-        rows = (Proposal.query
-                .options(joinedload(Proposal.proposer))
-                .filter(Proposal.article_id.in_(ids))
-                .order_by(Proposal.article_id.asc(), Proposal.created_at.desc())
-                .all())
-        seen = set()
-        for p in rows:
-            if p.article_id in seen:
-                continue
-            seen.add(p.article_id)
-            credit_name = None
-            if p.share_name and p.user:
-                credit_name = p.user.name or p.user.email
-            proposals[p.article_id] = {
-                "share_name": bool(p.share_name),
-                "credit_name": credit_name
-            }
-    print("[DEBUG proposals dict]", proposals, flush=True)
+        rows = (db.session.query(Like.article_id, db.func.count(Like.id))
+                .filter(Like.article_id.in_(ids))
+                .group_by(Like.article_id).all())
+        like_counts = {r[0]: r[1] for r in rows}
 
-    # ---------- AJOUT : crédit pour l’article du mois ----------
-    featured_credit = None
-    if featured:
-        pf = (Proposal.query
-              .options(joinedload(Proposal.proposer))
-              .filter_by(article_id=featured.id)
-              .order_by(Proposal.created_at.desc())
-              .first())
-        if pf:
-            featured_credit = {
-                "share_name": bool(pf.share_name),
-                "credit_name": (pf.user.name or pf.user.email) if (pf.share_name and pf.user) else None,
-            }
-
-    return render_template(
-        'index.html',
-        articles=articles,
-        featured=featured,
-        # >>> passe bien ces deux variables au template
-        proposals=proposals,
-        featured_credit=featured_credit,
-        q=q, total=total, last30=last30,
-        domain=domain, pathology=pathology, study_type=study_type,
-        domains=domains, pathologies=pathologies, study_types=study_types
-    )
+    return render_template(‘index.html’, articles=articles, like_counts=like_counts)
 
 # -----------------------------------------------------------------------------
 # Favoris
