@@ -30,7 +30,7 @@
 .card { position: relative; }
 </style>
 
-<h3 class="mb-3">Rechercher</h3>
+<h3 class="mb-3">{{ t('nav.search') }}</h3>
 
 <div class="card side-card p-3 mb-4">
 
@@ -45,7 +45,7 @@
              value="{{ q_pubmed or '' }}"
              style="font-size:1rem;">
       <button class="btn btn-primary px-4" type="submit" style="white-space:nowrap; font-size:1rem;">
-        Rechercher
+        {{ t('nav.search') }}
       </button>
     </div>
 
@@ -63,7 +63,7 @@
       <div>
         <label class="form-label small mb-1">Type d'étude</label>
         <select name="study_type" class="form-select form-select-sm">
-          <option value="">Tous</option>
+          <option value="">{{ t('filter.all') }}</option>
           <option value="rct"        {{ 'selected' if request.args.get('study_type') == 'rct' else '' }}>RCT</option>
           <option value="meta"       {{ 'selected' if request.args.get('study_type') == 'meta' else '' }}>Méta-analyse</option>
           <option value="systematic" {{ 'selected' if request.args.get('study_type') == 'systematic' else '' }}>Revue systématique</option>
@@ -75,7 +75,7 @@
       <div>
         <label class="form-label small mb-1">Accès</label>
         <select name="access" class="form-select form-select-sm">
-          <option value="">Tous</option>
+          <option value="">{{ t('filter.all') }}</option>
           <option value="fulltext" {{ 'selected' if request.args.get('access') == 'fulltext' else '' }}>Full text</option>
           <option value="free"     {{ 'selected' if request.args.get('access') == 'free' else '' }}>Free full text</option>
         </select>
@@ -84,7 +84,7 @@
       <div>
         <label class="form-label small mb-1">Langue</label>
         <select name="lang" class="form-select form-select-sm">
-          <option value="">Toutes</option>
+          <option value="">{{ t('filter.all_f') }}</option>
           <option value="en" {{ 'selected' if request.args.get('lang') == 'en' else '' }}>Anglais</option>
           <option value="fr" {{ 'selected' if request.args.get('lang') == 'fr' else '' }}>Français</option>
         </select>
@@ -94,7 +94,7 @@
         <label class="form-label small mb-1">Période</label>
         <select name="date_range" class="form-select form-select-sm" id="date-range-select"
                 onchange="document.getElementById('custom-dates').style.display = this.value === 'custom' ? 'flex' : 'none'">
-          <option value="">Toutes</option>
+          <option value="">{{ t('filter.all_f') }}</option>
           <option value="1y"     {{ 'selected' if request.args.get('date_range') == '1y' else '' }}>1 an</option>
           <option value="5y"     {{ 'selected' if request.args.get('date_range') == '5y' else '' }}>5 ans</option>
           <option value="10y"    {{ 'selected' if request.args.get('date_range') == '10y' else '' }}>10 ans</option>
@@ -134,7 +134,7 @@
 
 </div>
 
-<h5 class="mb-3">Brouillons</h5>
+<h5 class="mb-3">{{ t('search.results_title') }}</h5>
 
 <div class="row gy-3">
   {% for a in latest_drafts %}
@@ -153,7 +153,7 @@
 
       <div class="small text-muted mb-2 d-flex flex-wrap gap-2 align-items-center">
         {% if a.journal %}<span class="badge badge-soft badge-journal">{{ a.journal }}</span>{% endif %}
-        {% if a.published_date %}<span>Paru le {{ a.published_date.strftime('%d %b %Y') }}</span>{% endif %}
+        {% if a.published_date %}<span>{{ t('article.published') }} {{ a.published_date.strftime('%d %b %Y') }}</span>{% endif %}
         {% set sc = (reliability_score(a)[0]) %}
         {% set ifs_color =
             'bg-success' if sc>=80 else
@@ -177,7 +177,7 @@
         {% endif %}
         <button class="btn btn-sm btn-outline-secondary"
                 onclick="event.stopPropagation(); showCardCite(this, {{ a.id }})"
-                data-article-id="{{ a.id }}">Citer</button>
+                data-article-id="{{ a.id }}">{{ t('btn.cite') }}</button>
 
         {% if current_user.is_authenticated %}
         <form class="d-flex gap-2 align-items-center ms-auto favorite-form"
@@ -206,7 +206,7 @@
     </div>
   </div>
   {% else %}
-    <div class="col-12"><p class="text-muted">Aucun brouillon.</p></div>
+    <div class="col-12"><p class="text-muted">{{ t('search.empty_draft') }}</p></div>
   {% endfor %}
 </div>
 
@@ -214,12 +214,12 @@
 <div class="d-flex align-items-center justify-content-between mt-3 flex-wrap gap-2">
   <a class="btn btn-outline-secondary btn-sm {{ 'disabled' if page <= 1 else '' }}"
      href="{{ url_for('drafts_load_pubmed', q_pubmed=q_pubmed, page=page-1, sort=sort) }}">
-    Précédent
+    {{ t('btn.previous') }}
   </a>
   <div class="small text-muted">Page {{ page }} / {{ total_pages }}</div>
   <a class="btn btn-outline-secondary btn-sm {{ 'disabled' if page >= total_pages else '' }}"
      href="{{ url_for('drafts_load_pubmed', q_pubmed=q_pubmed, page=page+1, sort=sort) }}">
-    Suivant
+    {{ t('btn.next') }}
   </a>
 </div>
 {% endif %}
@@ -339,7 +339,7 @@ async function openArticleModal(id){
     setBadge('am-pathology', data.pathology);
     setBadge('am-studytype', data.study_type);
     const fmt = iso => { if(!iso) return null; try{ const d=new Date(iso); return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'});}catch{return null;} };
-    document.getElementById('am-pubdate').textContent  = fmt(data.published_date) ? `Paru le ${fmt(data.published_date)}` : "";
+    document.getElementById('am-pubdate').textContent  = fmt(data.published_date) ? `${t_js('article.published')||'{{ t("article.published") }}'} ${fmt(data.published_date)}` : "";
     document.getElementById('am-sitedate').textContent = fmt(data.published_at)   ? `Ajouté le ${fmt(data.published_at)}` : "";
     document.getElementById('am-abstract').innerHTML = formatAbstract(data.abstract);
     _injectModalTranslateBtn(data.abstract);

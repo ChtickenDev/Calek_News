@@ -8,6 +8,9 @@
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/physara-logo.png') }}">
 
+  <!-- Anti-flash : applique le thème avant le premier rendu -->
+  <script>(function(){var t=localStorage.getItem('theme')||(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.setAttribute('data-bs-theme',t);})();</script>
+
   <!-- Bootstrap CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 
@@ -120,7 +123,6 @@
     </a>
 
     <div class="d-flex align-items-center gap-2 d-lg-none">
-      <button id="theme-toggle-mobile" class="btn btn-sm btn-outline-secondary" title="Basculer le thème">🌞</button>
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
               aria-controls="navbarNav" aria-expanded="false" aria-label="Ouvrir la navigation">
         ☰
@@ -157,6 +159,27 @@
                 <li><a class="dropdown-item" href="{{ url_for('admin_dashboard') }}">⚙️ {{ t('admin.dashboard') }}</a></li>
               {% endif %}
               <li><hr class="dropdown-divider"></li>
+              <li>
+                <div class="dropdown-item d-flex align-items-center justify-content-between pe-2" style="cursor:default;">
+                  <span>{{ t('theme.dark_mode') }}</span>
+                  <div class="form-check form-switch mb-0 ms-3">
+                    <input class="form-check-input" type="checkbox" id="dark-mode-switch" role="switch"
+                           onclick="event.stopPropagation()">
+                  </div>
+                </div>
+              </li>
+              <li><hr class="dropdown-divider"></li>
+              <li>
+                <div class="dropdown-item d-flex align-items-center gap-2 py-1" style="cursor:default;">
+                  <a href="{{ url_for('set_lang', lang='fr') }}"
+                     class="btn btn-sm {% if current_lang() == 'fr' %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+                     style="font-size:0.75rem;padding:2px 10px;">FR</a>
+                  <a href="{{ url_for('set_lang', lang='en') }}"
+                     class="btn btn-sm {% if current_lang() == 'en' %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+                     style="font-size:0.75rem;padding:2px 10px;">EN</a>
+                </div>
+              </li>
+              <li><hr class="dropdown-divider"></li>
               <li><a class="dropdown-item text-danger" href="{{ url_for('logout') }}">{{ t('nav.logout') }}</a></li>
             </ul>
           </div>
@@ -164,19 +187,6 @@
           <a href="{{ url_for('login') }}" class="btn btn-sm btn-outline-primary">{{ t('nav.login') }}</a>
           <a href="{{ url_for('signup') }}" class="btn btn-sm btn-primary">{{ t('nav.signup') }}</a>
         {% endif %}
-
-        <div class="d-flex align-items-center gap-1 ms-2">
-          <a href="{{ url_for('set_lang', lang='fr') }}"
-             class="btn btn-sm {% if current_lang() == 'fr' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
-            FR
-          </a>
-          <a href="{{ url_for('set_lang', lang='en') }}"
-             class="btn btn-sm {% if current_lang() == 'en' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
-            EN
-          </a>
-        </div>
-
-        <button id="theme-toggle" class="btn btn-sm btn-outline-secondary d-none d-lg-inline-flex" title="Basculer le thème" aria-label="Basculer le thème">🌞</button>
       </div>
     </div>
   </div>
@@ -281,30 +291,13 @@
 
 <script>
 /* ---------- Thème (clair/sombre) ---------- */
-(function initTheme(){
-  const saved = localStorage.getItem('theme');
-  const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-  const initial = saved || (prefersDark ? 'dark' : 'light');
-  document.documentElement.setAttribute('data-bs-theme', initial);
-  const icon = (initial === 'dark') ? '🌙' : '🌞';
-  const btn = document.getElementById('theme-toggle');
-  const btnM = document.getElementById('theme-toggle-mobile');
-  if (btn) btn.textContent = icon;
-  if (btnM) btnM.textContent = icon;
-})();
+/* L'application initiale est faite dans <head> pour éviter le flash */
 function setTheme(mode){
   document.documentElement.setAttribute('data-bs-theme', mode);
   localStorage.setItem('theme', mode);
-  const icon = (mode === 'dark') ? '🌙' : '🌞';
-  const btn = document.getElementById('theme-toggle');
-  const btnM = document.getElementById('theme-toggle-mobile');
-  if (btn) btn.textContent = icon;
-  if (btnM) btnM.textContent = icon;
+  const sw = document.getElementById('dark-mode-switch');
+  if (sw) sw.checked = (mode === 'dark');
 }
-document.getElementById('theme-toggle')?.addEventListener('click', ()=>{
-  const current = document.documentElement.getAttribute('data-bs-theme') || 'light';
-  setTheme(current === 'dark' ? 'light' : 'dark');
-});
 
 /* ---------- Helpers résumé (JATS → paragraphes + titres) ---------- */
 function formatAbstract(raw) {
@@ -387,7 +380,7 @@ async function openArticleModal(id) {
     };
     const pub = fmt(data.published_date);
     const add = fmt(data.published_at);
-    document.getElementById('am-pubdate').textContent = pub ? `Paru le ${pub}` : "";
+    document.getElementById('am-pubdate').textContent = pub ? `${t_js('article.published')||'Paru le'} ${pub}` : "";
     document.getElementById('am-sitedate').textContent = add ? `Ajouté le ${add}` : "";
 
     const credit = document.getElementById('am-credit');
@@ -560,10 +553,6 @@ document.addEventListener('click', (e) => {
   if (id) openArticleModal(id);
 });
 
-document.getElementById('theme-toggle-mobile')?.addEventListener('click', () => {
-  const current = document.documentElement.getAttribute('data-bs-theme') || 'light';
-  setTheme(current === 'dark' ? 'light' : 'dark');
-});
 function avatarColor(seed) {
   const colors = [
     '#6366f1','#8b5cf6','#ec4899','#f59e0b',
@@ -579,7 +568,14 @@ function applyAvatarColors() {
     el.style.background = avatarColor(el.dataset.seed);
   });
 }
-document.addEventListener('DOMContentLoaded', applyAvatarColors);
+document.addEventListener('DOMContentLoaded', function(){
+  applyAvatarColors();
+  const sw = document.getElementById('dark-mode-switch');
+  if (sw) {
+    sw.checked = (document.documentElement.getAttribute('data-bs-theme') === 'dark');
+    sw.addEventListener('change', () => setTheme(sw.checked ? 'dark' : 'light'));
+  }
+});
 
 function formatVancouver(data) {
   const authors = data.authors
@@ -612,7 +608,10 @@ function copyCite() {
 window._translations = {{ {
   'btn.translate': t('btn.translate'),
   'btn.translating': t('btn.translating'),
-  'btn.show_original': t('btn.show_original')
+  'btn.show_original': t('btn.show_original'),
+  'article.published': t('article.published'),
+  'feed.following_badge': t('feed.following_badge'),
+  'feed.suggested': t('feed.suggested')
 } | tojson }};
 
 function t_js(key) {

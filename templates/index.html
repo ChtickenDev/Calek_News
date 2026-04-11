@@ -42,7 +42,7 @@
 
       <div class="small text-muted mb-2 d-flex flex-wrap gap-2">
         {% if a.journal %}<span class="badge badge-soft badge-journal">{{ a.journal }}</span>{% endif %}
-        {% if a.published_date %}<span>Paru le {{ a.published_date.strftime('%d %b %Y') }}</span>{% endif %}
+        {% if a.published_date %}<span>{{ t('article.published') }} {{ a.published_date.strftime('%d %b %Y') }}</span>{% endif %}
       </div>
 
       {% if a.abstract %}

@@ -4,8 +4,8 @@
 <div class="dropdown" onclick="event.stopPropagation()">
   <button class="btn btn-sm btn-outline-secondary dropdown-toggle"
           data-bs-toggle="dropdown" data-bs-auto-close="outside"
-          onclick="event.stopPropagation()" title="Partager">
-    Partager
+          onclick="event.stopPropagation()" title="{{ t('btn.share') }}">
+    {{ t('btn.share') }}
   </button>
   <ul class="dropdown-menu dropdown-menu-end" style="min-width:190px;">
     <li>
@@ -242,7 +242,7 @@
         {% if a.authors %}<p class="text-muted small mb-1">{{ a.authors }}</p>{% endif %}
         <div class="small text-muted mb-2">
           {% if a.journal %}<span class="badge badge-soft badge-journal">{{ a.journal }}</span>{% endif %}
-          {% if a.published_date %}<span>Paru le {{ a.published_date.strftime('%d %b %Y') }}</span>{% endif %}
+          {% if a.published_date %}<span>{{ t('article.published') }} {{ a.published_date.strftime('%d %b %Y') }}</span>{% endif %}
         </div>
         {% if a.abstract %}
           {% set _abstract_text = a.clean_abstract or (a.abstract|striptags) %}
@@ -276,7 +276,7 @@
 
           <div class="dropdown ms-auto" onclick="event.stopPropagation()">
             <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" onclick="event.stopPropagation()">
-              Dossier
+              {{ t('btn.folder') }}
             </button>
             {% set fv_art_folder_ids = folders_by_article.get(a.id, []) | map(attribute='id') | list %}
             <ul class="dropdown-menu">
@@ -294,10 +294,10 @@
                   </li>
                 {% endfor %}
               {% else %}
-                <li><span class="dropdown-item text-muted">Aucun dossier</span></li>
+                <li><span class="dropdown-item text-muted">{{ t('folder.empty') }}</span></li>
               {% endif %}
               <li><hr class="dropdown-divider"></li>
-              <li><button class="dropdown-item text-success" onclick="openCreateFolder()">+ Nouveau dossier</button></li>
+              <li><button class="dropdown-item text-success" onclick="openCreateFolder()">+ {{ t('folder.new') }}</button></li>
             </ul>
           </div>
           {% endif %}
@@ -312,7 +312,7 @@
 
 {% else %}
 <!-- Vue tous les favoris -->
-<p class="text-muted">Vous avez {{ favorites|length }} favori{{ '' if favorites|length==1 else 's' }}.</p>
+<p class="text-muted">{{ t('favorites.you_have') }} {{ favorites|length }} {{ t('favorites.fav_singular') if favorites|length==1 else t('favorites.fav_plural') }}.</p>
 
 <div class="row gy-3">
   {% for f in favorites %}
@@ -337,7 +337,7 @@
 
         <div class="small text-muted mb-2 d-flex flex-wrap gap-2">
           {% if a.journal %}<span class="badge badge-soft badge-journal">{{ a.journal }}</span>{% endif %}
-          {% if a.published_date %}<span>Paru le {{ a.published_date.strftime('%d %b %Y') }}</span>{% endif %}
+          {% if a.published_date %}<span>{{ t('article.published') }} {{ a.published_date.strftime('%d %b %Y') }}</span>{% endif %}
         </div>
 
         {% if a.abstract %}
@@ -383,7 +383,7 @@
 
           <div class="dropdown" onclick="event.stopPropagation()">
             <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" onclick="event.stopPropagation()">
-              Dossier
+              {{ t('btn.folder') }}
             </button>
             {% set art_folder_ids = art_folders | map(attribute='id') | list %}
             <ul class="dropdown-menu">
@@ -401,10 +401,10 @@
                   </li>
                 {% endfor %}
               {% else %}
-                <li><span class="dropdown-item text-muted">Aucun dossier</span></li>
+                <li><span class="dropdown-item text-muted">{{ t('folder.empty') }}</span></li>
               {% endif %}
               <li><hr class="dropdown-divider"></li>
-              <li><button class="dropdown-item text-success" onclick="openCreateFolder()">+ Nouveau dossier</button></li>
+              <li><button class="dropdown-item text-success" onclick="openCreateFolder()">+ {{ t('folder.new') }}</button></li>
             </ul>
           </div>
 
@@ -895,7 +895,7 @@ async function openArticleModal(id) {
     const ifs = document.getElementById('am-ifs');
     if (sc!==null){ ifs.textContent=`IFS: ${sc}`; ifs.style.display=''; } else { ifs.style.display='none'; }
     const fmt = iso => { if(!iso) return null; try{ const d=new Date(iso); return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'});}catch{return null;} };
-    document.getElementById('am-pubdate').textContent = fmt(data.published_date) ? `Paru le ${fmt(data.published_date)}` : "";
+    document.getElementById('am-pubdate').textContent = fmt(data.published_date) ? `${t_js('article.published')||'{{ t("article.published") }}'} ${fmt(data.published_date)}` : "";
     document.getElementById('am-sitedate').textContent = fmt(data.published_at) ? `Ajouté le ${fmt(data.published_at)}` : "";
     document.getElementById('am-abstract').innerHTML = formatAbstract(data.abstract);
     const urlBtn = document.getElementById('am-url'); if (data.url) { urlBtn.href = data.url; urlBtn.style.display=""; } else urlBtn.style.display="none";

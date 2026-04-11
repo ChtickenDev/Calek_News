@@ -39,7 +39,7 @@
       <!-- Badge suggéré -->
       <div class="mb-3">
         <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle suggested-badge">
-          ✦ Suggéré pour vous
+          ✦ {{ t('feed.suggested') }}
         </span>
       </div>
       {% else %}
@@ -60,7 +60,7 @@
              class="text-decoration-none fw-semibold text-body d-block text-truncate" style="font-size:0.85rem;">
             {{ first.user.name or first.user.email.split('@')[0] }}
             {% if first.is_followed %}
-              <span class="badge bg-success-subtle text-success ms-1" style="font-size:0.65rem;">Abonné·e</span>
+              <span class="badge bg-success-subtle text-success ms-1" style="font-size:0.65rem;">{{ t('feed.following_badge') }}</span>
             {% endif %}
           </a>
           <span class="text-muted" style="font-size:0.7rem;">{{ first.fav.created_at.strftime('%d %b %Y') }}</span>
@@ -99,7 +99,7 @@
 
       <div class="small text-muted mb-2 d-flex flex-wrap gap-2">
         {% if a.journal %}<span class="badge badge-soft badge-journal">{{ a.journal }}</span>{% endif %}
-        {% if a.published_date %}<span>Paru le {{ a.published_date.strftime('%d %b %Y') }}</span>{% endif %}
+        {% if a.published_date %}<span>{{ t('article.published') }} {{ a.published_date.strftime('%d %b %Y') }}</span>{% endif %}
       </div>
 
       {% if a.abstract %}
@@ -280,7 +280,7 @@ async function followUser(userId, btn) {
   const res = await fetch(`/follow/${userId}`, {method: 'POST'});
   const data = await res.json();
   if (data.ok) {
-    btn.outerHTML = `<span class="badge bg-success-subtle text-success flex-shrink-0" style="font-size:0.65rem;">Abonné·e</span>`;
+    btn.outerHTML = `<span class="badge bg-success-subtle text-success flex-shrink-0" style="font-size:0.65rem;">${t_js('feed.following_badge')||'{{ t("feed.following_badge") }}'}</span>`;
   }
 }
 
@@ -364,7 +364,7 @@ async function loadSharers(articleId, scrollTo) {
         <div class="flex-grow-1 min-w-0">
           <div class="d-flex align-items-center gap-2 flex-wrap">
             <a href="${s.profile_url}" class="fw-semibold text-body text-decoration-none" style="font-size:0.82rem;">${s.name}</a>
-            ${s.is_followed ? '<span class="badge bg-success-subtle text-success" style="font-size:0.6rem;">Abonné·e</span>' : ''}
+            ${s.is_followed ? `<span class="badge bg-success-subtle text-success" style="font-size:0.6rem;">${t_js('feed.following_badge')||'{{ t("feed.following_badge") }}'}</span>` : ''}
             <span class="text-muted" style="font-size:0.7rem;">${s.date}</span>
           </div>
           ${s.note ? `<div class="public-note-box mt-1" style="font-size:0.75rem;">${s.note}</div>` : ''}
@@ -403,7 +403,7 @@ async function openArticleModal(id, showSharers = false) {
     const ifs = document.getElementById('am-ifs');
     if (sc!==null){ ifs.textContent=`IFS: ${sc}`; ifs.style.display=''; } else { ifs.style.display='none'; }
     const fmt = iso => { if(!iso) return null; try{ const d=new Date(iso); return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'});}catch{return null;} };
-    document.getElementById('am-pubdate').textContent = fmt(data.published_date) ? `Paru le ${fmt(data.published_date)}` : "";
+    document.getElementById('am-pubdate').textContent = fmt(data.published_date) ? `${t_js('article.published')||'{{ t("article.published") }}'} ${fmt(data.published_date)}` : "";
     document.getElementById('am-abstract').innerHTML = formatAbstract(data.abstract);
     _injectModalTranslateBtn(data.abstract);
     const urlBtn = document.getElementById('am-url'); if(data.url){urlBtn.href=data.url;urlBtn.style.display="";}else urlBtn.style.display="none";
