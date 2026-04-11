@@ -6,6 +6,10 @@ import csv
 import io
 import time
 import math
+import random
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
 from functools import wraps
 from flask import session
@@ -51,6 +55,27 @@ app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "local-secret-key")
 app.url_map.strict_slashes = False  # évite les redirections 308/301
 
 db = SQLAlchemy(app)
+
+# -----------------------------------------------------------------------------
+# Google OAuth (authlib)
+# -----------------------------------------------------------------------------
+from authlib.integrations.flask_client import OAuth as _OAuth
+
+_oauth = _OAuth(app)
+google_oauth = _oauth.register(
+    name='google',
+    client_id=os.environ.get('GOOGLE_CLIENT_ID'),
+    client_secret=os.environ.get('GOOGLE_CLIENT_SECRET'),
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+    client_kwargs={'scope': 'openid email profile'},
+)
+
+# --- Configuration email (2FA) ---
+MAIL_SERVER   = os.environ.get('MAIL_SERVER',   'smtp.gmail.com')
+MAIL_PORT     = int(os.environ.get('MAIL_PORT', 587))
+MAIL_USERNAME = os.environ.get('MAIL_USERNAME', '')
+MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD', '')
+MAIL_FROM     = os.environ.get('MAIL_FROM', MAIL_USERNAME)
 
 # --- Rate limiting (PubMed routes uniquement) ---
 from flask_limiter import Limiter
@@ -157,6 +182,7 @@ class User(UserMixin, db.Model):
     abonnements_publics = db.Column(db.Boolean, default=True)
     zotero_api_key = db.Column(db.String(200))
     zotero_user_id = db.Column(db.String(50))
+    google_id      = db.Column(db.String(100), unique=True, nullable=True)
 
     def set_password(self, pw):
         self.password_hash = generate_password_hash(pw)
@@ -800,6 +826,14 @@ def ensure_folder_schema():
 
 def ensure_event_schema():
     db.create_all()
+
+
+def ensure_google_schema():
+    """Ajoute la colonne google_id à la table user si absente."""
+    user_cols = {r["name"] for r in db.session.execute(text("PRAGMA table_info(user)")).mappings().all()}
+    if "google_id" not in user_cols:
+        db.session.execute(text("ALTER TABLE user ADD COLUMN google_id VARCHAR(100)"))
+        db.session.commit()
 
 
 # -----------------------------------------------------------------------------
@@ -2106,6 +2140,54 @@ def extract_pmid_from_article(a: Article) -> str | None:
 
 
 # -----------------------------------------------------------------------------
+# Utilitaire email 2FA
+# -----------------------------------------------------------------------------
+def send_2fa_email(to_email: str, code: str) -> bool:
+    """Envoie un code OTP par email. Retourne True si succès."""
+    if not MAIL_USERNAME or not MAIL_PASSWORD:
+        # Mode dev : afficher le code dans les logs
+        print(f"[2FA DEV] Code pour {to_email} : {code}", flush=True)
+        return True
+
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = 'Votre code de vérification Physara'
+        msg['From']    = MAIL_FROM
+        msg['To']      = to_email
+
+        text_body = (
+            f"Votre code de vérification Physara : {code}\n\n"
+            "Ce code est valable 10 minutes.\n"
+            "Si vous n'avez pas demandé cette connexion, ignorez ce message."
+        )
+        html_body = f"""
+        <div style="font-family:sans-serif;max-width:480px;margin:auto;padding:32px;">
+          <h2 style="color:#6366f1;margin-bottom:8px;">Physara</h2>
+          <p style="color:#374151;">Votre code de vérification :</p>
+          <div style="font-size:2.5rem;font-weight:700;letter-spacing:.3em;
+                      background:#f3f4f6;border-radius:12px;padding:20px;
+                      text-align:center;color:#111827;margin:24px 0;">{code}</div>
+          <p style="color:#6b7280;font-size:.875rem;">
+            Valable 10 minutes. Si vous n'êtes pas à l'origine de cette demande, ignorez ce message.
+          </p>
+        </div>"""
+
+        msg.attach(MIMEText(text_body, 'plain'))
+        msg.attach(MIMEText(html_body, 'html'))
+
+        with smtplib.SMTP(MAIL_SERVER, MAIL_PORT, timeout=10) as server:
+            server.ehlo()
+            server.starttls()
+            server.login(MAIL_USERNAME, MAIL_PASSWORD)
+            server.send_message(msg)
+        return True
+
+    except Exception as exc:
+        print(f"[2FA] Erreur envoi email à {to_email} : {exc}", flush=True)
+        return False
+
+
+# -----------------------------------------------------------------------------
 # Auth
 # -----------------------------------------------------------------------------
 @app.route("/signup", methods=["GET", "POST"])
@@ -2144,6 +2226,112 @@ def login():
 def logout():
     logout_user()
     return redirect(url_for("index"))
+
+
+# -----------------------------------------------------------------------------
+# Google OAuth
+# -----------------------------------------------------------------------------
+@app.route('/auth/google')
+def auth_google():
+    if current_user.is_authenticated:
+        return redirect(url_for('feed'))
+    redirect_uri = url_for('auth_google_callback', _external=True)
+    return google_oauth.authorize_redirect(redirect_uri)
+
+
+@app.route('/auth/google/callback')
+def auth_google_callback():
+    try:
+        token = google_oauth.authorize_access_token()
+    except Exception as exc:
+        print(f"[OAuth] Erreur token Google : {exc}", flush=True)
+        flash("Erreur lors de l'authentification Google. Réessayez.", "danger")
+        return redirect(url_for('login'))
+
+    userinfo = token.get('userinfo') or {}
+    email     = (userinfo.get('email') or '').strip().lower()
+    name      = userinfo.get('name', '')
+    google_id = userinfo.get('sub', '')
+
+    if not email:
+        flash("Impossible de récupérer l'adresse email depuis Google.", "danger")
+        return redirect(url_for('login'))
+
+    # Trouver ou créer l'utilisateur
+    u = User.query.filter_by(email=email).first()
+    if u is None:
+        u = User.query.filter_by(google_id=google_id).first()
+
+    if u is None:
+        # Nouveau compte via Google
+        u = User(email=email, name=name or email.split('@')[0], google_id=google_id)
+        u.password_hash = generate_password_hash(os.urandom(32).hex())
+        db.session.add(u)
+        db.session.commit()
+    else:
+        # Lier le google_id si pas encore enregistré
+        if not u.google_id:
+            u.google_id = google_id
+            db.session.commit()
+
+    # Générer et envoyer le code 2FA
+    code = str(random.randint(100000, 999999))
+    session['_2fa_code'] = code
+    session['_2fa_exp']  = (datetime.utcnow() + timedelta(minutes=10)).isoformat()
+    session['_2fa_uid']  = u.id
+
+    if not send_2fa_email(u.email, code):
+        # Nettoyage session et message d'erreur
+        session.pop('_2fa_code', None)
+        session.pop('_2fa_exp',  None)
+        session.pop('_2fa_uid',  None)
+        flash("Impossible d'envoyer le code de vérification. Vérifiez la config email.", "danger")
+        return redirect(url_for('login'))
+
+    flash(f"Un code de vérification a été envoyé à {u.email}.", "info")
+    return redirect(url_for('auth_verify'))
+
+
+@app.route('/auth/verify', methods=['GET', 'POST'])
+def auth_verify():
+    if '_2fa_uid' not in session:
+        return redirect(url_for('login'))
+
+    if request.method == 'POST':
+        entered  = request.form.get('code', '').strip()
+        stored   = session.get('_2fa_code')
+        exp_str  = session.get('_2fa_exp')
+        user_id  = session.get('_2fa_uid')
+
+        if not stored or not exp_str or not user_id:
+            flash("Session expirée. Recommencez la connexion.", "danger")
+            return redirect(url_for('login'))
+
+        if datetime.utcnow() > datetime.fromisoformat(exp_str):
+            session.pop('_2fa_code', None)
+            session.pop('_2fa_exp',  None)
+            session.pop('_2fa_uid',  None)
+            flash("Code expiré (10 min). Recommencez la connexion.", "danger")
+            return redirect(url_for('login'))
+
+        if entered != stored:
+            flash("Code incorrect.", "danger")
+            return render_template('auth_verify.html')
+
+        # ✓ Code valide — nettoyer la session puis connecter
+        session.pop('_2fa_code', None)
+        session.pop('_2fa_exp',  None)
+        session.pop('_2fa_uid',  None)
+
+        u = db.session.get(User, user_id)
+        if not u:
+            flash("Compte introuvable.", "danger")
+            return redirect(url_for('login'))
+
+        login_user(u)
+        return redirect(url_for('feed'))
+
+    return render_template('auth_verify.html')
 
 
 import os
@@ -3602,7 +3790,8 @@ def upgrade_db():
     ensure_article_columns()
     ensure_proposal_schema()
     ensure_favorite_columns()
-    ensure_userdraft_schema()  
+    ensure_userdraft_schema()
+    ensure_google_schema()
     flash("Base mise à niveau ✅", "success")
     return redirect(url_for("index"))
 
@@ -4252,6 +4441,7 @@ if __name__ == "__main__":
         ensure_userdraft_schema()
         ensure_folder_schema()
         ensure_event_schema()
+        ensure_google_schema()
         db.session.execute(text("UPDATE article SET featured=0 WHERE featured IS NULL"))
         db.session.commit()
     app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)

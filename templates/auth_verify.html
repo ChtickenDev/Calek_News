@@ -1,0 +1,46 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-5">
+
+    <div class="card p-4 mt-4">
+      <div class="text-center mb-4">
+        <div style="font-size:2.5rem;">📧</div>
+        <h4 class="mt-2 mb-1">Vérification en deux étapes</h4>
+        <p class="text-muted small mb-0">
+          Un code à 6 chiffres a été envoyé à votre adresse email.<br>
+          Il est valable <strong>10 minutes</strong>.
+        </p>
+      </div>
+
+      <form method="post" autocomplete="off">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Code de vérification</label>
+          <input
+            class="form-control form-control-lg text-center fw-bold"
+            type="text"
+            name="code"
+            inputmode="numeric"
+            pattern="[0-9]{6}"
+            maxlength="6"
+            placeholder="• • • • • •"
+            required
+            autofocus
+            style="letter-spacing:.35em; font-size:1.6rem;">
+          <div class="form-text text-muted">Entrez le code reçu par email.</div>
+        </div>
+
+        <button type="submit" class="btn btn-primary w-100">Vérifier</button>
+      </form>
+
+      <hr class="my-3">
+
+      <p class="text-center small text-muted mb-0">
+        Vous n'avez pas reçu de code ?
+        <a href="{{ url_for('login') }}">Recommencer la connexion</a>
+      </p>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
