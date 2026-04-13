@@ -81,10 +81,13 @@
         </div>
       {% endif %}
 
-      <!-- IFS + domaine -->
+      <!-- IFS + domaine + Citer -->
       <div class="card-top">
         {{ ifs_badge(sc) }}
         {% if a.domain %}<span class="card-domain">{{ a.domain }}</span>{% endif %}
+        <button class="card-top-action" style="margin-left:auto;"
+                onclick="event.stopPropagation(); showCardCite(this, {{ a.id }})"
+                data-article-id="{{ a.id }}">{{ t('btn.cite') }}</button>
       </div>
 
       <!-- Titre -->
@@ -140,9 +143,6 @@
                 onclick="event.stopPropagation(); toggleLike({{ a.id }}, this)">
           Like · <span class="like-count">{{ like_count }}</span>
         </button>
-        <button class="card-btn" style="margin-left:auto;"
-                onclick="event.stopPropagation(); showCardCite(this, {{ a.id }})"
-                data-article-id="{{ a.id }}">{{ t('btn.cite') }}</button>
       </div>
 
     </div>

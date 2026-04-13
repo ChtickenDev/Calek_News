@@ -235,6 +235,9 @@
         <div class="card-top">
           {{ ifs_badge(sc) }}
           {% if a.domain %}<span class="card-domain">{{ a.domain }}</span>{% endif %}
+          <button class="card-top-action" style="margin-left:auto;"
+                  onclick="event.stopPropagation(); showCardCite(this, {{ a.id }})"
+                  data-article-id="{{ a.id }}">{{ t('btn.cite') }}</button>
         </div>
 
         <div class="card-title" onclick="event.stopPropagation(); openArticleModal({{ a.id }})">{{ a.title }}</div>
@@ -287,9 +290,6 @@
               <button class="card-btn" style="color:#dc3545;border-color:#dc3545;">{{ t('btn.remove') }}</button>
             </form>
           {% endif %}
-          <button class="card-btn" style="margin-left:auto;"
-                  onclick="event.stopPropagation(); showCardCite(this, {{ a.id }})"
-                  data-article-id="{{ a.id }}">{{ t('btn.cite') }}</button>
         </div>
 
       </div>
@@ -316,6 +316,16 @@
         <div class="card-top">
           {{ ifs_badge(sc) }}
           {% if a.domain %}<span class="card-domain">{{ a.domain }}</span>{% endif %}
+          <div style="margin-left:auto; display:flex; gap:4px;" onclick="event.stopPropagation()">
+            <button class="card-top-action{% if f.is_public %} card-top-action-public{% endif %}"
+                    id="vis-btn-{{ a.id }}"
+                    onclick="event.stopPropagation(); toggleVisibility({{ a.id }}, this)">
+              {{ t('btn.public') if f.is_public else t('btn.private') }}
+            </button>
+            <button class="card-top-action"
+                    onclick="event.stopPropagation(); showCardCite(this, {{ a.id }})"
+                    data-article-id="{{ a.id }}">{{ t('btn.cite') }}</button>
+          </div>
         </div>
 
         <div class="card-title" onclick="event.stopPropagation(); openArticleModal({{ a.id }})">{{ a.title }}</div>
@@ -342,15 +352,9 @@
           {% if a.abstract %}{% set _abstract_text = a.clean_abstract or (a.abstract|striptags) %}{{ _abstract_text[:400] }}{% if _abstract_text|length > 400 %}…{% endif %}{% else %}{{ t('article.no_abstract') }}{% endif %}
         </div>
 
-        <!-- DOI · Public/Privé · Note · Partager · Dossier · Retirer · Citer -->
+        <!-- DOI · Partager · Dossier · Retirer -->
         <div class="card-actions" onclick="event.stopPropagation()">
           {% if a.doi %}<a class="card-btn" href="https://doi.org/{{ a.doi }}" target="_blank" onclick="event.stopPropagation()">DOI</a>{% endif %}
-          <button class="card-btn{% if f.is_public %} card-btn-public{% endif %}"
-                  id="vis-btn-{{ a.id }}"
-                  onclick="event.stopPropagation(); toggleVisibility({{ a.id }}, this)">
-            {{ t('btn.public') if f.is_public else t('btn.private') }}
-          </button>
-          <button class="card-btn" onclick="event.stopPropagation(); togglePublicNote({{ a.id }})">Note</button>
           {{ share_dropdown(a.id) }}
           <div class="dropdown" onclick="event.stopPropagation()">
             <button class="card-btn dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" onclick="event.stopPropagation()">{{ t('btn.folder') }}</button>
@@ -373,9 +377,6 @@
           <form method="post" action="{{ url_for('unfavorite', article_id=a.id) }}" onclick="event.stopPropagation()">
             <button class="card-btn" style="color:#dc3545;border-color:#dc3545;">{{ t('btn.remove') }}</button>
           </form>
-          <button class="card-btn" style="margin-left:auto;"
-                  onclick="event.stopPropagation(); showCardCite(this, {{ a.id }})"
-                  data-article-id="{{ a.id }}">{{ t('btn.cite') }}</button>
         </div>
 
         <div id="public-note-{{ a.id }}" class="w-100 mt-2" style="display:none;" onclick="event.stopPropagation()">
@@ -723,7 +724,7 @@ async function toggleVisibility(articleId, btn) {
   const data = await res.json();
   if (data.ok) {
     btn.textContent = data.is_public ? '{{ t("btn.public") }}' : '{{ t("btn.private") }}';
-    btn.className = `card-btn${data.is_public ? ' card-btn-public' : ''}`;
+    btn.className = `card-top-action${data.is_public ? ' card-top-action-public' : ''}`;
   }
 }
 
