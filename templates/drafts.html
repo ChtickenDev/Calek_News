@@ -140,61 +140,72 @@
 <div class="row gy-3">
   {% for a in latest_drafts %}
   <div class="col-md-6 col-lg-4">
-    <div class="card h-100 article-card p-3" data-article-id="{{ a.id }}" role="button" tabindex="0" style="position:relative;">
+    {% set sc = (reliability_score(a)[0]) %}
+    <div class="article-card" data-article-id="{{ a.id }}" role="button" tabindex="0">
 
-      <div class="d-flex flex-wrap gap-2 mb-1">
-        {% if a.source %}<span class="badge badge-soft">{{ a.source|capitalize }}</span>{% endif %}
-        {% if a.domain %}<span class="badge badge-soft">{{ a.domain }}</span>{% endif %}
-        {% if a.pathology %}<span class="badge badge-soft">{{ a.pathology }}</span>{% endif %}
-        {% if a.study_type %}<span class="badge badge-soft">{{ a.study_type }}</span>{% endif %}
-      </div>
+      <!-- Cite button (abs top-right) -->
+      <button class="card-cite-btn" onclick="event.stopPropagation(); showCardCite(this, {{ a.id }})" data-article-id="{{ a.id }}">{{ t('btn.cite') }}</button>
 
-      <h6 class="fw-bold line-clamp-2">{{ a.title }}</h6>
-      {% if a.authors %}<p class="text-muted small mb-2">{{ a.authors }}</p>{% endif %}
-
-      <div class="small text-muted mb-2 d-flex flex-wrap gap-2 align-items-center">
-        {% if a.journal %}<span class="badge badge-soft badge-journal">{{ a.journal }}</span>{% endif %}
-        {% if a.published_date %}<span>{{ t('article.published') }} {{ a.published_date.strftime('%d %b %Y') }}</span>{% endif %}
-        {% set sc = (reliability_score(a)[0]) %}
+      <!-- IFS + domaine -->
+      <div class="card-top">
         {{ ifs_badge(sc) }}
+        {% if a.domain %}<span class="card-domain">{{ a.domain }}</span>{% endif %}
       </div>
 
-      {% if a.abstract %}
-        {% set _abstract_text = a.clean_abstract or (a.abstract|striptags) %}
-        <p class="small line-clamp-3 mb-1">{{ _abstract_text[:320] }}{% if _abstract_text|length > 320 %}…{% endif %}</p>
-      {% endif %}
+      <!-- Titre -->
+      <div class="card-title" onclick="event.stopPropagation(); openArticleModal({{ a.id }})">{{ a.title }}</div>
 
-      <div class="mt-auto d-flex gap-2 align-items-center">
-        {% if a.url %}
-          <a class="btn btn-sm btn-primary" target="_blank" rel="noopener" href="{{ a.url }}" onclick="event.stopPropagation()">Ouvrir</a>
+      <!-- Méta -->
+      <div class="card-meta">
+        {% if a.authors %}
+        <div class="card-meta-row">
+          <span class="card-meta-key">Auteurs</span>
+          <span class="card-meta-val">{{ a.authors }}</span>
+        </div>
         {% endif %}
-        {% if a.doi %}
-          <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" href="https://doi.org/{{ a.doi }}" onclick="event.stopPropagation()">DOI</a>
+        {% if a.journal %}
+        <div class="card-meta-row">
+          <span class="card-meta-key">Revue</span>
+          <span class="card-meta-val">{{ a.journal }}</span>
+        </div>
         {% endif %}
-        <button class="btn btn-sm btn-outline-secondary"
-                onclick="event.stopPropagation(); showCardCite(this, {{ a.id }})"
-                data-article-id="{{ a.id }}">{{ t('btn.cite') }}</button>
+        {% if a.published_date %}
+        <div class="card-meta-row">
+          <span class="card-meta-key">Date</span>
+          <span class="card-meta-val card-meta-date">{{ a.published_date.strftime('%d %b %Y') }}</span>
+        </div>
+        {% endif %}
+      </div>
 
-        {% if current_user.is_authenticated %}
-        <form class="d-flex gap-2 align-items-center ms-auto favorite-form"
-              method="post" action="{{ url_for('favorite', article_id=a.id) }}"
-              onclick="event.stopPropagation()">
-          <input class="form-control form-control-sm" name="public_note" placeholder="Note publique…" style="max-width:140px;">
-          <button type="submit" class="btn btn-sm btn-outline-warning">Favori</button>
-        </form>
-        {% endif %}
+      <hr class="card-sep">
 
-        {% set is_proposed = a.id in proposed_set %}
-        {% if not is_proposed and (current_user.role == 'admin' or a.posted_by_id == current_user.id) %}
-          <form method="post"
-                action="{{ url_for('drafts_remove_from_me', article_id=a.id) }}"
-                onclick="event.stopPropagation()"
-                onsubmit="return confirm('Supprimer ce brouillon ?');">
-            <button class="btn btn-sm btn-outline-danger">Supprimer</button>
-          </form>
+      <!-- Résumé -->
+      <div class="card-abstract">
+        {% if a.abstract %}
+          {% set _abstract_text = a.clean_abstract or (a.abstract|striptags) %}
+          {{ _abstract_text[:400] }}{% if _abstract_text|length > 400 %}…{% endif %}
         {% else %}
+          {{ t('article.no_abstract') }}
+        {% endif %}
+      </div>
+
+      <!-- Actions -->
+      <div class="card-actions" onclick="event.stopPropagation()">
+        {% if a.url %}<a class="card-btn card-btn-primary" href="{{ a.url }}" target="_blank" rel="noopener" onclick="event.stopPropagation()">{{ t('btn.open') }}</a>{% endif %}
+        {% if a.doi %}<a class="card-btn" href="https://doi.org/{{ a.doi }}" target="_blank" rel="noopener" onclick="event.stopPropagation()">DOI</a>{% endif %}
+        {% if current_user.is_authenticated %}
+          {% set is_proposed = a.id in proposed_set %}
           {% if is_proposed %}
-            <span class="badge bg-info ms-auto">Proposé</span>
+            <span class="badge bg-info">Proposé</span>
+          {% else %}
+            <form class="d-inline favorite-form" method="post" action="{{ url_for('favorite', article_id=a.id) }}" onclick="event.stopPropagation()">
+              <button type="submit" class="card-btn">{{ t('btn.save') }}</button>
+            </form>
+            {% if current_user.role == 'admin' or a.posted_by_id == current_user.id %}
+            <form method="post" action="{{ url_for('drafts_remove_from_me', article_id=a.id) }}" onclick="event.stopPropagation()" onsubmit="return confirm('Supprimer ce brouillon ?');">
+              <button class="card-btn" style="color:#e74c3c;border-color:#e74c3c;">Supprimer</button>
+            </form>
+            {% endif %}
           {% endif %}
         {% endif %}
       </div>
@@ -362,7 +373,7 @@ async function openArticleModal(id){
   }catch(e){ console.error(e); }
 }
 
-document.querySelectorAll('.card[data-article-id]').forEach(card=>{
+document.querySelectorAll('.article-card[data-article-id]').forEach(card=>{
   card.querySelectorAll('a,input,textarea,select,form').forEach(el=>{
     el.addEventListener('click', e=>e.stopPropagation(), {capture:true});
   });
@@ -388,11 +399,11 @@ function formatVancouver(data) {
 
 const _citeCache = {};
 async function showCardCite(btn, articleId) {
-  const card = btn.closest('.card');
+  const card = btn.closest('.article-card');
   const existing = card.querySelector('.cite-box-card');
   if (existing) { existing.remove(); card.style.zIndex = ''; return; }
   document.querySelectorAll('.cite-box-card').forEach(b => {
-    b.closest('.card').style.zIndex = '';
+    b.closest('.article-card').style.zIndex = '';
     b.remove();
   });
   if (!_citeCache[articleId]) {

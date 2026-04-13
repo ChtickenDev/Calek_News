@@ -1,10 +1,11 @@
 {% extends "layout.html" %}
+{% from '_macros.html' import ifs_badge %}
 {% block content %}
 {% macro share_dropdown(article_id) %}
 <div class="dropdown" onclick="event.stopPropagation()">
-  <button class="btn btn-sm btn-outline-secondary dropdown-toggle"
+  <button class="card-btn dropdown-toggle"
           data-bs-toggle="dropdown" data-bs-auto-close="outside"
-          onclick="event.stopPropagation()" title="{{ t('btn.share') }}">
+          onclick="event.stopPropagation()">
     {{ t('btn.share') }}
   </button>
   <ul class="dropdown-menu dropdown-menu-end" style="min-width:190px;">
@@ -228,80 +229,66 @@
 <div class="row gy-3">
   {% for a in folder_articles %}
     {% set sc = (reliability_score(a)[0]) if reliability_score is defined else None %}
-    {% set ifs_cls = 'badge-ifs-success' if sc is not none and sc>=80
-                      else ('badge-ifs-primary' if sc is not none and sc>=60
-                      else ('badge-ifs-warning' if sc is not none and sc>=40 else 'badge-ifs-danger')) %}
     <div class="col-md-6 col-lg-4">
-      <div class="card h-100 article-card p-3" data-article-id="{{ a.id }}" role="button" tabindex="0">
-        <div class="d-flex flex-wrap gap-2 mb-2 align-items-center">
-          {% if sc is not none %}<span class="badge badge-ifs {{ ifs_cls }}">IFS: {{ sc }}</span>{% endif %}
-          {% if a.domain %}<span class="badge badge-soft">{{ a.domain }}</span>{% endif %}
-          {% if a.study_type %}<span class="badge badge-soft">{{ a.study_type }}</span>{% endif %}
-        </div>
-        <h6 class="fw-bold line-clamp-2 mb-1">{{ a.title }}</h6>
-        {% if a.authors %}<p class="text-muted small mb-1">{{ a.authors }}</p>{% endif %}
-        <div class="small text-muted mb-2">
-          {% if a.journal %}<span class="badge badge-soft badge-journal">{{ a.journal }}</span>{% endif %}
-          {% if a.published_date %}<span>{{ t('article.published') }} {{ a.published_date.strftime('%d %b %Y') }}</span>{% endif %}
-        </div>
-        {% if a.abstract %}
-          {% set _abstract_text = a.clean_abstract or (a.abstract|striptags) %}
-          <p class="small line-clamp-3 mb-1">{{ _abstract_text[:320] }}{% if _abstract_text|length > 320 %}…{% endif %}</p>
-        {% else %}
-          <p class="small text-muted mb-3 fst-italic">{{ t('article.no_abstract') }}</p>
-        {% endif %}
-        <div class="mt-auto d-flex align-items-center gap-2 flex-wrap">
-          {% if a.url %}<a class="btn btn-sm btn-primary" href="{{ a.url }}" target="_blank" onclick="event.stopPropagation()">{{ t('btn.open') }}</a>{% endif %}
-          {% if a.doi %}<a class="btn btn-sm btn-outline-primary" href="https://doi.org/{{ a.doi }}" target="_blank" onclick="event.stopPropagation()">DOI</a>{% endif %}
+      <div class="article-card" data-article-id="{{ a.id }}" role="button" tabindex="0">
 
-          <button class="btn btn-sm btn-outline-secondary"
-                  onclick="event.stopPropagation(); showCardCite(this, {{ a.id }})"
-                  data-article-id="{{ a.id }}">{{ t('btn.cite') }}</button>
+        <button class="card-cite-btn" onclick="event.stopPropagation(); showCardCite(this, {{ a.id }})" data-article-id="{{ a.id }}">{{ t('btn.cite') }}</button>
 
+        <div class="card-top">
+          {{ ifs_badge(sc) }}
+          {% if a.domain %}<span class="card-domain">{{ a.domain }}</span>{% endif %}
+        </div>
+
+        <div class="card-title" onclick="event.stopPropagation(); openArticleModal({{ a.id }})">{{ a.title }}</div>
+
+        <div class="card-meta">
+          {% if a.authors %}<div class="card-meta-row"><span class="card-meta-key">Auteurs</span><span class="card-meta-val">{{ a.authors }}</span></div>{% endif %}
+          {% if a.journal %}<div class="card-meta-row"><span class="card-meta-key">Revue</span><span class="card-meta-val">{{ a.journal }}</span></div>{% endif %}
+          {% if a.published_date %}<div class="card-meta-row"><span class="card-meta-key">Date</span><span class="card-meta-val card-meta-date">{{ a.published_date.strftime('%d %b %Y') }}</span></div>{% endif %}
+        </div>
+
+        <hr class="card-sep">
+
+        <div class="card-abstract">
+          {% if a.abstract %}{% set _abstract_text = a.clean_abstract or (a.abstract|striptags) %}{{ _abstract_text[:400] }}{% if _abstract_text|length > 400 %}…{% endif %}{% else %}{{ t('article.no_abstract') }}{% endif %}
+        </div>
+
+        <div class="card-actions" onclick="event.stopPropagation()">
+          {% if a.url %}<a class="card-btn card-btn-primary" href="{{ a.url }}" target="_blank" onclick="event.stopPropagation()">{{ t('btn.open') }}</a>{% endif %}
+          {% if a.doi %}<a class="card-btn" href="https://doi.org/{{ a.doi }}" target="_blank" onclick="event.stopPropagation()">DOI</a>{% endif %}
           {{ share_dropdown(a.id) }}
-
           {% if active_folder.user_id == current_user.id %}
-          <button class="btn btn-sm btn-outline-danger ms-auto"
-                  onclick="event.stopPropagation(); removeFromFolder({{ active_folder.id }}, {{ a.id }}, this)">
-            Retirer
-          </button>
-          {% else %}
-          <!-- Ajouter aux favoris + dossier -->
-          <button class="btn btn-sm {{ 'btn-success' if a.id in favs else 'btn-outline-secondary' }}"
-                  id="fav-btn-{{ a.id }}"
-                  onclick="event.stopPropagation(); toggleFavorite({{ a.id }}, this)"
-                  title="{{ 'Dans vos favoris' if a.id in favs else 'Ajouter aux favoris' }}">
-            {{ 'Favori' if a.id in favs else '+ Favori' }}
-          </button>
-
-          <div class="dropdown ms-auto" onclick="event.stopPropagation()">
-            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" onclick="event.stopPropagation()">
-              {{ t('btn.folder') }}
+            <button class="card-btn" style="color:#e74c3c;border-color:#e74c3c;"
+                    onclick="event.stopPropagation(); removeFromFolder({{ active_folder.id }}, {{ a.id }}, this)">
+              {{ t('btn.remove') }}
             </button>
-            {% set fv_art_folder_ids = folders_by_article.get(a.id, []) | map(attribute='id') | list %}
-            <ul class="dropdown-menu">
-              {% if folders %}
-                {% for fd in folders %}
-                  {% set in_folder = fd.id in fv_art_folder_ids %}
-                  <li>
-                    <button class="dropdown-item {% if in_folder %}folder-item-active{% endif %}"
-                            data-folder-id="{{ fd.id }}"
-                            data-in-folder="{{ 'true' if in_folder else 'false' }}"
-                            onclick="event.stopPropagation(); toggleFolder({{ fd.id }}, {{ a.id }}, this)">
-                      <span class="folder-dot" style="background:{{ fd.color or '#6366f1' }};"></span>
-                      {% if in_folder %}<span class="folder-check">✓ </span>{% endif %}{{ fd.name }}
-                    </button>
-                  </li>
-                {% endfor %}
-              {% else %}
-                <li><span class="dropdown-item text-muted">{{ t('folder.empty') }}</span></li>
-              {% endif %}
-              <li><hr class="dropdown-divider"></li>
-              <li><button class="dropdown-item text-success" onclick="openCreateFolder()">+ {{ t('folder.new') }}</button></li>
-            </ul>
-          </div>
+          {% else %}
+            <button class="card-btn{% if a.id in favs %} card-btn-fav{% endif %}"
+                    id="fav-btn-{{ a.id }}"
+                    onclick="event.stopPropagation(); toggleFavorite({{ a.id }}, this)">
+              {{ 'Favori' if a.id in favs else '+ Favori' }}
+            </button>
+            <div class="dropdown" onclick="event.stopPropagation()">
+              <button class="card-btn dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" onclick="event.stopPropagation()">{{ t('btn.folder') }}</button>
+              {% set fv_art_folder_ids = folders_by_article.get(a.id, []) | map(attribute='id') | list %}
+              <ul class="dropdown-menu">
+                {% if folders %}{% for fd in folders %}{% set in_folder = fd.id in fv_art_folder_ids %}
+                  <li><button class="dropdown-item {% if in_folder %}folder-item-active{% endif %}"
+                              data-folder-id="{{ fd.id }}" data-in-folder="{{ 'true' if in_folder else 'false' }}"
+                              onclick="event.stopPropagation(); toggleFolder({{ fd.id }}, {{ a.id }}, this)">
+                    <span class="folder-dot" style="background:{{ fd.color or '#6366f1' }};"></span>
+                    {% if in_folder %}<span class="folder-check">✓ </span>{% endif %}{{ fd.name }}
+                  </button></li>
+                {% endfor %}{% else %}
+                  <li><span class="dropdown-item text-muted">{{ t('folder.empty') }}</span></li>
+                {% endif %}
+                <li><hr class="dropdown-divider"></li>
+                <li><button class="dropdown-item text-success" onclick="openCreateFolder()">+ {{ t('folder.new') }}</button></li>
+              </ul>
+            </div>
           {% endif %}
         </div>
+
       </div>
     </div>
   {% endfor %}
@@ -319,108 +306,79 @@
   {% set a = f.article %}
   {% if a %}
     {% set sc = (reliability_score(a)[0]) if reliability_score is defined else None %}
-    {% set ifs_cls = 'badge-ifs-success' if sc is not none and sc>=80
-                      else ('badge-ifs-primary' if sc is not none and sc>=60
-                      else ('badge-ifs-warning' if sc is not none and sc>=40 else 'badge-ifs-danger')) %}
+    {% set art_folders = folders_by_article.get(a.id, []) %}
     <div class="col-md-6 col-lg-4">
-      <div class="card h-100 article-card p-3" data-article-id="{{ a.id }}" role="button" tabindex="0">
+      <div class="article-card" data-article-id="{{ a.id }}" role="button" tabindex="0">
 
-        <div class="d-flex flex-wrap gap-2 mb-2 align-items-center">
-          {% if sc is not none %}<span class="badge badge-ifs {{ ifs_cls }}">IFS: {{ sc }}</span>{% endif %}
-          {% if a.domain %}<span class="badge badge-soft">{{ a.domain }}</span>{% endif %}
-          {% if a.pathology %}<span class="badge badge-soft">{{ a.pathology }}</span>{% endif %}
-          {% if a.study_type %}<span class="badge badge-soft">{{ a.study_type }}</span>{% endif %}
+        <button class="card-cite-btn" onclick="event.stopPropagation(); showCardCite(this, {{ a.id }})" data-article-id="{{ a.id }}">{{ t('btn.cite') }}</button>
+
+        <div class="card-top">
+          {{ ifs_badge(sc) }}
+          {% if a.domain %}<span class="card-domain">{{ a.domain }}</span>{% endif %}
         </div>
 
-        <h6 class="fw-bold line-clamp-2 mb-1">{{ a.title }}</h6>
-        {% if a.authors %}<p class="text-muted small mb-1">{{ a.authors }}</p>{% endif %}
+        <div class="card-title" onclick="event.stopPropagation(); openArticleModal({{ a.id }})">{{ a.title }}</div>
 
-        <div class="small text-muted mb-2 d-flex flex-wrap gap-2">
-          {% if a.journal %}<span class="badge badge-soft badge-journal">{{ a.journal }}</span>{% endif %}
-          {% if a.published_date %}<span>{{ t('article.published') }} {{ a.published_date.strftime('%d %b %Y') }}</span>{% endif %}
+        <div class="card-meta">
+          {% if a.authors %}<div class="card-meta-row"><span class="card-meta-key">Auteurs</span><span class="card-meta-val">{{ a.authors }}</span></div>{% endif %}
+          {% if a.journal %}<div class="card-meta-row"><span class="card-meta-key">Revue</span><span class="card-meta-val">{{ a.journal }}</span></div>{% endif %}
+          {% if a.published_date %}<div class="card-meta-row"><span class="card-meta-key">Date</span><span class="card-meta-val card-meta-date">{{ a.published_date.strftime('%d %b %Y') }}</span></div>{% endif %}
         </div>
 
-        {% if a.abstract %}
-          {% set _abstract_text = a.clean_abstract or (a.abstract|striptags) %}
-          <p class="small line-clamp-3 mb-1">{{ _abstract_text[:320] }}{% if _abstract_text|length > 320 %}…{% endif %}</p>
-        {% else %}
-          <p class="small text-muted mb-3 fst-italic">{{ t('article.no_abstract') }}</p>
-        {% endif %}
+        <hr class="card-sep">
 
-        {% set art_folders = folders_by_article.get(a.id, []) %}
+        {% if art_folders %}
         <div class="d-flex flex-wrap gap-1 mb-2" id="folders-of-{{ a.id }}">
-          {% for fd in art_folders %}
-            <span class="badge" style="background:{{ fd.color or '#6366f1' }}; color:#fff;">{{ fd.name }}</span>
-          {% endfor %}
+          {% for fd in art_folders %}<span class="badge" style="background:{{ fd.color or '#6366f1' }};color:#fff;">{{ fd.name }}</span>{% endfor %}
         </div>
-
-        {% if f.public_note %}
-          <div class="public-note-box mb-2">{{ f.public_note }}</div>
+        {% else %}
+        <div id="folders-of-{{ a.id }}"></div>
         {% endif %}
 
-        <div class="mt-auto d-flex align-items-center gap-2 flex-wrap">
-          {% if a.url %}<a class="btn btn-sm btn-primary" href="{{ a.url }}" target="_blank" onclick="event.stopPropagation()">{{ t('btn.open') }}</a>{% endif %}
-          {% if a.doi %}<a class="btn btn-sm btn-outline-primary" href="https://doi.org/{{ a.doi }}" target="_blank" onclick="event.stopPropagation()">DOI</a>{% endif %}
+        {% if f.public_note %}<div class="public-note-box mb-2" style="font-size:0.82rem;">{{ f.public_note }}</div>{% endif %}
 
-          <button class="btn btn-sm {{ 'btn-success' if f.is_public else 'btn-outline-secondary' }}"
+        <div class="card-abstract">
+          {% if a.abstract %}{% set _abstract_text = a.clean_abstract or (a.abstract|striptags) %}{{ _abstract_text[:400] }}{% if _abstract_text|length > 400 %}…{% endif %}{% else %}{{ t('article.no_abstract') }}{% endif %}
+        </div>
+
+        <div class="card-actions" onclick="event.stopPropagation()">
+          {% if a.url %}<a class="card-btn card-btn-primary" href="{{ a.url }}" target="_blank" onclick="event.stopPropagation()">{{ t('btn.open') }}</a>{% endif %}
+          {% if a.doi %}<a class="card-btn" href="https://doi.org/{{ a.doi }}" target="_blank" onclick="event.stopPropagation()">DOI</a>{% endif %}
+          <button class="card-btn{% if f.is_public %} card-btn-public{% endif %}"
                   id="vis-btn-{{ a.id }}"
-                  onclick="event.stopPropagation(); toggleVisibility({{ a.id }}, this)"
-                  title="{{ t('btn.public') if f.is_public else t('btn.private') }}">
+                  onclick="event.stopPropagation(); toggleVisibility({{ a.id }}, this)">
             {{ t('btn.public') if f.is_public else t('btn.private') }}
           </button>
-
-          <button class="btn btn-sm btn-outline-secondary"
-                  onclick="event.stopPropagation(); togglePublicNote({{ a.id }})"
-                  title="Note publique">
-            Note
-          </button>
-
-          <button class="btn btn-sm btn-outline-secondary"
-                  onclick="event.stopPropagation(); showCardCite(this, {{ a.id }})"
-                  data-article-id="{{ a.id }}">{{ t('btn.cite') }}</button>
-
+          <button class="card-btn" onclick="event.stopPropagation(); togglePublicNote({{ a.id }})">Note</button>
           {{ share_dropdown(a.id) }}
-
           <div class="dropdown" onclick="event.stopPropagation()">
-            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" onclick="event.stopPropagation()">
-              {{ t('btn.folder') }}
-            </button>
+            <button class="card-btn dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" onclick="event.stopPropagation()">{{ t('btn.folder') }}</button>
             {% set art_folder_ids = art_folders | map(attribute='id') | list %}
             <ul class="dropdown-menu">
-              {% if folders %}
-                {% for fd in folders %}
-                  {% set in_folder = fd.id in art_folder_ids %}
-                  <li>
-                    <button class="dropdown-item {% if in_folder %}folder-item-active{% endif %}"
-                            data-folder-id="{{ fd.id }}"
-                            data-in-folder="{{ 'true' if in_folder else 'false' }}"
+              {% if folders %}{% for fd in folders %}{% set in_folder = fd.id in art_folder_ids %}
+                <li><button class="dropdown-item {% if in_folder %}folder-item-active{% endif %}"
+                            data-folder-id="{{ fd.id }}" data-in-folder="{{ 'true' if in_folder else 'false' }}"
                             onclick="event.stopPropagation(); toggleFolder({{ fd.id }}, {{ a.id }}, this)">
-                      <span class="folder-dot" style="background:{{ fd.color or '#6366f1' }};"></span>
-                      {% if in_folder %}<span class="folder-check">✓ </span>{% endif %}{{ fd.name }}
-                    </button>
-                  </li>
-                {% endfor %}
-              {% else %}
+                  <span class="folder-dot" style="background:{{ fd.color or '#6366f1' }};"></span>
+                  {% if in_folder %}<span class="folder-check">✓ </span>{% endif %}{{ fd.name }}
+                </button></li>
+              {% endfor %}{% else %}
                 <li><span class="dropdown-item text-muted">{{ t('folder.empty') }}</span></li>
               {% endif %}
               <li><hr class="dropdown-divider"></li>
               <li><button class="dropdown-item text-success" onclick="openCreateFolder()">+ {{ t('folder.new') }}</button></li>
             </ul>
           </div>
-
-          <form method="post" action="{{ url_for('unfavorite', article_id=a.id) }}"
-                class="ms-auto" onclick="event.stopPropagation()">
-            <button class="btn btn-sm btn-outline-danger">{{ t('btn.remove') }}</button>
+          <form method="post" action="{{ url_for('unfavorite', article_id=a.id) }}" onclick="event.stopPropagation()">
+            <button class="card-btn" style="color:#e74c3c;border-color:#e74c3c;">{{ t('btn.remove') }}</button>
           </form>
         </div>
 
         <div id="public-note-{{ a.id }}" class="w-100 mt-2" style="display:none;" onclick="event.stopPropagation()">
           <div class="input-group input-group-sm">
-            <input type="text" class="form-control"
-                   id="public-note-input-{{ a.id }}"
-                   placeholder="Note publique visible par vos abonnés..."
-                   value="{{ f.public_note or '' }}">
-            <button class="btn btn-outline-success" onclick="savePublicNote({{ a.id }})">Enregistrer</button>
+            <input type="text" class="form-control" id="public-note-input-{{ a.id }}"
+                   placeholder="Note publique visible par vos abonnés..." value="{{ f.public_note or '' }}">
+            <button class="btn btn-outline-success" onclick="savePublicNote({{ a.id }})">{{ t('btn.save') }}</button>
           </div>
         </div>
 
@@ -590,8 +548,8 @@
 .badge-ifs { background: var(--bs-warning-bg-subtle,#fff3cd); color:#6c4b00; border:1px solid rgba(0,0,0,.08); }
 
 /* Drag & Drop */
-.card[data-article-id] { cursor: grab; }
-.card[data-article-id]:active { cursor: grabbing; }
+.article-card[data-article-id] { cursor: grab; }
+.article-card[data-article-id]:active { cursor: grabbing; }
 .folder-tile-drop {
   border-color: #6366f1 !important;
   background: rgba(99,102,241,0.08) !important;
@@ -740,16 +698,16 @@ async function toggleFolder(folderId, articleId, btn) {
 }
 // --- Favoris ---
 async function toggleFavorite(articleId, btn) {
-  const isFav = btn.classList.contains('btn-success');
+  const isFav = btn.classList.contains('card-btn-fav');
   const url = isFav ? `/unfavorite/${articleId}` : `/favorite/${articleId}`;
   const res = await fetch(url, {method: 'POST'});
   const data = await res.json();
   if (data.ok) {
     if (!isFav) {
-      btn.classList.replace('btn-outline-secondary', 'btn-success');
+      btn.classList.add('card-btn-fav');
       btn.textContent = 'Favori';
     } else {
-      btn.classList.replace('btn-success', 'btn-outline-secondary');
+      btn.classList.remove('card-btn-fav');
       btn.textContent = '+ Favori';
     }
   }
@@ -760,8 +718,8 @@ async function toggleVisibility(articleId, btn) {
   const res = await fetch(`/favorite/${articleId}/visibility`, {method: 'POST'});
   const data = await res.json();
   if (data.ok) {
-    btn.textContent = data.is_public ? 'Public' : 'Privé';
-    btn.className = `btn btn-sm ${data.is_public ? 'btn-success' : 'btn-outline-secondary'}`;
+    btn.textContent = data.is_public ? '{{ t("btn.public") }}' : '{{ t("btn.private") }}';
+    btn.className = `card-btn${data.is_public ? ' card-btn-public' : ''}`;
   }
 }
 
@@ -921,11 +879,11 @@ async function openArticleModal(id) {
 
 const _citeCache = {};
 async function showCardCite(btn, articleId) {
-  const card = btn.closest('.card');
+  const card = btn.closest('.article-card');
   const existing = card.querySelector('.cite-box-card');
   if (existing) { existing.remove(); card.style.zIndex = ''; return; }
   document.querySelectorAll('.cite-box-card').forEach(b => {
-    b.closest('.card').style.zIndex = '';
+    b.closest('.article-card').style.zIndex = '';
     b.remove();
   });
   if (!_citeCache[articleId]) {
@@ -958,7 +916,7 @@ function _fallbackCopy(text, btn) {
   document.body.removeChild(ta);
 }
 
-document.querySelectorAll('.card[data-article-id]').forEach(card => {
+document.querySelectorAll('.article-card[data-article-id]').forEach(card => {
   card.querySelectorAll('a,button,input,textarea,select,form').forEach(el => el.addEventListener('click', e => e.stopPropagation()));
   card.addEventListener('click', (e) => {
     if (e.target.closest('.dropdown') || e.target.closest('.dropdown-menu')) return;
@@ -976,7 +934,7 @@ document.querySelectorAll('.card[data-article-id]').forEach(card => {
 });
 
 // --- Drag & Drop ---
-document.querySelectorAll('.card[data-article-id]').forEach(card => {
+document.querySelectorAll('.article-card[data-article-id]').forEach(card => {
   card.setAttribute('draggable', 'true');
   card.addEventListener('dragstart', e => {
     e.dataTransfer.setData('article_id', card.getAttribute('data-article-id'));

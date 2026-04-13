@@ -31,23 +31,24 @@
   {% set sc = (reliability_score(a)[0]) if reliability_score is defined else None %}
 
   <div class="col-md-6 col-lg-4">
-    <div class="card h-100 article-card p-3" data-article-id="{{ a.id }}" role="button" tabindex="0">
+    <div class="article-card" data-article-id="{{ a.id }}" role="button" tabindex="0">
 
+      <!-- Cite button (abs top-right) -->
+      <button class="card-cite-btn" onclick="event.stopPropagation(); showCardCite(this, {{ a.id }})" data-article-id="{{ a.id }}">{{ t('btn.cite') }}</button>
+
+      <!-- Sharer ou badge suggéré -->
       {% if item.suggested %}
-      <!-- Badge suggéré -->
-      <div class="mb-3">
+      <div class="mb-2" style="padding-right:48px;">
         <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle suggested-badge">
           ✦ {{ t('feed.suggested') }}
         </span>
       </div>
       {% else %}
-      <!-- Premier sharer -->
-      <div class="d-flex align-items-center gap-2 mb-3" onclick="event.stopPropagation()">
+      <div class="d-flex align-items-center gap-2 mb-2" style="padding-right:48px;" onclick="event.stopPropagation()">
         {% if first.user.photo_filename %}
           <img src="{{ url_for('static', filename='uploads/avatars/' + first.user.photo_filename) }}"
                class="avatar-circle {% if first.is_followed %}avatar-followed{% endif %}"
-               style="object-fit:cover;"
-               alt="{{ (first.user.name or first.user.email)[0].upper() }}">
+               style="object-fit:cover;" alt="">
         {% else %}
           <div class="avatar-circle avatar-initials-dynamic" data-seed="{{ first.user.email }}">
             {{ (first.user.name or first.user.email)[0].upper() }}
@@ -83,46 +84,61 @@
         </div>
       {% endif %}
 
-      <hr class="my-2">
-
-      <!-- Badges article -->
-      <div class="d-flex flex-wrap gap-2 mb-2 align-items-center">
+      <!-- IFS + domaine -->
+      <div class="card-top">
         {{ ifs_badge(sc) }}
-        {% if a.domain %}<span class="badge badge-soft">{{ a.domain }}</span>{% endif %}
-        {% if a.study_type %}<span class="badge badge-soft">{{ a.study_type }}</span>{% endif %}
+        {% if a.domain %}<span class="card-domain">{{ a.domain }}</span>{% endif %}
       </div>
 
-      <h6 class="fw-bold line-clamp-2 mb-1">{{ a.title }}</h6>
-      {% if a.authors %}<p class="text-muted small mb-1">{{ a.authors }}</p>{% endif %}
+      <!-- Titre -->
+      <div class="card-title" onclick="event.stopPropagation(); openArticleModal({{ a.id }})">{{ a.title }}</div>
 
-      <div class="small text-muted mb-2 d-flex flex-wrap gap-2">
-        {% if a.journal %}<span class="badge badge-soft badge-journal">{{ a.journal }}</span>{% endif %}
-        {% if a.published_date %}<span>{{ t('article.published') }} {{ a.published_date.strftime('%d %b %Y') }}</span>{% endif %}
+      <!-- Méta -->
+      <div class="card-meta">
+        {% if a.authors %}
+        <div class="card-meta-row">
+          <span class="card-meta-key">Auteurs</span>
+          <span class="card-meta-val">{{ a.authors }}</span>
+        </div>
+        {% endif %}
+        {% if a.journal %}
+        <div class="card-meta-row">
+          <span class="card-meta-key">Revue</span>
+          <span class="card-meta-val">{{ a.journal }}</span>
+        </div>
+        {% endif %}
+        {% if a.published_date %}
+        <div class="card-meta-row">
+          <span class="card-meta-key">Date</span>
+          <span class="card-meta-val card-meta-date">{{ a.published_date.strftime('%d %b %Y') }}</span>
+        </div>
+        {% endif %}
       </div>
 
-      {% if a.abstract %}
-        {% set _abstract_text = a.clean_abstract or (a.abstract|striptags) %}
-        <p class="small line-clamp-3 mb-1">{{ _abstract_text[:320] }}{% if _abstract_text|length > 320 %}…{% endif %}</p>
-      {% else %}
-        <p class="small text-muted mb-3 fst-italic">{{ t('article.no_abstract') }}</p>
-      {% endif %}
+      <hr class="card-sep">
+
+      <!-- Résumé -->
+      <div class="card-abstract">
+        {% if a.abstract %}
+          {% set _abstract_text = a.clean_abstract or (a.abstract|striptags) %}
+          {{ _abstract_text[:400] }}{% if _abstract_text|length > 400 %}…{% endif %}
+        {% else %}
+          {{ t('article.no_abstract') }}
+        {% endif %}
+      </div>
 
       <!-- Actions -->
-      <div class="mt-auto d-flex gap-2 align-items-center flex-wrap" onclick="event.stopPropagation()">
-        {% if a.url %}<a class="btn btn-sm btn-primary" href="{{ a.url }}" target="_blank">{{ t('btn.open') }}</a>{% endif %}
-        {% if a.doi %}<a class="btn btn-sm btn-outline-primary" href="https://doi.org/{{ a.doi }}" target="_blank">DOI</a>{% endif %}
-        <button class="btn btn-sm btn-outline-secondary"
-                onclick="event.stopPropagation(); showCardCite(this, {{ a.id }})"
-                data-article-id="{{ a.id }}">{{ t('btn.cite') }}</button>
+      <div class="card-actions" onclick="event.stopPropagation()">
+        {% if a.url %}<a class="card-btn card-btn-primary" href="{{ a.url }}" target="_blank" onclick="event.stopPropagation()">{{ t('btn.open') }}</a>{% endif %}
+        {% if a.doi %}<a class="card-btn" href="https://doi.org/{{ a.doi }}" target="_blank" onclick="event.stopPropagation()">DOI</a>{% endif %}
         {% set is_fav = a.id in fav_ids %}
-        <button class="btn btn-sm fav-btn {% if is_fav %}btn-warning{% else %}btn-outline-secondary{% endif %}"
+        <button class="card-btn fav-btn{% if is_fav %} card-btn-fav{% endif %}"
                 data-article-id="{{ a.id }}"
                 data-faved="{{ 'true' if is_fav else 'false' }}"
-                onclick="event.stopPropagation(); toggleFav({{ a.id }}, this)"
-                title="{{ 'Retirer des favoris' if is_fav else 'Ajouter aux favoris' }}">
+                onclick="event.stopPropagation(); toggleFav({{ a.id }}, this)">
           {{ '★' if is_fav else '☆' }}
         </button>
-        <button class="btn btn-sm like-btn ms-auto {% if user_liked %}btn-danger{% else %}btn-outline-secondary{% endif %}"
+        <button class="card-btn like-btn{% if user_liked %} card-btn-liked{% endif %}"
                 data-article-id="{{ a.id }}"
                 data-liked="{{ 'true' if user_liked else 'false' }}"
                 onclick="event.stopPropagation(); toggleLike({{ a.id }}, this)">
@@ -302,9 +318,8 @@ async function toggleFav(articleId, btn) {
   if (res.ok) {
     const nowFaved = !faved;
     btn.dataset.faved = nowFaved ? 'true' : 'false';
-    btn.className = `btn btn-sm fav-btn ${nowFaved ? 'btn-warning' : 'btn-outline-secondary'}`;
+    btn.className = `card-btn fav-btn${nowFaved ? ' card-btn-fav' : ''}`;
     btn.textContent = nowFaved ? '★' : '☆';
-    btn.title = nowFaved ? 'Retirer des favoris' : 'Ajouter aux favoris';
   }
 }
 
@@ -315,7 +330,7 @@ async function toggleLike(articleId, btn) {
   const data = await res.json();
   if (data.ok) {
     btn.dataset.liked = data.liked ? 'true' : 'false';
-    btn.className = `btn btn-sm like-btn ms-auto ${data.liked ? 'btn-danger' : 'btn-outline-secondary'}`;
+    btn.className = `card-btn like-btn${data.liked ? ' card-btn-liked' : ''}`;
     btn.querySelector('.like-count').textContent = data.count;
     if (currentModalArticleId === articleId) updateModalLike(data.liked, data.count);
   }
@@ -437,7 +452,7 @@ async function openArticleModal(id, showSharers = false) {
   } catch(e){ console.error(e); }
 }
 
-document.querySelectorAll('.card[data-article-id]').forEach(card => {
+document.querySelectorAll('.article-card[data-article-id]').forEach(card => {
   card.querySelectorAll('a,button,form').forEach(el => el.addEventListener('click', e => e.stopPropagation()));
   card.addEventListener('click', () => { const id=card.getAttribute('data-article-id'); if(id) openArticleModal(parseInt(id)); });
   card.addEventListener('keydown', e => {
@@ -448,14 +463,12 @@ document.querySelectorAll('.card[data-article-id]').forEach(card => {
 const _citeCache = {};
 
 async function showCardCite(btn, articleId) {
-  // Toggle — si déjà ouvert, ferme
-  const card = btn.closest('.card');
+  const card = btn.closest('.article-card');
   const existing = card.querySelector('.cite-box-card');
   if (existing) { existing.remove(); card.style.zIndex = ''; return; }
 
-  // Ferme les autres
   document.querySelectorAll('.cite-box-card').forEach(b => {
-    b.closest('.card').style.zIndex = '';
+    b.closest('.article-card').style.zIndex = '';
     b.remove();
   });
 
