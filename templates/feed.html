@@ -33,18 +33,15 @@
   <div class="col-md-6 col-lg-4">
     <div class="article-card" data-article-id="{{ a.id }}" role="button" tabindex="0">
 
-      <!-- Cite button (abs top-right) -->
-      <button class="card-cite-btn" onclick="event.stopPropagation(); showCardCite(this, {{ a.id }})" data-article-id="{{ a.id }}">{{ t('btn.cite') }}</button>
-
       <!-- Sharer ou badge suggéré -->
       {% if item.suggested %}
-      <div class="mb-2" style="padding-right:48px;">
+      <div style="margin-bottom:12px;">
         <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle suggested-badge">
           ✦ {{ t('feed.suggested') }}
         </span>
       </div>
       {% else %}
-      <div class="d-flex align-items-center gap-2 mb-2" style="padding-right:48px;" onclick="event.stopPropagation()">
+      <div class="d-flex align-items-center gap-2" style="margin-bottom:12px;" onclick="event.stopPropagation()">
         {% if first.user.photo_filename %}
           <img src="{{ url_for('static', filename='uploads/avatars/' + first.user.photo_filename) }}"
                class="avatar-circle {% if first.is_followed %}avatar-followed{% endif %}"
@@ -56,14 +53,14 @@
         {% endif %}
         <div class="flex-grow-1 min-w-0">
           <a href="{{ url_for('user_profile', user_id=first.user.id) }}"
-             class="text-decoration-none fw-semibold text-body d-block text-truncate" style="font-size:0.85rem;">
+             class="text-decoration-none fw-semibold text-body d-block text-truncate" style="font-size:13px;">
             {{ first.user.name or first.user.email.split('@')[0] }}
             {% if first.is_followed %}
-              <span class="badge bg-success-subtle text-success ms-1" style="font-size:0.65rem;">{{ t('feed.following_badge') }}</span>
+              <span class="badge bg-success-subtle text-success ms-1" style="font-size:11px;">{{ t('feed.following_badge') }}</span>
             {% endif %}
           </a>
-          <span class="text-muted" style="font-size:0.7rem;">{{ first.fav.created_at.strftime('%d %b %Y') }}</span>
-          <span class="badge bg-secondary ms-1" style="font-size:0.6rem; cursor:help;"
+          <span class="text-muted" style="font-size:12px;">{{ first.fav.created_at.strftime('%d %b %Y') }}</span>
+          <span class="badge bg-secondary ms-1" style="font-size:12px; cursor:help;"
                 title="Social:{{ item.score_detail.social }} | Pertinence:{{ item.score_detail.pertinence }} | Qualité:{{ item.score_detail.qualite }} | Fraîcheur:{{ item.score_detail.fraicheur }} | Pénalités:{{ item.score_detail.penalites }}">
             ⚡ {{ item.score }}
           </span>
@@ -129,21 +126,23 @@
 
       <!-- Actions -->
       <div class="card-actions" onclick="event.stopPropagation()">
-        {% if a.url %}<a class="card-btn card-btn-primary" href="{{ a.url }}" target="_blank" onclick="event.stopPropagation()">{{ t('btn.open') }}</a>{% endif %}
         {% if a.doi %}<a class="card-btn" href="https://doi.org/{{ a.doi }}" target="_blank" onclick="event.stopPropagation()">DOI</a>{% endif %}
         {% set is_fav = a.id in fav_ids %}
         <button class="card-btn fav-btn{% if is_fav %} card-btn-fav{% endif %}"
                 data-article-id="{{ a.id }}"
                 data-faved="{{ 'true' if is_fav else 'false' }}"
                 onclick="event.stopPropagation(); toggleFav({{ a.id }}, this)">
-          {{ '★' if is_fav else '☆' }}
+          Favori
         </button>
         <button class="card-btn like-btn{% if user_liked %} card-btn-liked{% endif %}"
                 data-article-id="{{ a.id }}"
                 data-liked="{{ 'true' if user_liked else 'false' }}"
                 onclick="event.stopPropagation(); toggleLike({{ a.id }}, this)">
-          ♥ <span class="like-count">{{ like_count }}</span>
+          Like · <span class="like-count">{{ like_count }}</span>
         </button>
+        <button class="card-btn" style="margin-left:auto;"
+                onclick="event.stopPropagation(); showCardCite(this, {{ a.id }})"
+                data-article-id="{{ a.id }}">{{ t('btn.cite') }}</button>
       </div>
 
     </div>
@@ -319,7 +318,7 @@ async function toggleFav(articleId, btn) {
     const nowFaved = !faved;
     btn.dataset.faved = nowFaved ? 'true' : 'false';
     btn.className = `card-btn fav-btn${nowFaved ? ' card-btn-fav' : ''}`;
-    btn.textContent = nowFaved ? '★' : '☆';
+    btn.textContent = 'Favori';
   }
 }
 
