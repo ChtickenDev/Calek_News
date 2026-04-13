@@ -157,35 +157,23 @@
       <div class="d-flex align-items-center gap-2">
         {% if current_user.is_authenticated %}
           <div class="dropdown">
-            <button class="btn btn-sm btn-outline-secondary dropdown-toggle d-flex align-items-center gap-2"
-                    data-bs-toggle="dropdown" aria-expanded="false" data-bs-offset="0,6">
+            <button class="dropdown-toggle d-flex align-items-center gap-2"
+                    data-bs-toggle="dropdown" aria-expanded="false" data-bs-offset="0,6"
+                    style="border-radius:20px;padding:4px 10px;background:var(--bs-secondary-bg);border:0.5px solid var(--bs-border-color);font-size:13px;color:var(--bs-body-color);">
               {% if current_user.photo_filename %}
                 <img src="{{ url_for('static', filename='uploads/avatars/' + current_user.photo_filename) }}"
-                    class="avatar-nav" style="object-fit:cover;" alt="">
+                     style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;" alt="">
               {% else %}
-                <span class="avatar-nav avatar-initials-dynamic" data-seed="{{ current_user.email }}">{{ (current_user.name or current_user.email)[0].upper() }}</span>
+                <span class="avatar-initials-dynamic" data-seed="{{ current_user.email }}"
+                      style="width:28px;height:28px;border-radius:50%;background:#6366f1;color:#fff;font-weight:700;font-size:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                  {{ (current_user.name or current_user.email)[0].upper() }}
+                </span>
               {% endif %}
-              <span class="d-none d-md-inline text-truncate" style="max-width:140px;">{{ current_user.name or current_user.email.split('@')[0] }}</span>
+              <span>{{ (current_user.name or current_user.email.split('@')[0]).split()[0] }}</span>
+              <span style="font-size:10px;opacity:.6;">▾</span>
             </button>
 
             <ul class="dropdown-menu dropdown-menu-end user-dropdown-menu">
-              <!-- En-tête -->
-              <li class="udd-header">
-                {% if current_user.photo_filename %}
-                  <img src="{{ url_for('static', filename='uploads/avatars/' + current_user.photo_filename) }}"
-                       class="udd-avatar" alt="">
-                {% else %}
-                  <span class="udd-avatar avatar-initials-dynamic" data-seed="{{ current_user.email }}">
-                    {{ (current_user.name or current_user.email)[0].upper() }}
-                  </span>
-                {% endif %}
-                <div style="overflow:hidden;">
-                  <div class="udd-name text-truncate">{{ current_user.name or current_user.email.split('@')[0] }}</div>
-                  <div class="udd-email text-truncate">{{ current_user.email }}</div>
-                </div>
-              </li>
-              <hr class="udd-sep">
-
               <!-- Mon profil -->
               <li><a class="udd-row{% if request.endpoint == 'me' %} fw-semibold{% endif %}"
                      href="{{ url_for('me') }}">{{ t('nav.profile') }}</a></li>
