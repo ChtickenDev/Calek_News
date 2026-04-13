@@ -129,7 +129,7 @@
 
       <!-- Actions -->
       <div class="card-actions" onclick="event.stopPropagation()">
-        {% if a.doi %}<a class="card-btn" href="https://doi.org/{{ a.doi }}" target="_blank" onclick="event.stopPropagation()">DOI</a>{% endif %}
+        {% if a.doi %}<a class="card-btn" href="https://doi.org/{{ a.doi }}" target="_blank" onclick="event.stopPropagation()">Article</a>{% endif %}
         {% set is_fav = a.id in fav_ids %}
         <button class="card-btn fav-btn{% if is_fav %} card-btn-fav{% endif %}"
                 data-article-id="{{ a.id }}"

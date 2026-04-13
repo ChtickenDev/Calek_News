@@ -255,7 +255,7 @@
         </div>
 
         <div class="card-actions" onclick="event.stopPropagation()">
-          {% if a.doi %}<a class="card-btn" href="https://doi.org/{{ a.doi }}" target="_blank" onclick="event.stopPropagation()">DOI</a>{% endif %}
+          {% if a.doi %}<a class="card-btn" href="https://doi.org/{{ a.doi }}" target="_blank" onclick="event.stopPropagation()">Article</a>{% endif %}
           {{ share_dropdown(a.id) }}
           {% if active_folder.user_id == current_user.id %}
             <button class="card-btn" style="color:#dc3545;border-color:#dc3545;"
@@ -354,7 +354,7 @@
 
         <!-- DOI · Partager · Dossier · Retirer -->
         <div class="card-actions" onclick="event.stopPropagation()">
-          {% if a.doi %}<a class="card-btn" href="https://doi.org/{{ a.doi }}" target="_blank" onclick="event.stopPropagation()">DOI</a>{% endif %}
+          {% if a.doi %}<a class="card-btn" href="https://doi.org/{{ a.doi }}" target="_blank" onclick="event.stopPropagation()">Article</a>{% endif %}
           {{ share_dropdown(a.id) }}
           <div class="dropdown" onclick="event.stopPropagation()">
             <button class="card-btn dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" onclick="event.stopPropagation()">{{ t('btn.folder') }}</button>
