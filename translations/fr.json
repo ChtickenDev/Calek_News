@@ -59,5 +59,6 @@
   "btn.translate": "Traduire en français",
   "btn.translating": "Traduction...",
   "btn.show_original": "Voir l'original",
-  "theme.dark_mode": "Mode sombre"
+  "theme.dark_mode": "Mode sombre",
+  "nav.language": "Langue"
 }

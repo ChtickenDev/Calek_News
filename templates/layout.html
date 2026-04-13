@@ -168,7 +168,7 @@
               <span class="d-none d-md-inline text-truncate" style="max-width:140px;">{{ current_user.name or current_user.email.split('@')[0] }}</span>
             </button>
 
-            <ul class="dropdown-menu user-dropdown-menu">
+            <ul class="dropdown-menu dropdown-menu-end user-dropdown-menu">
               <!-- En-tête -->
               <li class="udd-header">
                 {% if current_user.photo_filename %}
@@ -206,7 +206,7 @@
 
               <!-- Langue -->
               <li class="udd-row udd-lang-row" style="cursor:default;">
-                <span>{{ t('nav.language') if t('nav.language') else 'Langue' }}</span>
+                <span>{{ t('nav.language') }}</span>
                 <span>
                   <a href="{{ url_for('set_lang', lang='fr') }}"
                      class="udd-lang{% if current_lang() == 'fr' %} active{% endif %}"
