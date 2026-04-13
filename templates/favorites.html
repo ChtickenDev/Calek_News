@@ -399,43 +399,59 @@
 <!-- Modal article -->
 <div class="modal fade" id="articleModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-xl modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 id="am-title" class="modal-title"></h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <div class="d-flex flex-wrap gap-2 mb-2">
-          <span id="am-journal" class="badge badge-soft badge-journal"></span>
-          <span id="am-ifs" class="badge badge-ifs"></span>
-          <span id="am-source" class="badge badge-soft"></span>
-          <span id="am-domain" class="badge badge-soft"></span>
-          <span id="am-pathology" class="badge badge-soft"></span>
-          <span id="am-studytype" class="badge badge-soft"></span>
+    <div class="modal-content" style="border-radius:12px; overflow:hidden; box-shadow:0 8px 32px rgba(0,0,0,.12);">
+
+      <!-- Header : badges + titre -->
+      <div class="modal-header px-4 pt-4 pb-3 border-bottom" style="align-items:flex-start; gap:12px;">
+        <div class="flex-grow-1 min-w-0">
+          <div class="d-flex flex-wrap gap-2 mb-2">
+            <span id="am-ifs-header" class="badge" style="display:none;"></span>
+            <span id="am-journal"   class="badge badge-soft badge-journal" style="display:none;"></span>
+            <span id="am-domain"    class="badge badge-soft" style="display:none;"></span>
+            <span id="am-studytype" class="badge badge-soft" style="display:none;"></span>
+            <span id="am-source"    class="badge badge-soft" style="display:none;"></span>
+            <span id="am-pathology" class="badge badge-soft" style="display:none;"></span>
+          </div>
+          <h5 id="am-title" class="modal-title fw-bold mb-0" style="font-size:1.05rem; line-height:1.45;"></h5>
         </div>
-        <p id="am-authors" class="small text-muted mb-2"></p>
+        <button type="button" class="btn-close flex-shrink-0 mt-1" data-bs-dismiss="modal"></button>
+      </div>
+
+      <!-- Body -->
+      <div class="modal-body px-4 py-3">
+        <p id="am-authors" class="small text-muted mb-1"></p>
         <div class="small text-muted mb-3">
           <span id="am-pubdate"></span>
           <span id="am-sitedate" class="ms-2"></span>
         </div>
-        <div class="mb-3">
-          <div class="d-flex align-items-center justify-content-between">
-            <strong>Indice de fiabilité : <span id="am-rel-level">—</span></strong>
-            <span id="am-rel-score" class="small text-muted"></span>
+
+        <!-- Indice de fiabilité -->
+        <div class="mb-4 px-3 py-3" style="background:var(--bs-secondary-bg); border-radius:8px;">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <span class="small fw-semibold" style="text-transform:uppercase; letter-spacing:.06em; color:var(--bs-secondary-color); font-size:11px;">Indice de fiabilité</span>
+            <span class="small text-muted">
+              <span id="am-rel-level" class="fw-semibold text-body"></span>
+              <span class="mx-1">·</span>
+              <span id="am-rel-score"></span>
+            </span>
           </div>
-          <div class="progress mt-2" style="height:10px;">
+          <div class="progress" style="height:6px; border-radius:3px;">
             <div id="am-rel-bar" class="progress-bar" role="progressbar" style="width:0%;"></div>
           </div>
-          <ul id="am-rel-reasons" class="small mt-2 mb-0"></ul>
+          <ul id="am-rel-reasons" class="small mt-2 mb-0" style="list-style:none; padding-left:0;"></ul>
         </div>
-        <h6 class="mb-2">Résumé</h6>
+
+        <!-- Résumé -->
+        <div class="small fw-semibold mb-2" style="text-transform:uppercase; letter-spacing:.06em; color:var(--bs-secondary-color);">Résumé</div>
         <div id="am-abstract" class="mb-0"></div>
       </div>
-      <div class="modal-footer d-flex align-items-center flex-wrap gap-2">
-        <a id="am-url" href="#" target="_blank" class="btn btn-primary" style="display:none;">{{ t('btn.open') }}</a>
-        <a id="am-doi" href="#" target="_blank" class="btn btn-outline-primary" style="display:none;">DOI</a>
-        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">{{ t('btn.close') }}</button>
-        <button type="button" class="btn btn-outline-secondary" id="am-cite-btn" style="display:none;" onclick="toggleCiteBox()">{{ t('btn.cite') }}</button>
+
+      <!-- Footer -->
+      <div class="modal-footer px-4 py-3 border-top d-flex align-items-center flex-wrap gap-2">
+        <a id="am-url" href="#" target="_blank" class="btn btn-primary btn-sm" style="display:none;">{{ t('btn.open') }}</a>
+        <a id="am-doi" href="#" target="_blank" class="btn btn-outline-secondary btn-sm" style="display:none;">Article</a>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="am-cite-btn" style="display:none;" onclick="toggleCiteBox()">{{ t('btn.cite') }}</button>
+        <button type="button" class="btn btn-link btn-sm text-muted" data-bs-dismiss="modal" style="text-decoration:none;">{{ t('btn.close') }}</button>
         <div id="am-cite-box" style="display:none; width:100%;">
           <div class="cite-box">
             <div class="cite-box-label">Vancouver</div>
@@ -787,7 +803,7 @@ async function savePublicNote(articleId) {
 
 // --- Modal article ---
 document.getElementById('articleModal').addEventListener('hidden.bs.modal', () => {
-  ['am-journal','am-ifs','am-source','am-domain','am-pathology','am-studytype','am-authors','am-pubdate','am-sitedate','am-rel-score','am-rel-level']
+  ['am-journal','am-ifs-header','am-source','am-domain','am-pathology','am-studytype','am-authors','am-pubdate','am-sitedate','am-rel-score','am-rel-level']
     .forEach(id => { const el=document.getElementById(id); if(el) el.textContent=''; });
   document.getElementById('am-abstract').innerHTML='';
   document.getElementById('am-rel-reasons').innerHTML='';
@@ -852,15 +868,24 @@ async function openArticleModal(id) {
     setBadge('am-domain', data.domain);
     setBadge('am-pathology', data.pathology);
     setBadge('am-studytype', data.study_type);
-    const sc = (data.reliability && data.reliability.score) || null;
+    const sc = (data.reliability && data.reliability.score) || 0;
     const lv = (data.reliability && data.reliability.level) || "—";
     const rs = (data.reliability && data.reliability.reasons) || [];
-    const ifs = document.getElementById('am-ifs');
-    if (sc!==null){ ifs.textContent=`IFS: ${sc}`; ifs.style.display=''; } else { ifs.style.display='none'; }
+    // Badge IFS dans le header (même palette que _macros.html via _ifsModalColor de layout.html)
+    const ifsHeader = document.getElementById('am-ifs-header');
+    if (ifsHeader) {
+      if (sc > 0) {
+        const {bg, fg} = _ifsModalColor(sc);
+        ifsHeader.textContent = `IFS: ${sc}`;
+        ifsHeader.style.cssText = `background:${bg};color:${fg};border:none;`;
+        ifsHeader.style.display = '';
+      } else { ifsHeader.style.display = 'none'; }
+    }
     const fmt = iso => { if(!iso) return null; try{ const d=new Date(iso); return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'});}catch{return null;} };
     document.getElementById('am-pubdate').textContent = fmt(data.published_date) ? `${t_js('article.published')||'{{ t("article.published") }}'} ${fmt(data.published_date)}` : "";
     document.getElementById('am-sitedate').textContent = fmt(data.published_at) ? `Ajouté le ${fmt(data.published_at)}` : "";
     document.getElementById('am-abstract').innerHTML = formatAbstract(data.abstract);
+    _injectModalTranslateBtn(data.abstract);
     const urlBtn = document.getElementById('am-url'); if (data.url) { urlBtn.href = data.url; urlBtn.style.display=""; } else urlBtn.style.display="none";
     const doiBtn = document.getElementById('am-doi'); if (data.doi) { doiBtn.href = `https://doi.org/${data.doi}`; doiBtn.style.display=""; } else doiBtn.style.display="none";
     const citeBtn = document.getElementById('am-cite-btn');
@@ -871,11 +896,14 @@ async function openArticleModal(id) {
       document.getElementById('am-cite-box').style.display = 'none';
     }
     const bar = document.getElementById('am-rel-bar');
-    bar.style.width = `${sc||0}%`; bar.className='progress-bar';
-    if (sc>=80) bar.classList.add('bg-success'); else if (sc>=60) bar.classList.add('bg-primary'); else if (sc>=40) bar.classList.add('bg-warning'); else bar.classList.add('bg-danger');
+    if (bar) {
+      bar.style.width = `${sc}%`;
+      bar.className = 'progress-bar';
+      bar.style.background = sc > 0 ? _ifsModalColor(sc).bg : 'var(--bs-secondary-bg)';
+    }
     document.getElementById('am-rel-level').textContent = lv;
-    document.getElementById('am-rel-score').textContent = `${sc||0}/100`;
-    document.getElementById('am-rel-reasons').innerHTML = rs.map(r => `<li>${r}</li>`).join('') || '<li>Aucune raison listée</li>';
+    document.getElementById('am-rel-score').textContent = `${sc}/100`;
+    document.getElementById('am-rel-reasons').innerHTML = rs.map(r => `<li style="padding:2px 0;">&#10003; ${r}</li>`).join('') || '<li class="text-muted">Aucun critère disponible</li>';
     const modalEl = document.getElementById('articleModal');
     if (!articleModalInstance) articleModalInstance = new bootstrap.Modal(modalEl);
     articleModalInstance.show();

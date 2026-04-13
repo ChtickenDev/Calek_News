@@ -712,8 +712,8 @@ function t_js(key) {
 }
 
 function _injectModalTranslateBtn(rawAbstract) {
-  const existingTransBtn = document.getElementById('am-translate-btn');
-  if (existingTransBtn) existingTransBtn.remove();
+  const existingWrapper = document.getElementById('am-translate-wrapper');
+  if (existingWrapper) existingWrapper.remove();
 
   const abstractEl = document.getElementById('am-abstract');
   const textToTranslate = (rawAbstract || '').trim();
@@ -725,14 +725,18 @@ function _injectModalTranslateBtn(rawAbstract) {
   const matches = frMarkers.filter(m => sample.includes(m)).length;
   if (matches >= 3) return;
 
+  const wrapper = document.createElement('div');
+  wrapper.id = 'am-translate-wrapper';
+  wrapper.className = 'text-center my-3';
   const transBtn = document.createElement('button');
   transBtn.id = 'am-translate-btn';
-  transBtn.className = 'btn btn-sm btn-outline-secondary mt-3 d-block mx-auto';
-  transBtn.innerHTML = `🌐 ${t_js('btn.translate') || 'Traduire en français'}`;
+  transBtn.style.cssText = 'background:transparent; border:0.5px solid #aaa; border-radius:20px; padding:6px 20px; font-size:13px; color:#666; cursor:pointer;';
+  transBtn.textContent = t_js('btn.translate') || 'Traduire en français';
   transBtn.onclick = function() {
     translateAbstract(this, textToTranslate, abstractEl);
   };
-  abstractEl.insertAdjacentElement('afterend', transBtn);
+  wrapper.appendChild(transBtn);
+  abstractEl.insertAdjacentElement('afterend', wrapper);
 }
 
 async function translateAbstract(btn, text, targetEl) {
@@ -740,11 +744,11 @@ async function translateAbstract(btn, text, targetEl) {
   if (btn.dataset.translated === '1') {
     targetEl.innerHTML = btn.dataset.originalHtml || '';
     btn.dataset.translated = '0';
-    btn.innerHTML = `🌐 ${t_js('btn.translate') || 'Traduire en français'}`;
+    btn.textContent = t_js('btn.translate') || 'Traduire en français';
     return;
   }
 
-  btn.innerHTML = `🌐 ${t_js('btn.translating') || 'Traduction...'}`;
+  btn.textContent = t_js('btn.translating') || 'Traduction...';
   btn.disabled = true;
 
   try {
@@ -789,7 +793,7 @@ async function translateAbstract(btn, text, targetEl) {
     btn.dataset.originalHtml = originalHtml;
     targetEl.innerHTML = newHtml;
     btn.dataset.translated = '1';
-    btn.innerHTML = `🌐 ${t_js('btn.show_original') || "Voir l'original"}`;
+    btn.textContent = t_js('btn.show_original') || "Voir l'original";
   } catch(e) {
     btn.textContent = 'Erreur réseau';
     setTimeout(() => { btn.textContent = t_js('btn.translate') || 'Traduire en français'; btn.disabled = false; }, 2000);
