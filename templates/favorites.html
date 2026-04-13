@@ -232,8 +232,6 @@
     <div class="col-md-6 col-lg-4">
       <div class="article-card" data-article-id="{{ a.id }}" role="button" tabindex="0">
 
-        <button class="card-cite-btn" onclick="event.stopPropagation(); showCardCite(this, {{ a.id }})" data-article-id="{{ a.id }}">{{ t('btn.cite') }}</button>
-
         <div class="card-top">
           {{ ifs_badge(sc) }}
           {% if a.domain %}<span class="card-domain">{{ a.domain }}</span>{% endif %}
@@ -254,11 +252,10 @@
         </div>
 
         <div class="card-actions" onclick="event.stopPropagation()">
-          {% if a.url %}<a class="card-btn card-btn-primary" href="{{ a.url }}" target="_blank" onclick="event.stopPropagation()">{{ t('btn.open') }}</a>{% endif %}
           {% if a.doi %}<a class="card-btn" href="https://doi.org/{{ a.doi }}" target="_blank" onclick="event.stopPropagation()">DOI</a>{% endif %}
           {{ share_dropdown(a.id) }}
           {% if active_folder.user_id == current_user.id %}
-            <button class="card-btn" style="color:#e74c3c;border-color:#e74c3c;"
+            <button class="card-btn" style="color:#dc3545;border-color:#dc3545;"
                     onclick="event.stopPropagation(); removeFromFolder({{ active_folder.id }}, {{ a.id }}, this)">
               {{ t('btn.remove') }}
             </button>
@@ -286,7 +283,13 @@
                 <li><button class="dropdown-item text-success" onclick="openCreateFolder()">+ {{ t('folder.new') }}</button></li>
               </ul>
             </div>
+            <form method="post" action="{{ url_for('unfavorite', article_id=a.id) }}" onclick="event.stopPropagation()">
+              <button class="card-btn" style="color:#dc3545;border-color:#dc3545;">{{ t('btn.remove') }}</button>
+            </form>
           {% endif %}
+          <button class="card-btn" style="margin-left:auto;"
+                  onclick="event.stopPropagation(); showCardCite(this, {{ a.id }})"
+                  data-article-id="{{ a.id }}">{{ t('btn.cite') }}</button>
         </div>
 
       </div>
@@ -309,8 +312,6 @@
     {% set art_folders = folders_by_article.get(a.id, []) %}
     <div class="col-md-6 col-lg-4">
       <div class="article-card" data-article-id="{{ a.id }}" role="button" tabindex="0">
-
-        <button class="card-cite-btn" onclick="event.stopPropagation(); showCardCite(this, {{ a.id }})" data-article-id="{{ a.id }}">{{ t('btn.cite') }}</button>
 
         <div class="card-top">
           {{ ifs_badge(sc) }}
@@ -341,8 +342,8 @@
           {% if a.abstract %}{% set _abstract_text = a.clean_abstract or (a.abstract|striptags) %}{{ _abstract_text[:400] }}{% if _abstract_text|length > 400 %}…{% endif %}{% else %}{{ t('article.no_abstract') }}{% endif %}
         </div>
 
+        <!-- DOI · Public/Privé · Note · Partager · Dossier · Retirer · Citer -->
         <div class="card-actions" onclick="event.stopPropagation()">
-          {% if a.url %}<a class="card-btn card-btn-primary" href="{{ a.url }}" target="_blank" onclick="event.stopPropagation()">{{ t('btn.open') }}</a>{% endif %}
           {% if a.doi %}<a class="card-btn" href="https://doi.org/{{ a.doi }}" target="_blank" onclick="event.stopPropagation()">DOI</a>{% endif %}
           <button class="card-btn{% if f.is_public %} card-btn-public{% endif %}"
                   id="vis-btn-{{ a.id }}"
@@ -370,8 +371,11 @@
             </ul>
           </div>
           <form method="post" action="{{ url_for('unfavorite', article_id=a.id) }}" onclick="event.stopPropagation()">
-            <button class="card-btn" style="color:#e74c3c;border-color:#e74c3c;">{{ t('btn.remove') }}</button>
+            <button class="card-btn" style="color:#dc3545;border-color:#dc3545;">{{ t('btn.remove') }}</button>
           </form>
+          <button class="card-btn" style="margin-left:auto;"
+                  onclick="event.stopPropagation(); showCardCite(this, {{ a.id }})"
+                  data-article-id="{{ a.id }}">{{ t('btn.cite') }}</button>
         </div>
 
         <div id="public-note-{{ a.id }}" class="w-100 mt-2" style="display:none;" onclick="event.stopPropagation()">
