@@ -1,0 +1,76 @@
+{% extends "layout.html" %}
+
+{% block mobile_page_title %}Paramètres{% endblock %}
+{% block mobile_action %}
+  <a href="javascript:history.back()" class="mobile-ctx-btn">&#8592; Retour</a>
+{% endblock %}
+
+{% block content %}
+
+<div style="background:var(--bs-body-bg); border:0.5px solid var(--bs-border-color); border-radius:12px; overflow:hidden; margin-top:8px;">
+
+  <!-- Mon profil -->
+  <a href="{{ url_for('me') }}"
+     style="display:flex; align-items:center; justify-content:space-between;
+            padding:14px 16px; border-bottom:0.5px solid var(--bs-border-color);
+            text-decoration:none; color:var(--bs-body-color); font-size:13px;">
+    Mon profil <span style="color:var(--bs-secondary-color);">›</span>
+  </a>
+
+  <!-- Mode sombre -->
+  <div onclick="toggleDarkMode()"
+       style="display:flex; align-items:center; justify-content:space-between;
+              padding:14px 16px; border-bottom:0.5px solid var(--bs-border-color);
+              font-size:13px; cursor:pointer; color:var(--bs-body-color);">
+    <span>Mode sombre</span>
+    <div class="udd-toggle" id="p-toggle"><div class="udd-dot" id="p-dot"></div></div>
+  </div>
+
+  <!-- Langue -->
+  <div style="display:flex; align-items:center; justify-content:space-between;
+              padding:14px 16px; border-bottom:0.5px solid var(--bs-border-color);
+              font-size:13px; color:var(--bs-body-color);">
+    <span>Langue</span>
+    <span style="display:flex; gap:8px;">
+      <a href="{{ url_for('set_lang', lang='fr') }}"
+         class="udd-lang{% if current_lang() == 'fr' %} active{% endif %}"
+         style="text-decoration:none;">FR</a>
+      <a href="{{ url_for('set_lang', lang='en') }}"
+         class="udd-lang{% if current_lang() == 'en' %} active{% endif %}"
+         style="text-decoration:none;">EN</a>
+    </span>
+  </div>
+
+  <!-- Déconnexion -->
+  <a href="{{ url_for('logout') }}"
+     style="display:flex; align-items:center; justify-content:space-between;
+            padding:14px 16px; text-decoration:none; font-size:13px; color:#dc3545;">
+    Déconnexion <span>›</span>
+  </a>
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function syncParamsToggle(isDark) {
+  const t = document.getElementById('p-toggle');
+  const d = document.getElementById('p-dot');
+  if (!t || !d) return;
+  t.style.background = isDark ? '#6366f1' : '#ccc';
+  d.style.left = isDark ? '16px' : '2px';
+}
+
+// Patch setTheme pour synchroniser aussi le toggle de cette page
+const _origSetTheme = window.setTheme;
+window.setTheme = function(mode) {
+  _origSetTheme(mode);
+  syncParamsToggle(mode === 'dark');
+};
+
+document.addEventListener('DOMContentLoaded', function() {
+  syncParamsToggle(document.documentElement.getAttribute('data-bs-theme') === 'dark');
+});
+</script>
+{% endblock %}

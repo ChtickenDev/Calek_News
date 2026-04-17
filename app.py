@@ -2503,6 +2503,11 @@ def set_lang(lang):
         session['lang'] = lang
     return redirect(request.referrer or url_for('index'))
 
+@app.route('/parametres')
+@login_required
+def parametres():
+    return render_template('parametres.html')
+
 @app.route('/')
 def index():
     if current_user.is_authenticated:
