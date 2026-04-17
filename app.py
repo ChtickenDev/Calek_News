@@ -791,14 +791,18 @@ def ensure_userdraft_schema():
 def ensure_folder_schema():
     db.create_all()
 
-    # Migration table folder
-    cols = {r["column_name"] for r in db.session.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='folder' AND table_schema='public'")).mappings().all()}
-    if "is_public" not in cols:
-        db.session.execute(text("ALTER TABLE folder ADD COLUMN is_public BOOLEAN NOT NULL DEFAULT 1"))
-    if "color" not in cols:
-        db.session.execute(text("ALTER TABLE folder ADD COLUMN color VARCHAR(20) NOT NULL DEFAULT '#6366f1'"))
-    if "parent_id" not in cols:
-        db.session.execute(text("ALTER TABLE folder ADD COLUMN IF NOT EXISTS parent_id INTEGER REFERENCES folder(id) ON DELETE SET NULL"))
+    # Migration table folder — connexion directe pour éviter les problèmes de transaction session
+    with db.engine.connect() as _conn:
+        cols = {r["column_name"] for r in _conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='folder' AND table_schema='public'")).mappings().all()}
+        if "is_public" not in cols:
+            _conn.execute(text("ALTER TABLE folder ADD COLUMN is_public BOOLEAN NOT NULL DEFAULT TRUE"))
+            _conn.commit()
+        if "color" not in cols:
+            _conn.execute(text("ALTER TABLE folder ADD COLUMN color VARCHAR(20) NOT NULL DEFAULT '#6366f1'"))
+            _conn.commit()
+        if "parent_id" not in cols:
+            _conn.execute(text("ALTER TABLE folder ADD COLUMN IF NOT EXISTS parent_id INTEGER REFERENCES folder(id) ON DELETE SET NULL"))
+            _conn.commit()
 
     # Migration table user
     user_cols = {r["column_name"] for r in db.session.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='user' AND table_schema='public'")).mappings().all()}
