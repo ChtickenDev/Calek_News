@@ -96,7 +96,7 @@
             {{ t('users.unfollow') }}
           </button>
         {% else %}
-          <button class="card-btn card-btn-primary follow-btn"
+          <button class="card-btn btn-follow follow-btn"
                   data-user-id="{{ u.id }}"
                   onclick="event.stopPropagation(); followUser({{ u.id }}, this)">
             {{ t('users.follow') }}
@@ -205,6 +205,17 @@
 .activity-old    { background: #ef4444; }
 .activity-none   { background: #94a3b8; }
 
+/* Bouton Suivre */
+.btn-follow {
+  background-color: #4a90d9;
+  border-color: #4a90d9;
+  color: #fff !important;
+}
+.btn-follow:hover {
+  background-color: #3a7fc8;
+  border-color: #3a7fc8;
+}
+
 /* Barre de recherche */
 .users-search-group .form-control,
 .users-search-group .input-group-text {
@@ -279,7 +290,7 @@ async function unfollowUser(userId, btn) {
   const res = await fetch(`/unfollow/${userId}`, {method: 'POST'});
   const data = await res.json();
   if (data.ok) {
-    btn.className = 'card-btn card-btn-primary follow-btn';
+    btn.className = 'card-btn btn-follow follow-btn';
     btn.textContent = _followLabel;
     btn.onclick = function(e) { e.stopPropagation(); followUser(userId, this); };
   }
