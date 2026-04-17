@@ -197,30 +197,6 @@
         </div>
       </div>
 
-      <!-- Connexion Zotero -->
-      <div class="profile-section">
-        <h6 class="section-title">Connexion Zotero</h6>
-        <p class="small text-muted mb-3">
-          Connectez votre bibliothèque Zotero pour importer automatiquement vos articles en favoris.
-          Vous trouverez votre User ID et votre clé API sur
-          <a href="https://www.zotero.org/settings/keys" target="_blank" rel="noopener">zotero.org/settings/keys</a>.
-        </p>
-        <div class="row g-3">
-          <div class="col-md-6">
-            <label class="form-label small fw-semibold">User ID Zotero <span class="text-muted fw-normal">(ex : 12345678)</span></label>
-            <input type="text" name="zotero_user_id" class="form-control"
-                   value="{{ current_user.zotero_user_id or '' }}"
-                   placeholder="12345678">
-          </div>
-          <div class="col-md-6">
-            <label class="form-label small fw-semibold">Clé API Zotero</label>
-            <input type="text" name="zotero_api_key" class="form-control"
-                   value="{{ '•' * 24 if current_user.zotero_api_key else '' }}"
-                   placeholder="{{ 'Clé configurée — laisser vide pour conserver' if current_user.zotero_api_key else 'Votre clé API privée' }}">
-          </div>
-        </div>
-      </div>
-
       <!-- Confidentialité -->
       <div class="profile-section">
         <h6 class="section-title">Confidentialité</h6>

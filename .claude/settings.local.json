@@ -10,7 +10,11 @@
       "Bash(python -c \"import flask; print\\(flask.__file__\\)\")",
       "Bash(.venv/Scripts/python.exe -m pip install flask-limiter cryptography)",
       "Bash(.venv/Scripts/python.exe -c \"import app\")",
-      "Bash(ls C:/Users/baske/Desktop/Physara/*.py)"
+      "Bash(ls C:/Users/baske/Desktop/Physara/*.py)",
+      "Bash(ls -la /c/Users/baske/Desktop/Physara/*.py)",
+      "Bash(grep -r \"zotero\" /c/Users/baske/Desktop/Physara/*.py)",
+      "Bash(python3:*)",
+      "Bash(python:*)"
     ]
   }
 }

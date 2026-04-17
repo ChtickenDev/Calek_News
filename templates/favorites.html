@@ -57,29 +57,40 @@
   </ul>
 </div>
 {% endmacro %}
-<!-- Modal confirmation import Zotero -->
-{% if current_user.zotero_api_key and current_user.zotero_user_id %}
+<!-- Modal import Zotero (fichier JSON) -->
 <div class="modal fade" id="zoteroImportModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
-      <div class="modal-header">
-        <h6 class="modal-title mb-0">Importer depuis Zotero</h6>
+      <div class="modal-header border-bottom">
+        <h5 class="modal-title fw-semibold" style="font-size:15px;">Importer depuis Zotero</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
-        <p class="mb-1">Ceci va importer tous vos articles de revue (<em>journalArticle</em>) depuis Zotero vers vos favoris Physara.</p>
-        <p class="text-muted small mb-0">Les articles déjà en favoris ne seront pas dupliqués. Les articles sans DOI ou introuvables sur PubMed seront ignorés.</p>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
-        <form method="post" action="{{ url_for('zotero_import') }}" class="d-inline">
-          <button type="submit" class="btn btn-primary btn-sm">Lancer l'import</button>
+        <div class="p-3 rounded mb-3" style="background:var(--bs-secondary-bg);font-size:13px;line-height:1.7;">
+          <div style="font-weight:600;margin-bottom:6px;">Comment exporter depuis Zotero ?</div>
+          <ol style="padding-left:16px;margin:0;">
+            <li>Ouvrez Zotero Desktop</li>
+            <li>Cliquez sur <strong>Fichier &#8594; Exporter la biblioth&#232;que</strong></li>
+            <li>Choisissez le format <strong>Zotero JSON</strong></li>
+            <li>Cochez <strong>Exporter les notes</strong> si souhait&#233;</li>
+            <li>Enregistrez le fichier <code>.json</code></li>
+            <li>Importez-le ci-dessous</li>
+          </ol>
+        </div>
+        <div style="font-size:12px;color:var(--bs-secondary-color);margin-bottom:10px;">
+          &#9888;&#65039; Seuls les articles d&#233;j&#224; pr&#233;sents dans vos favoris Physara seront organis&#233;s. Les nouveaux articles Zotero ne seront pas import&#233;s.
+        </div>
+        <form id="zoteroImportForm" enctype="multipart/form-data">
+          <input type="file" name="zotero_file" accept=".json" class="form-control form-control-sm">
         </form>
+      </div>
+      <div class="modal-footer border-top">
+        <button class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Annuler</button>
+        <button class="btn btn-sm" style="background:#1a1a2e;color:#fff;" onclick="submitZoteroImport()">Importer</button>
       </div>
     </div>
   </div>
 </div>
-{% endif %}
 
 <!-- Modal suppression dossier -->
 <div class="modal fade" id="deleteFolderModal" tabindex="-1" aria-hidden="true">
@@ -188,14 +199,12 @@
       <span>+</span><span class="physara-folder-add-label">Nouveau dossier</span>
     </div>
 
-    {% if current_user.zotero_api_key and current_user.zotero_user_id %}
     <div class="physara-sidebar-footer">
-      <form method="post" action="{{ url_for('zotero_export_all') }}" onclick="event.stopPropagation()">
-        <button type="submit" class="physara-sidebar-btn">Exporter Zotero</button>
+      <form method="post" action="{{ url_for('zotero_export') }}" onclick="event.stopPropagation()">
+        <button type="submit" class="physara-sidebar-btn">Exporter vers Zotero</button>
       </form>
-      <button class="physara-sidebar-btn" data-bs-toggle="modal" data-bs-target="#zoteroImportModal">Importer Zotero</button>
+      <button class="physara-sidebar-btn" onclick="openZoteroImportModal()">Importer depuis Zotero</button>
     </div>
-    {% endif %}
   </aside>
 
   <!-- Contenu principal -->
@@ -1409,6 +1418,39 @@ async function openShare(platform, articleId) {
   }
 
   window.open(links[platform], '_blank', 'noopener,noreferrer');
+}
+
+function openZoteroImportModal() {
+  new bootstrap.Modal(document.getElementById('zoteroImportModal')).show();
+}
+
+async function submitZoteroImport() {
+  const form = document.getElementById('zoteroImportForm');
+  const fileInput = form.querySelector('input[type="file"]');
+  if (!fileInput.files.length) {
+    alert('Veuillez s\u00e9lectionner un fichier JSON Zotero.');
+    return;
+  }
+  const formData = new FormData(form);
+  try {
+    const res = await fetch('/zotero/import', { method: 'POST', body: formData });
+    const data = await res.json();
+    bootstrap.Modal.getInstance(document.getElementById('zoteroImportModal')).hide();
+    if (data.success) {
+      alert(
+        'Import termin\u00e9 !\n' +
+        '\u2713 ' + data.folders_created + ' dossier(s) cr\u00e9\u00e9(s)\n' +
+        '= ' + data.folders_matched + ' dossier(s) existants r\u00e9utilis\u00e9s\n' +
+        '\u2713 ' + data.articles_matched + ' articles organis\u00e9s\n' +
+        '\u26a0 ' + data.articles_ignored + ' articles non trouv\u00e9s dans vos favoris'
+      );
+      if (data.folders_created > 0 || data.articles_matched > 0) window.location.reload();
+    } else {
+      alert('Erreur : ' + (data.message || 'Import \u00e9chou\u00e9'));
+    }
+  } catch (e) {
+    alert('Erreur r\u00e9seau : ' + e);
+  }
 }
 </script>
 {% endblock %}

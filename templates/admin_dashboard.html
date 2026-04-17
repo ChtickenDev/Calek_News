@@ -68,10 +68,6 @@
     <button class="btn btn-outline-danger">🗑 Supprimer tous les brouillons</button>
   </form>
 
-  <form method="post" action="{{ url_for('admin_migrate_zotero_keys') }}" class="d-inline"
-        onsubmit="return confirm('Chiffrer toutes les clés Zotero en clair ? (opération irréversible)');">
-    <button class="btn btn-outline-secondary btn-sm">🔑 Migrer clés Zotero (Fernet)</button>
-  </form>
 </div>
 
 <!-- Recherche / tri -->

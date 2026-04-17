@@ -180,8 +180,6 @@ class User(UserMixin, db.Model):
     tiktok = db.Column(db.String(255))
     youtube = db.Column(db.String(255))
     abonnements_publics = db.Column(db.Boolean, default=True)
-    zotero_api_key = db.Column(db.String(200))
-    zotero_user_id = db.Column(db.String(50))
     google_id      = db.Column(db.String(100), unique=True, nullable=True)
 
     def set_password(self, pw):
@@ -825,8 +823,6 @@ def ensure_folder_schema():
         "tiktok": "VARCHAR(255)",
         "youtube": "VARCHAR(255)",
         "abonnements_publics": "BOOLEAN DEFAULT 1",
-        "zotero_api_key": "VARCHAR(100)",
-        "zotero_user_id": "VARCHAR(50)",
     }
     for col, coltype in new_user_cols.items():
         if col not in user_cols:
@@ -2387,11 +2383,6 @@ def me():
         current_user.tiktok = request.form.get('tiktok', '').strip()
         current_user.youtube = request.form.get('youtube', '').strip()
         current_user.abonnements_publics = 'abonnements_publics' in request.form
-        new_zotero_key = request.form.get('zotero_api_key', '').strip()
-        if new_zotero_key and not all(c == '•' for c in new_zotero_key):
-            current_user.zotero_api_key = encrypt_api_key(new_zotero_key)
-        # sinon on conserve l'ancienne valeur chiffrée
-        current_user.zotero_user_id = request.form.get('zotero_user_id', '').strip() or None
 
         db.session.commit()
         flash('Profil mis à jour !', 'success')
@@ -2767,358 +2758,218 @@ def favorite_set_public_note(article_id):
     return jsonify({"ok": True})
 
 
-@app.route('/zotero/import', methods=['POST'])
+@app.route('/zotero/export', methods=['POST'])
 @login_required
-def zotero_import():
-    zotero_uid = getattr(current_user, 'zotero_user_id', None)
-    zotero_key = decrypt_api_key(getattr(current_user, 'zotero_api_key', None) or '')
-    if not zotero_uid or not zotero_key:
-        flash("Configurez d'abord votre User ID et clé API Zotero dans votre profil.", 'warning')
-        return redirect(url_for('favorites'))
+def zotero_export():
+    """Génère un fichier JSON Zotero téléchargeable contenant tous les favoris organisés par dossiers."""
+    import uuid as _uuid
 
-    headers = {"Zotero-API-Key": zotero_key}
-    limit = 100
-
-    # --- 1. Récupérer toutes les collections Zotero ---
-    collections_map = {}  # collection_key → nom
-    coll_start = 0
-    while True:
-        try:
-            cr = requests.get(
-                f"https://api.zotero.org/users/{zotero_uid}/collections",
-                headers=headers,
-                params={"format": "json", "limit": limit, "start": coll_start},
-                timeout=30
-            )
-            if cr.status_code != 200:
-                flash(f"Erreur Zotero API (collections) : {cr.status_code}", 'danger')
-                return redirect(url_for('favorites'))
-            colls = cr.json()
-        except Exception as e:
-            flash(f"Erreur lors de la récupération des collections Zotero : {e}", 'danger')
-            return redirect(url_for('favorites'))
-
-        for c in colls:
-            key = c.get('key', '')
-            name = (c.get('data') or {}).get('name', '').strip()
-            if key and name:
-                collections_map[key] = name
-
-        if len(colls) < limit:
-            break
-        coll_start += limit
-
-    # Cache local des Folder déjà existants ou créés durant cet import
-    # {folder_name → Folder}
-    folder_cache = {}
-    folders_created = 0
-
-    def get_or_create_folder(name):
-        nonlocal folders_created
-        if name in folder_cache:
-            return folder_cache[name]
-        folder = Folder.query.filter_by(name=name, user_id=current_user.id).first()
-        if not folder:
-            folder = Folder(name=name, user_id=current_user.id,
-                            is_public=True, color='#6366f1')
-            db.session.add(folder)
-            db.session.flush()  # obtenir l'id sans commit global
-            folders_created += 1
-        folder_cache[name] = folder
-        return folder
-
-    # --- 2. Parcourir les items ---
-    imported = 0
-    already = 0
-    not_found = 0
-    items_start = 0
-
-    while True:
-        try:
-            resp = requests.get(
-                f"https://api.zotero.org/users/{zotero_uid}/items",
-                headers=headers,
-                params={"format": "json", "limit": limit,
-                        "start": items_start, "itemType": "journalArticle"},
-                timeout=30
-            )
-            if resp.status_code != 200:
-                flash(f"Erreur Zotero API : {resp.status_code}", 'danger')
-                return redirect(url_for('favorites'))
-            items = resp.json()
-        except Exception as e:
-            flash(f"Erreur lors de la connexion à Zotero : {e}", 'danger')
-            return redirect(url_for('favorites'))
-
-        if not items:
-            break
-
-        for item in items:
-            data = item.get('data', {})
-            doi = (data.get('DOI') or '').strip()
-            if not doi:
-                continue
-
-            # Cherche l'article en base par DOI
-            article = Article.query.filter_by(doi=normalize_doi(doi)).first()
-
-            if not article:
-                # Recherche PubMed via DOI
-                try:
-                    time.sleep(0.1)
-                    es_resp = requests.get(
-                        "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
-                        params=ncbi_params(db="pubmed", term=f"{doi}[DOI]", retmode="json"),
-                        timeout=20
-                    )
-                    pmids = es_resp.json().get("esearchresult", {}).get("idlist", [])
-                except Exception:
-                    pmids = []
-
-                if not pmids:
-                    not_found += 1
-                    continue
-
-                pmid = pmids[0]
-                time.sleep(0.1)
-                meta_map = efetch_pubmed_batch([pmid])
-                meta = meta_map.get(pmid)
-                if not meta:
-                    not_found += 1
-                    continue
-
-                meta['source'] = 'pubmed'
-                article = add_or_attach_article(meta, current_user)
-
-            # Créer le favori si inexistant
-            existing_fav = Favorite.query.filter_by(
-                user_id=current_user.id, article_id=article.id).first()
-            if existing_fav:
-                already += 1
-            else:
-                db.session.add(Favorite(
-                    user_id=current_user.id,
-                    article_id=article.id,
-                    is_public=False,
-                ))
-                db.session.add(UserEvent(
-                    user_id=current_user.id,
-                    article_id=article.id,
-                    event_type="zotero_import",
-                    extra=json.dumps({"doi": doi}),
-                ))
-                imported += 1
-
-            # --- 3. Ranger dans les dossiers correspondant aux collections ---
-            for coll_key in (data.get('collections') or []):
-                coll_name = collections_map.get(coll_key)
-                if not coll_name:
-                    continue
-                folder = get_or_create_folder(coll_name)
-                exists_fa = FolderArticle.query.filter_by(
-                    folder_id=folder.id, article_id=article.id).first()
-                if not exists_fa:
-                    db.session.add(FolderArticle(
-                        folder_id=folder.id, article_id=article.id))
-
-        db.session.commit()
-
-        if len(items) < limit:
-            break
-        items_start += limit
-
-    flash(
-        f"Import Zotero terminé : {imported} article(s) importé(s), "
-        f"{already} déjà en favoris, {not_found} non trouvé(s) sur PubMed, "
-        f"{folders_created} dossier(s) créé(s).",
-        'success'
-    )
-    return redirect(url_for('favorites'))
-
-@app.route('/zotero/export/all', methods=['POST'])
-@login_required
-def zotero_export_all():
-    zotero_uid = current_user.zotero_user_id
-    zotero_key = decrypt_api_key(current_user.zotero_api_key or '')
-    if not zotero_uid or not zotero_key:
-        flash("Configurez d'abord votre User ID et clé API Zotero dans votre profil.", 'warning')
-        return redirect(url_for('favorites'))
-
+    # 1. Récupérer tous les favoris de l'utilisateur
     favs = (Favorite.query
             .options(joinedload(Favorite.article))
             .filter_by(user_id=current_user.id)
             .all())
-    articles = [f.article for f in favs if f.article]
+    favs = [f for f in favs if f.article]
 
-    added, skipped, errors = _zotero_export_articles(articles, zotero_uid, zotero_key)
-    flash(f"Export Zotero : {added} article(s) ajouté(s), {skipped} déjà présent(s), {errors} erreur(s).", 'success')
-    return redirect(url_for('favorites'))
+    # 2. Récupérer tous les dossiers de l'utilisateur
+    folders = Folder.query.filter_by(user_id=current_user.id).all()
 
+    # 3. Construire le mapping folder_id → collection_key
+    folder_key = {f.id: _uuid.uuid4().hex[:8].upper() for f in folders}
 
-@app.route('/zotero/export/folder/<int:folder_id>', methods=['POST'])
-@login_required
-def zotero_export_folder(folder_id):
-    folder = Folder.query.filter_by(id=folder_id, user_id=current_user.id).first_or_404()
-    zotero_uid = current_user.zotero_user_id
-    zotero_key = decrypt_api_key(current_user.zotero_api_key or '')
-    if not zotero_uid or not zotero_key:
-        flash("Configurez d'abord votre User ID et clé API Zotero dans votre profil.", 'warning')
-        return redirect(url_for('folder_view', folder_id=folder_id))
+    # 4. Construire les collections Zotero
+    collections = {}
+    for fd in folders:
+        key = folder_key[fd.id]
+        parent_key = folder_key[fd.parent_id] if fd.parent_id and fd.parent_id in folder_key else False
+        collections[key] = {
+            "key": key,
+            "name": fd.name,
+            "parentCollection": parent_key,
+            "relations": {}
+        }
 
-    articles = (Article.query
-                .join(FolderArticle, FolderArticle.article_id == Article.id)
-                .filter(FolderArticle.folder_id == folder_id)
-                .all())
+    # 5. Construire les articles
+    # Mapping article_id → liste de collection_keys
+    article_colls = {}
+    fa_rows = FolderArticle.query.join(Folder, Folder.id == FolderArticle.folder_id)\
+        .filter(Folder.user_id == current_user.id).all()
+    for fa in fa_rows:
+        ckey = folder_key.get(fa.folder_id)
+        if ckey:
+            article_colls.setdefault(fa.article_id, []).append(ckey)
 
-    added, skipped, errors = _zotero_export_articles(articles, zotero_uid, zotero_key,
-                                                      collection_name=folder.name)
-    flash(f"Export « {folder.name} » → Zotero : {added} ajouté(s), {skipped} déjà présent(s), {errors} erreur(s).", 'success')
-    return redirect(url_for('folder_view', folder_id=folder_id))
-
-
-def _zotero_export_articles(articles: list, zotero_uid: str, zotero_key: str,
-                             collection_name: str = None) -> tuple[int, int, int]:
-    """
-    Envoie une liste d'Article vers la bibliothèque Zotero de l'utilisateur.
-    - Déduplique sur DOI (vérifie les items existants).
-    - Si collection_name fourni, crée/réutilise la collection Zotero correspondante.
-    Retourne (added, skipped, errors).
-    """
-    headers = {
-        "Zotero-API-Key": zotero_key,
-        "Content-Type": "application/json",
-    }
-    base = f"https://api.zotero.org/users/{zotero_uid}"
-
-    # 1. Récupère les DOI déjà présents dans Zotero (pour déduplication)
-    existing_dois = set()
-    start = 0
-    while True:
-        try:
-            r = requests.get(f"{base}/items", headers=headers,
-                             params={"format": "json", "limit": 100, "start": start,
-                                     "itemType": "journalArticle"},
-                             timeout=30)
-            items = r.json() if r.status_code == 200 else []
-        except Exception:
-            items = []
-        for it in items:
-            doi = (it.get('data') or {}).get('DOI', '').strip().lower()
-            if doi:
-                existing_dois.add(doi)
-        if len(items) < 100:
-            break
-        start += 100
-
-    # 2. Crée ou récupère la collection Zotero si demandée
-    collection_key = None
-    if collection_name:
-        try:
-            cr = requests.get(f"{base}/collections", headers=headers,
-                              params={"format": "json", "limit": 100}, timeout=30)
-            colls = cr.json() if cr.status_code == 200 else []
-            for c in colls:
-                if (c.get('data') or {}).get('name', '').strip().lower() == collection_name.strip().lower():
-                    collection_key = c['key']
-                    break
-            if not collection_key:
-                cr2 = requests.post(f"{base}/collections", headers=headers,
-                                    json=[{"name": collection_name}], timeout=30)
-                if cr2.status_code in (200, 201):
-                    created = cr2.json()
-                    # Zotero renvoie {successful: {"0": {key: ...}}}
-                    first = (created.get('successful') or {}).get('0') or {}
-                    collection_key = first.get('key')
-        except Exception:
-            pass
-
-    # 3. Construit les items Zotero et envoie par batch de 50
-    added = skipped = errors = 0
-    to_send = []
-
-    for a in articles:
-        doi_norm = (a.doi or '').strip().lower()
-        if doi_norm and doi_norm in existing_dois:
-            skipped += 1
-            continue
-
-        item = {
+    items = []
+    for f in favs:
+        a = f.article
+        creators = []
+        for author in (a.authors or '').split(','):
+            author = author.strip()
+            if not author:
+                continue
+            parts = author.rsplit(' ', 1)
+            if len(parts) == 2:
+                creators.append({"creatorType": "author", "firstName": parts[0].strip(), "lastName": parts[1].strip()})
+            else:
+                creators.append({"creatorType": "author", "firstName": "", "lastName": author})
+        items.append({
             "itemType": "journalArticle",
             "title": a.title or "",
-            "abstractNote": a.clean_abstract or "",
+            "creators": creators,
+            "abstractNote": (a.clean_abstract or a.abstract or ""),
             "publicationTitle": a.journal or "",
+            "date": a.published_date.strftime('%Y-%m-%d') if a.published_date else "",
             "DOI": a.doi or "",
             "url": a.url or "",
-            "date": a.published_date.strftime('%Y-%m-%d') if a.published_date else "",
-            "extra": f"PMID: {_extract_pmid_from_url(a.url)}" if a.url else "",
-            "collections": [collection_key] if collection_key else [],
-            "creators": _parse_authors_for_zotero(a.authors or ""),
-            "tags": _build_zotero_tags(a),
-        }
-        to_send.append(item)
+            "collections": article_colls.get(a.id, []),
+            "relations": {}
+        })
 
-    # Envoi par batch de 50 (limite Zotero)
-    for i in range(0, len(to_send), 50):
-        batch = to_send[i:i+50]
-        try:
-            r = requests.post(f"{base}/items", headers=headers,
-                              json=batch, timeout=30)
-            if r.status_code in (200, 201):
-                result = r.json()
-                added += len(result.get('successful') or {})
-                errors += len(result.get('failed') or {})
-            else:
-                errors += len(batch)
-        except Exception:
-            errors += len(batch)
+    payload = json.dumps({"version": 1, "collections": collections, "items": items},
+                         ensure_ascii=False, indent=2)
 
-    return added, skipped, errors
+    from flask import Response
+    return Response(
+        payload,
+        mimetype='application/json',
+        headers={"Content-Disposition": 'attachment; filename="physara_export.json"'}
+    )
 
 
-def _extract_pmid_from_url(url: str) -> str:
-    if not url:
-        return ""
-    m = re.search(r'/pubmed\.ncbi\.nlm\.nih\.gov/(\d+)', url)
-    return m.group(1) if m else ""
+@app.route('/zotero/import', methods=['POST'])
+@login_required
+def zotero_import():
+    """Import d'un fichier JSON Zotero uploadé. Organise les favoris existants dans des dossiers."""
+    import random as _random
 
+    file = request.files.get('zotero_file')
+    if not file or not file.filename.endswith('.json'):
+        return jsonify({"success": False, "message": "Fichier JSON requis"}), 400
 
-def _parse_authors_for_zotero(authors_str: str) -> list:
-    """
-    Convertit 'Prénom Nom, Prénom Nom' en liste de creators Zotero.
-    """
-    if not authors_str:
-        return []
-    creators = []
-    for author in authors_str.split(','):
-        author = author.strip()
-        if not author:
+    try:
+        data = json.load(file)
+    except (ValueError, Exception) as e:
+        return jsonify({"success": False, "message": f"JSON invalide : {e}"}), 400
+
+    _COLORS = ['#6366f1', '#3b82f6', '#22c55e', '#f59e0b', '#ef4444',
+               '#ec4899', '#8b5cf6', '#64748b', '#14b8a6']
+    zotero_collections = data.get('collections') or {}
+    zotero_items = data.get('items') or []
+
+    # — A. Traitement des collections → dossiers —
+
+    # Séparer racines et enfants pour respecter l'arborescence
+    roots = {k: v for k, v in zotero_collections.items() if not v.get('parentCollection')}
+    children = {k: v for k, v in zotero_collections.items() if v.get('parentCollection')}
+
+    coll_key_to_folder_id = {}  # zotero_key → folder_id Physara
+    folders_created = 0
+    folders_matched = 0
+
+    def get_or_create_folder(name, parent_folder_id=None):
+        nonlocal folders_created, folders_matched
+        existing = Folder.query.filter(
+            Folder.user_id == current_user.id,
+            db.func.lower(Folder.name) == name.strip().lower()
+        ).first()
+        if existing:
+            folders_matched += 1
+            return existing.id
+        color = _random.choice(_COLORS)
+        new_folder = Folder(
+            user_id=current_user.id,
+            name=name.strip(),
+            color=color,
+            is_public=True,
+            parent_id=parent_folder_id
+        )
+        db.session.add(new_folder)
+        db.session.flush()
+        folders_created += 1
+        return new_folder.id
+
+    # Traiter d'abord les racines
+    for zkey, coll in roots.items():
+        name = (coll.get('name') or '').strip()
+        if not name:
             continue
-        parts = author.rsplit(' ', 1)
-        if len(parts) == 2:
-            creators.append({
-                "creatorType": "author",
-                "firstName": parts[0].strip(),
-                "lastName": parts[1].strip(),
-            })
-        else:
-            creators.append({
-                "creatorType": "author",
-                "firstName": "",
-                "lastName": author,
-            })
-    return creators
+        coll_key_to_folder_id[zkey] = get_or_create_folder(name)
 
+    # Puis les enfants (un seul niveau de récursion suffit pour la majorité des cas,
+    # mais on itère jusqu'à ce que tous les parents soient résolus)
+    remaining = dict(children)
+    max_passes = 10
+    for _ in range(max_passes):
+        if not remaining:
+            break
+        resolved_this_pass = []
+        for zkey, coll in remaining.items():
+            parent_zkey = coll.get('parentCollection')
+            if parent_zkey in coll_key_to_folder_id or not parent_zkey:
+                name = (coll.get('name') or '').strip()
+                if not name:
+                    resolved_this_pass.append(zkey)
+                    continue
+                parent_folder_id = coll_key_to_folder_id.get(parent_zkey)
+                coll_key_to_folder_id[zkey] = get_or_create_folder(name, parent_folder_id)
+                resolved_this_pass.append(zkey)
+        for zkey in resolved_this_pass:
+            remaining.pop(zkey, None)
 
-def _build_zotero_tags(a) -> list:
-    tags = []
-    if a.domain:
-        tags.append({"tag": a.domain})
-    if a.study_type:
-        tags.append({"tag": a.study_type})
-    if a.pathology:
-        tags.append({"tag": a.pathology})
-    tags.append({"tag": "Physara"})
-    return tags
+    db.session.flush()
+
+    # — B. Traitement des items —
+    # Construire un index des favoris de l'utilisateur (article_id → Favorite)
+    user_favs = Favorite.query.filter_by(user_id=current_user.id).all()
+    fav_by_article_id = {f.article_id: f for f in user_favs}
+
+    articles_matched = 0
+    articles_ignored = 0
+
+    for item in zotero_items:
+        if item.get('itemType') != 'journalArticle':
+            continue
+
+        doi_raw = (item.get('DOI') or '').strip()
+        title_raw = (item.get('title') or '').strip().lower()
+
+        # Chercher l'article dans Physara par DOI, sinon par titre
+        article = None
+        if doi_raw:
+            article = Article.query.filter_by(doi=normalize_doi(doi_raw)).first()
+        if not article and title_raw:
+            article = Article.query.filter(
+                db.func.lower(Article.title) == title_raw
+            ).first()
+
+        if not article or article.id not in fav_by_article_id:
+            articles_ignored += 1
+            continue
+
+        articles_matched += 1
+
+        # Ranger dans les dossiers correspondants
+        item_colls = item.get('collections') or []
+        for zkey in item_colls:
+            folder_id = coll_key_to_folder_id.get(zkey)
+            if not folder_id:
+                continue
+            existing_fa = FolderArticle.query.filter_by(
+                folder_id=folder_id, article_id=article.id).first()
+            if not existing_fa:
+                db.session.add(FolderArticle(folder_id=folder_id, article_id=article.id))
+
+    db.session.commit()
+
+    return jsonify({
+        "success": True,
+        "folders_created": folders_created,
+        "folders_matched": folders_matched,
+        "articles_matched": articles_matched,
+        "articles_ignored": articles_ignored,
+        "message": "Import terminé"
+    })
+
 
 @app.route('/folder/<int:folder_id>/visibility', methods=['POST'])
 @login_required
@@ -4043,24 +3894,6 @@ def admin_backfill_domains():
     )
     return redirect(url_for("admin_dashboard"))
 
-
-@app.route('/admin/migrate_zotero_keys', methods=['POST'])
-@login_required
-@admin_required
-def admin_migrate_zotero_keys():
-    users = User.query.filter(User.zotero_api_key.isnot(None)).all()
-    migrated = 0
-    for u in users:
-        raw = u.zotero_api_key
-        if not raw:
-            continue
-        if raw.startswith("gAAAAA"):
-            continue  # déjà chiffré
-        u.zotero_api_key = encrypt_api_key(raw)
-        migrated += 1
-    db.session.commit()
-    flash(f"Migration Zotero : {migrated} clé(s) chiffrée(s).", "success")
-    return redirect(url_for('admin_dashboard'))
 
 
 from sqlalchemy.orm import joinedload
