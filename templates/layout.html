@@ -259,8 +259,8 @@
 
             <ul class="dropdown-menu dropdown-menu-end user-dropdown-menu">
               <!-- Mon profil -->
-              <li><a class="udd-row{% if request.endpoint == 'me' %} fw-semibold{% endif %}"
-                     href="{{ url_for('me') }}">{{ t('nav.profile') }}</a></li>
+              <li><a class="udd-row{% if request.endpoint == 'user_profile' and request.view_args.get('user_id') == current_user.id %} fw-semibold{% endif %}"
+                     href="{{ url_for('user_profile', user_id=current_user.id) }}">{{ t('nav.profile') }}</a></li>
 
               {% if current_user.role == 'admin' %}
               <hr class="udd-sep">
