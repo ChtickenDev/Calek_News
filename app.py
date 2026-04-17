@@ -336,8 +336,12 @@ class Folder(db.Model):
     is_public = db.Column(db.Boolean, default=True, nullable=False)
     color = db.Column(db.String(20), default="#6366f1", nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    parent_id = db.Column(db.Integer, db.ForeignKey('folder.id'), nullable=True)
 
     user = db.relationship("User", backref=db.backref("folders", lazy="dynamic"))
+    children = db.relationship('Folder',
+                               backref=db.backref('parent', remote_side=[id]),
+                               lazy='dynamic')
 
     __table_args__ = (
         db.UniqueConstraint("user_id", "name", name="_user_folder_uc"),
@@ -793,6 +797,8 @@ def ensure_folder_schema():
         db.session.execute(text("ALTER TABLE folder ADD COLUMN is_public BOOLEAN NOT NULL DEFAULT 1"))
     if "color" not in cols:
         db.session.execute(text("ALTER TABLE folder ADD COLUMN color VARCHAR(20) NOT NULL DEFAULT '#6366f1'"))
+    if "parent_id" not in cols:
+        db.session.execute(text("ALTER TABLE folder ADD COLUMN IF NOT EXISTS parent_id INTEGER REFERENCES folder(id) ON DELETE SET NULL"))
 
     # Migration table user
     user_cols = {r["column_name"] for r in db.session.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='user' AND table_schema='public'")).mappings().all()}
@@ -2483,11 +2489,15 @@ def favorites_view():
     for folder in folders:
         folder_article_counts[folder.id] = FolderArticle.query.filter_by(folder_id=folder.id).count()
 
+    root_folders = [fd for fd in folders if fd.parent_id is None]
+    total_count = len(favs)
     return render_template(
         'favorites.html',
         favorites=favs,
         notes_by_article=notes_by_article,
         folders=folders,
+        root_folders=root_folders,
+        total_count=total_count,
         active_folder=None,
         folder_articles=None,
         folders_by_article=folders_by_article,
@@ -2594,24 +2604,63 @@ def folders_list():
 def folders_create():
     data = request.json or {}
     name = (data.get('name') or '').strip()
-    color = (data.get('color') or '#6366f1').strip()
+    color = (data.get('color') or '').strip()
+    parent_id = data.get('parent_id') or None
+    if parent_id:
+        try:
+            parent_id = int(parent_id)
+        except (ValueError, TypeError):
+            parent_id = None
+    if parent_id:
+        parent = Folder.query.filter_by(id=parent_id, user_id=current_user.id).first()
+        if not parent:
+            return jsonify({"ok": False, "error": "Dossier parent invalide"})
+    if not color:
+        if parent_id:
+            _COLORS = ['#6366f1','#3b82f6','#22c55e','#f59e0b','#ef4444','#ec4899','#8b5cf6','#64748b','#14b8a6']
+            color = random.choice(_COLORS)
+        else:
+            color = '#6366f1'
     if not name:
         return jsonify({"ok": False, "error": "Nom requis"})
     existing = Folder.query.filter_by(user_id=current_user.id, name=name).first()
     if existing:
         return jsonify({"ok": False, "error": "Ce dossier existe déjà"})
-    f = Folder(user_id=current_user.id, name=name, color=color)
+    f = Folder(user_id=current_user.id, name=name, color=color, parent_id=parent_id)
     db.session.add(f)
     db.session.commit()
     return jsonify({"ok": True, "folder_id": f.id})
+
+
+def _delete_folder_recursive(folder_id):
+    children = Folder.query.filter_by(parent_id=folder_id).all()
+    for child in children:
+        _delete_folder_recursive(child.id)
+    FolderArticle.query.filter_by(folder_id=folder_id).delete(synchronize_session=False)
+    Folder.query.filter_by(id=folder_id).delete(synchronize_session=False)
 
 
 @app.route('/folders/delete/<int:folder_id>', methods=['POST'])
 @login_required
 def folder_delete(folder_id):
     f = Folder.query.filter_by(id=folder_id, user_id=current_user.id).first_or_404()
-    FolderArticle.query.filter_by(folder_id=f.id).delete(synchronize_session=False)
-    db.session.delete(f)
+    _delete_folder_recursive(f.id)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route('/folders/<int:folder_id>/rename', methods=['POST'])
+@login_required
+def folder_rename(folder_id):
+    f = Folder.query.filter_by(id=folder_id, user_id=current_user.id).first_or_404()
+    data = request.json or {}
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({"ok": False, "error": "Nom requis"})
+    existing = Folder.query.filter_by(user_id=current_user.id, name=name).filter(Folder.id != folder_id).first()
+    if existing:
+        return jsonify({"ok": False, "error": "Ce nom existe déjà"})
+    f.name = name
     db.session.commit()
     return jsonify({"ok": True})
 
@@ -2665,10 +2714,14 @@ def folder_view(folder_id):
     # Nombre d'articles par dossier
     folder_article_counts = {folder.id: FolderArticle.query.filter_by(folder_id=folder.id).count() for folder in folders}
 
+    root_folders = [fd for fd in folders if fd.parent_id is None]
+    total_count = Favorite.query.filter_by(user_id=current_user.id).count()
     return render_template('favorites.html',
                            favorites=[],
                            notes_by_article={},
                            folders=folders,
+                           root_folders=root_folders,
+                           total_count=total_count,
                            active_folder=f,
                            folder_articles=articles,
                            folders_by_article={},

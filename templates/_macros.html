@@ -26,3 +26,33 @@
 <span class="badge" style="background:{{ ns.bg }};color:{{ ns.fg }};border:none;">IFS: {{ sc }}</span>
 {%- endif -%}
 {%- endmacro %}
+
+{#
+  render_folder_tree(folder, active_folder, depth) — arborescence dossier récursive.
+  Nécessite import with context pour accéder à folder_article_counts.
+#}
+{% macro render_folder_tree(folder, active_folder, depth=0) %}
+<div class="physara-folder-tree-item">
+  <div class="physara-folder-item {% if active_folder and active_folder.id == folder.id %}active{% endif %}"
+       onclick="navigateFolder({{ folder.id }})">
+    <span class="physara-folder-color-dot" style="background:{{ folder.color or '#6366f1' }};"></span>
+    <span class="physara-folder-name">{{ folder.name }}</span>
+    <span class="physara-folder-count">{{ folder_article_counts.get(folder.id, 0) if folder_article_counts is defined else '' }}</span>
+    {% if folder.children.count() > 0 %}
+    <span class="physara-folder-chevron">›</span>
+    {% endif %}
+    <div class="physara-folder-actions" onclick="event.stopPropagation()">
+      <span onclick="openNewFolderModal({{ folder.id }}, '{{ folder.name|e }}')" title="Sous-dossier">+</span>
+      <span onclick="openRenameFolderModal({{ folder.id }}, '{{ folder.name|e }}')" title="Renommer">✎</span>
+      <span onclick="openDeleteFolderModal('{{ folder.id }}', '{{ folder.name|e }}')" title="Supprimer">✕</span>
+    </div>
+  </div>
+  {% if folder.children.count() > 0 %}
+  <div class="physara-folder-children">
+    {% for child in folder.children %}
+      {{ render_folder_tree(child, active_folder, depth + 1) }}
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endmacro %}

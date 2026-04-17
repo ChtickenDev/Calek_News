@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% from '_macros.html' import ifs_badge %}
+{% from '_macros.html' import ifs_badge, render_folder_tree with context %}
 {% block content %}
 {% macro share_dropdown(article_id) %}
 <div class="dropdown" onclick="event.stopPropagation()">
@@ -55,24 +55,6 @@
   </ul>
 </div>
 {% endmacro %}
-<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-  <h3 class="mb-0">{{ t('favorites.title') }}</h3>
-  <div class="d-flex gap-2">
-    {% if current_user.zotero_api_key and current_user.zotero_user_id %}
-    <form method="post" action="{{ url_for('zotero_export_all') }}" onclick="event.stopPropagation()">
-      <button class="btn btn-sm btn-outline-success" type="submit"
-              title="{{ t('favorites.export_zotero') }}">
-        {{ t('favorites.export_zotero') }}
-      </button>
-    </form>
-    <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#zoteroImportModal">
-      {{ t('favorites.import_zotero') }}
-    </button>
-    {% endif %}
-    <a href="{{ url_for('favorites') }}" class="btn btn-sm btn-outline-secondary">{{ t('favorites.all') }}</a>
-  </div>
-</div>
-
 <!-- Modal confirmation import Zotero -->
 {% if current_user.zotero_api_key and current_user.zotero_user_id %}
 <div class="modal fade" id="zoteroImportModal" tabindex="-1" aria-hidden="true">
@@ -119,72 +101,17 @@
   </div>
 </div>
 
-<!-- Grille dossiers -->
-<div class="folders-grid mb-4" id="folders-grid">
-  {% for f in folders %}
-  <div class="folder-tile {% if active_folder and active_folder.id == f.id %}folder-tile-active{% endif %}"
-       data-folder-id="{{ f.id }}"
-       data-color="{{ f.color or '#6366f1' }}"
-       onclick="window.location='{{ url_for('folder_view', folder_id=f.id) }}'">
-
-    <!-- Icône dossier CSS -->
-    <div class="folder-icon-wrap">
-      <div class="folder-icon" style="--folder-color: {{ f.color or '#6366f1' }};">
-        <div class="folder-tab"></div>
-        <div class="folder-body"></div>
-      </div>
-      <!-- Bouton palette -->
-      <button class="btn-palette" title="Changer la couleur"
-              onclick="event.stopPropagation(); openPalette({{ f.id }}, this)">
-        ✎
-      </button>
-    </div>
-
-    <div class="folder-name text-truncate">{{ f.name }}</div>
-    <div class="folder-count text-muted">
-      {% set count = folder_article_counts.get(f.id, 0) %}
-      {{ count }} article{{ 's' if count > 1 else '' }}
-    </div>
-    {% if current_user.zotero_api_key and current_user.zotero_user_id %}
-    <form method="post" action="{{ url_for('zotero_export_folder', folder_id=f.id) }}"
-          onclick="event.stopPropagation()" class="mt-1">
-      <button type="submit" class="btn btn-xs btn-outline-success folder-export-btn"
-              title="Exporter ce dossier vers Zotero" onclick="event.stopPropagation()">
-        ↑ Zotero
-      </button>
-    </form>
-    {% endif %}
-
-    <!-- Palette couleurs (cachée) -->
-    <div class="color-palette" id="palette-{{ f.id }}" style="display:none;" onclick="event.stopPropagation()">
-      {% for color in ['#6366f1','#3b82f6','#22c55e','#f59e0b','#ef4444','#ec4899','#8b5cf6','#64748b'] %}
-      <button class="color-swatch" style="background:{{ color }};"
-              onclick="setFolderColor({{ f.id }}, '{{ color }}', this.closest('.folder-tile'))">
-      </button>
-      {% endfor %}
-    </div>
-
-  </div>
-  {% endfor %}
-
-  <!-- Tuile nouveau dossier -->
-  <div class="folder-tile folder-tile-new" onclick="openCreateFolder()">
-    <div class="folder-icon-wrap">
-      <div class="folder-new-icon">+</div>
-    </div>
-    <div class="folder-name text-muted">{{ t('folder.new') }}</div>
-  </div>
-</div>
-
 <!-- Modal création dossier -->
 <div class="modal fade" id="createFolderModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-sm modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
-        <h6 class="modal-title mb-0">Nouveau dossier</h6>
+        <h6 class="modal-title mb-0" id="createFolderModalTitle">Nouveau dossier</h6>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
+        <div id="createFolderParentInfo" class="text-muted small mb-2" style="display:none;"></div>
+        <input type="hidden" id="newFolderParentId" value="">
         <input type="text" id="new-folder-name" class="form-control mb-3" placeholder="Nom du dossier">
         <div class="d-flex flex-wrap gap-2 justify-content-center">
           {% for color in ['#6366f1','#3b82f6','#22c55e','#f59e0b','#ef4444','#ec4899','#8b5cf6','#64748b'] %}
@@ -203,6 +130,71 @@
     </div>
   </div>
 </div>
+
+<!-- Modal renommage dossier -->
+<div class="modal fade" id="renameFolderModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title mb-0">Renommer le dossier</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="renameFolderId" value="">
+        <input type="text" id="rename-folder-name" class="form-control" placeholder="Nouveau nom">
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
+        <button class="btn btn-primary btn-sm" onclick="renameFolder()">Renommer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Layout sidebar + contenu -->
+<div class="physara-favorites-layout">
+
+  <!-- Sidebar dossiers -->
+  <aside class="physara-sidebar" id="favSidebar">
+    <div class="physara-sidebar-header">
+      <span class="physara-sidebar-title">Dossiers</span>
+      <button class="physara-sidebar-toggle" onclick="toggleFavSidebar()">&#8249;</button>
+    </div>
+
+    <a href="{{ url_for('favorites') }}"
+       class="physara-folder-item {% if not active_folder %}active{% endif %}">
+      <span style="font-size:14px; flex-shrink:0;">&#128218;</span>
+      <span class="physara-folder-name">Tous</span>
+      <span class="physara-folder-count">{{ total_count }}</span>
+    </a>
+
+    {% for folder in root_folders %}
+      {{ render_folder_tree(folder, active_folder) }}
+    {% endfor %}
+
+    <div class="physara-folder-add" onclick="openNewFolderModal(null)">
+      <span>+</span><span class="physara-folder-add-label">Nouveau dossier</span>
+    </div>
+
+    {% if current_user.zotero_api_key and current_user.zotero_user_id %}
+    <div class="physara-sidebar-footer">
+      <form method="post" action="{{ url_for('zotero_export_all') }}" onclick="event.stopPropagation()">
+        <button type="submit" class="physara-sidebar-btn">Exporter Zotero</button>
+      </form>
+      <button class="physara-sidebar-btn" data-bs-toggle="modal" data-bs-target="#zoteroImportModal">Importer Zotero</button>
+    </div>
+    {% endif %}
+  </aside>
+
+  <!-- Contenu principal -->
+  <div class="physara-favorites-main">
+
+    <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+      <h3 class="mb-0">{{ t('favorites.title') }}</h3>
+      <div class="d-flex gap-2">
+        <a href="{{ url_for('favorites') }}" class="btn btn-sm btn-outline-secondary">{{ t('favorites.all') }}</a>
+      </div>
+    </div>
 
 {% if active_folder %}
 <!-- Vue dossier -->
@@ -289,7 +281,7 @@
                   <li><span class="dropdown-item text-muted">{{ t('folder.empty') }}</span></li>
                 {% endif %}
                 <li><hr class="dropdown-divider"></li>
-                <li><button class="dropdown-item text-success" onclick="openCreateFolder()">+ {{ t('folder.new') }}</button></li>
+                <li><button class="dropdown-item text-success" onclick="openNewFolderModal(null)">+ {{ t('folder.new') }}</button></li>
               </ul>
             </div>
             <form method="post" action="{{ url_for('unfavorite', article_id=a.id) }}" onclick="event.stopPropagation()">
@@ -383,7 +375,7 @@
                 <li><span class="dropdown-item text-muted">{{ t('folder.empty') }}</span></li>
               {% endif %}
               <li><hr class="dropdown-divider"></li>
-              <li><button class="dropdown-item text-success" onclick="openCreateFolder()">+ {{ t('folder.new') }}</button></li>
+              <li><button class="dropdown-item text-success" onclick="openNewFolderModal(null)">+ {{ t('folder.new') }}</button></li>
             </ul>
           </div>
           <form method="post" action="{{ url_for('unfavorite', article_id=a.id) }}" onclick="event.stopPropagation()">
@@ -407,6 +399,9 @@
   {% endfor %}
 </div>
 {% endif %}
+
+  </div><!-- /.physara-favorites-main -->
+</div><!-- /.physara-favorites-layout -->
 
 <!-- Modal article -->
 <div class="modal fade" id="articleModal" tabindex="-1" aria-hidden="true">
@@ -480,6 +475,121 @@
 
 {% block scripts %}
 <style>
+/* ===================== SIDEBAR LAYOUT ===================== */
+.physara-favorites-layout {
+  display: flex;
+  gap: 0;
+  min-height: calc(100vh - 60px);
+  margin: -16px -12px 0;
+}
+.physara-sidebar {
+  width: 220px;
+  background: var(--bs-body-bg);
+  border-right: 1px solid var(--bs-border-color);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  transition: width 0.2s ease;
+  overflow: hidden;
+}
+.physara-sidebar.collapsed { width: 48px; }
+.physara-sidebar-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid var(--bs-border-color);
+  flex-shrink: 0;
+}
+.physara-sidebar-title {
+  font-size: 11px; font-weight: 600; color: var(--bs-secondary-color);
+  text-transform: uppercase; letter-spacing: 0.07em; white-space: nowrap;
+}
+.physara-sidebar-toggle {
+  width: 22px; height: 22px; border-radius: 6px;
+  background: var(--bs-secondary-bg); border: none; cursor: pointer;
+  font-size: 13px; color: var(--bs-secondary-color); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.physara-sidebar.collapsed .physara-sidebar-title,
+.physara-sidebar.collapsed .physara-folder-name,
+.physara-sidebar.collapsed .physara-folder-count,
+.physara-sidebar.collapsed .physara-folder-add-label,
+.physara-sidebar.collapsed .physara-folder-actions,
+.physara-sidebar.collapsed .physara-folder-children,
+.physara-sidebar.collapsed .physara-sidebar-footer { display: none !important; }
+
+/* Folder items */
+.physara-folder-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 14px; cursor: pointer; white-space: nowrap;
+  text-decoration: none; color: var(--bs-body-color);
+  position: relative; font-size: 0.87rem;
+}
+.physara-folder-item:hover { background: var(--bs-secondary-bg); }
+.physara-folder-item.active { background: var(--bs-secondary-bg); font-weight: 600; }
+.physara-folder-color-dot {
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+}
+.physara-folder-count {
+  font-size: 10px; color: var(--bs-secondary-color);
+  background: var(--bs-secondary-bg); padding: 1px 6px; border-radius: 8px;
+  margin-left: auto; flex-shrink: 0;
+}
+.physara-folder-chevron { font-size: 11px; color: var(--bs-secondary-color); flex-shrink: 0; }
+.physara-folder-actions {
+  display: none; gap: 4px; margin-left: 4px; flex-shrink: 0;
+}
+.physara-folder-item:hover .physara-folder-actions { display: flex; }
+.physara-folder-actions span {
+  font-size: 11px; color: var(--bs-secondary-color);
+  padding: 1px 4px; border-radius: 3px; cursor: pointer;
+}
+.physara-folder-actions span:hover { background: var(--bs-border-color); color: var(--bs-body-color); }
+
+/* Arborescence */
+.physara-folder-children {
+  padding-left: 12px;
+  border-left: 1px solid var(--bs-border-color);
+  margin-left: 20px;
+}
+
+/* Add folder */
+.physara-folder-add {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 14px; font-size: 12px; color: var(--bs-secondary-color);
+  border-top: 1px solid var(--bs-border-color); cursor: pointer;
+  margin-top: auto; white-space: nowrap; flex-shrink: 0;
+}
+.physara-folder-add:hover { background: var(--bs-secondary-bg); }
+
+/* Footer Zotero */
+.physara-sidebar-footer {
+  padding: 10px 14px; border-top: 1px solid var(--bs-border-color);
+  display: flex; flex-direction: column; gap: 6px; flex-shrink: 0;
+}
+.physara-sidebar-btn {
+  padding: 6px 10px; font-size: 11px; border-radius: 7px;
+  border: 1px solid var(--bs-border-color); background: var(--bs-body-bg);
+  color: var(--bs-body-color); cursor: pointer; text-align: left;
+  white-space: nowrap; width: 100%;
+}
+.physara-sidebar-btn:hover { background: var(--bs-secondary-bg); }
+
+/* Main content */
+.physara-favorites-main {
+  flex: 1;
+  padding: 24px 28px;
+  overflow-y: auto;
+  min-width: 0;
+}
+
+/* Mobile : sidebar masquée */
+@media (max-width: 991px) {
+  .physara-favorites-layout { margin: -8px -8px 0; }
+  .physara-sidebar { display: none; }
+  .physara-favorites-main { padding: 16px; }
+}
+
+/* ===================== ANCIEN CSS DOSSIERS (dropdown) ===================== */
 /* Grille dossiers */
 .folders-grid {
   display: flex;
@@ -630,25 +740,89 @@ function selectNewColor(btn) {
   selectedNewColor = btn.dataset.color;
 }
 
-function openCreateFolder() {
+function openNewFolderModal(parentId, parentName) {
   if (!createFolderModal) {
     createFolderModal = new bootstrap.Modal(document.getElementById('createFolderModal'));
   }
   document.getElementById('new-folder-name').value = '';
+  document.getElementById('newFolderParentId').value = parentId || '';
+  const titleEl = document.getElementById('createFolderModalTitle');
+  const infoEl = document.getElementById('createFolderParentInfo');
+  if (parentId) {
+    titleEl.textContent = 'Nouveau sous-dossier';
+    infoEl.textContent = 'Sous-dossier de : ' + (parentName || '');
+    infoEl.style.display = 'block';
+  } else {
+    titleEl.textContent = 'Nouveau dossier';
+    infoEl.style.display = 'none';
+  }
+  document.querySelectorAll('.color-swatch-lg').forEach((s, i) => {
+    s.classList.toggle('swatch-selected', i === 0);
+  });
+  selectedNewColor = '#6366f1';
   createFolderModal.show();
 }
 
 async function createFolder() {
   const name = document.getElementById('new-folder-name').value.trim();
   if (!name) return;
+  const rawParentId = document.getElementById('newFolderParentId').value;
+  const parentId = rawParentId ? parseInt(rawParentId) : null;
   const res = await fetch('/folders/create', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({name, color: selectedNewColor})
+    body: JSON.stringify({name, color: selectedNewColor, parent_id: parentId})
   });
   const data = await res.json();
   if (data.ok) { location.reload(); } else { alert(data.error || 'Erreur'); }
 }
+
+// --- Sidebar ---
+function toggleFavSidebar() {
+  const s = document.getElementById('favSidebar');
+  if (!s) return;
+  const btn = s.querySelector('.physara-sidebar-toggle');
+  s.classList.toggle('collapsed');
+  btn.textContent = s.classList.contains('collapsed') ? '\u203a' : '\u2039';
+  localStorage.setItem('favSidebarCollapsed', s.classList.contains('collapsed'));
+}
+
+function navigateFolder(folderId) {
+  window.location.href = '/folders/' + folderId;
+}
+
+function openRenameFolderModal(folderId, folderName) {
+  document.getElementById('renameFolderId').value = folderId;
+  document.getElementById('rename-folder-name').value = folderName;
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('renameFolderModal')).show();
+}
+
+async function renameFolder() {
+  const folderId = document.getElementById('renameFolderId').value;
+  const name = document.getElementById('rename-folder-name').value.trim();
+  if (!name || !folderId) return;
+  const res = await fetch(`/folders/${folderId}/rename`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({name})
+  });
+  const data = await res.json();
+  if (data.ok) {
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('renameFolderModal')).hide();
+    location.reload();
+  } else {
+    alert(data.error || 'Erreur');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const s = document.getElementById('favSidebar');
+  if (s && localStorage.getItem('favSidebarCollapsed') === 'true') {
+    s.classList.add('collapsed');
+    const btn = s.querySelector('.physara-sidebar-toggle');
+    if (btn) btn.textContent = '\u203a';
+  }
+});
 
 // --- Dossiers ---
 async function toggleFolder(folderId, articleId, btn) {
