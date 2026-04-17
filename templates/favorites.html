@@ -485,6 +485,8 @@
 {% block scripts %}
 <style>
 /* ===================== SIDEBAR LAYOUT ===================== */
+:root { --navbar-h: 53px; } /* navbar min-height:52px + border-bottom:1px */
+
 /* Annuler le padding du container Bootstrap pour cette page */
 main.physara-no-pad {
   padding-left: 0 !important;
@@ -493,17 +495,17 @@ main.physara-no-pad {
 }
 .physara-favorites-layout {
   display: flex;
-  gap: 0;
-  min-height: 100vh;
+  align-items: stretch;
+  min-height: calc(100vh - var(--navbar-h));
   width: 100%;
   margin: 0;
 }
 .physara-sidebar {
   position: sticky;
-  top: 0;
-  align-self: flex-start;
-  height: 100vh;
+  top: var(--navbar-h);
+  height: calc(100vh - var(--navbar-h));
   overflow-y: auto;
+  align-self: flex-start;
   width: 220px;
   background: var(--bs-body-bg);
   border-right: 1px solid var(--bs-border-color);
