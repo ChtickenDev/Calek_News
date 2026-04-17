@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% from '_macros.html' import ifs_badge %}
+{% from '_macros.html' import ifs_badge, ifs_header_class %}
 
 {% block mobile_page_title %}Rechercher{% endblock %}
 
@@ -19,7 +19,7 @@
              placeholder="Rechercher sur PubMed…"
              value="{{ q_pubmed or '' }}"
              style="font-size:1rem;">
-      <button class="btn btn-primary px-4" type="submit" style="white-space:nowrap; font-size:1rem;">
+      <button class="btn px-4" type="submit" style="white-space:nowrap; font-size:1rem; background-color:#4a90d9; border-color:#4a90d9; color:#fff; border-radius:8px;">
         {{ t('nav.search') }}
       </button>
     </div>
@@ -129,7 +129,7 @@
               onclick="event.stopPropagation(); openCiteModal(this.dataset.title, this.dataset.authors, this.dataset.journal, this.dataset.date, this.dataset.doi, '', +this.dataset.sc, this.dataset.domain)">{{ t('btn.cite') }}</button>
 
       <!-- IFS + domaine -->
-      <div class="card-top">
+      <div class="card-ifs-header {{ ifs_header_class(sc) }}">
         {{ ifs_badge(sc) }}
         {% if a.domain %}<span class="card-domain">{{ a.domain }}</span>{% endif %}
       </div>
@@ -173,7 +173,6 @@
 
       <!-- Actions -->
       <div class="card-actions" onclick="event.stopPropagation()">
-        {% if a.url %}<a class="card-btn card-btn-primary" href="{{ a.url }}" target="_blank" rel="noopener" onclick="event.stopPropagation()">{{ t('btn.open') }}</a>{% endif %}
         {% if a.doi %}<a class="card-btn" href="https://doi.org/{{ a.doi }}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Article</a>{% endif %}
         {% if current_user.is_authenticated %}
           {% set is_proposed = a.id in proposed_set %}
