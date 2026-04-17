@@ -3325,6 +3325,69 @@ def feed():
     followed_ids = {f.followed_id for f in followed}
     discovery = len(followed_ids) == 0
 
+    # ── Mode découverte : aucun abonnement → articles les plus partagés en dossiers publics ──
+    if discovery:
+        from sqlalchemy import func as sqlfunc
+        articles_decouverte = (
+            db.session.query(Article)
+            .join(FolderArticle, FolderArticle.article_id == Article.id)
+            .join(Folder, Folder.id == FolderArticle.folder_id)
+            .filter(Folder.is_public == True)
+            .group_by(Article.id)
+            .order_by(sqlfunc.count(FolderArticle.id).desc(), Article.published_date.desc())
+            .limit(30)
+            .all()
+        )
+
+        art_ids = [a.id for a in articles_decouverte]
+
+        # Nombre de dossiers publics contenant chaque article
+        fav_count_rows = (
+            db.session.query(FolderArticle.article_id, sqlfunc.count(FolderArticle.id))
+            .join(Folder, Folder.id == FolderArticle.folder_id)
+            .filter(Folder.is_public == True,
+                    FolderArticle.article_id.in_(art_ids or [-1]))
+            .group_by(FolderArticle.article_id)
+            .all()
+        )
+        fav_counts_map = {r[0]: r[1] for r in fav_count_rows}
+
+        items = [{
+            "article":      a,
+            "sharers":      [],
+            "total_sharers": fav_counts_map.get(a.id, 0),
+            "latest_at":    a.published_date or datetime.utcnow(),
+            "score":        0,
+            "score_detail": {},
+            "suggested":    False,
+            "fav_count":    fav_counts_map.get(a.id, 0),
+        } for a in articles_decouverte]
+
+        like_counts = {}
+        liked_ids   = set()
+        if art_ids:
+            rows = (db.session.query(Like.article_id, db.func.count(Like.id))
+                    .filter(Like.article_id.in_(art_ids))
+                    .group_by(Like.article_id).all())
+            like_counts = {r[0]: r[1] for r in rows}
+            liked_ids = {lk.article_id for lk in Like.query.filter(
+                Like.user_id == current_user.id,
+                Like.article_id.in_(art_ids)
+            ).all()}
+
+        user_fav_article_ids = {f.article_id for f in Favorite.query.filter_by(user_id=current_user.id).all()}
+
+        return render_template('feed.html',
+            items=items,
+            followed_ids=followed_ids,
+            discovery=discovery,
+            is_decouverte=True,
+            like_counts=like_counts,
+            liked_ids=liked_ids,
+            fav_ids=user_fav_article_ids,
+        )
+    # ── /Mode découverte ──
+
     # --- Profil utilisateur : pondération domaines / study_types / keywords ---
     domain_weight: Counter = Counter()
     study_type_weight: Counter = Counter()
@@ -3612,9 +3675,10 @@ def feed():
         items=items,
         followed_ids=followed_ids,
         discovery=discovery,
+        is_decouverte=False,
         like_counts=like_counts,
         liked_ids=liked_ids,
-        fav_ids=user_fav_article_ids
+        fav_ids=user_fav_article_ids,
     )
 
 @app.route('/api/article/<int:article_id>/sharers')

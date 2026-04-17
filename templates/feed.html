@@ -23,6 +23,13 @@
 
 <hr class="d-none d-md-block mb-4">
 
+{% if is_decouverte %}
+<div style="background:#f0f7ff; border:0.5px solid #c8dff5; border-radius:10px; padding:10px 16px; margin-bottom:16px; font-size:13px; color:#4a90d9;">
+  Tu ne suis personne encore — voici les articles les plus partagés par la communauté.
+  <a href="{{ url_for('users_list') }}" style="color:#4a90d9; font-weight:500; margin-left:8px;">Trouver des profils →</a>
+</div>
+{% endif %}
+
 {% if not items %}
   <div class="text-center py-5 text-muted">
     <p class="fs-5">{{ t('feed.empty') }}</p>
@@ -49,6 +56,19 @@
           <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle suggested-badge">
             ✦ {{ t('feed.suggested') }}
           </span>
+        </div>
+        {% elif is_decouverte %}
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <div class="avatar-circle" style="background:#e8f0fb; color:#4a90d9; font-size:0.7rem; font-weight:700; flex-shrink:0;">
+            &#9679;
+          </div>
+          <div class="flex-grow-1 min-w-0">
+            <span class="fw-semibold text-body d-block text-truncate" style="font-size:13px;">Communauté Physara</span>
+          </div>
+          {% set fc = item.fav_count %}
+          {% if fc %}
+          <span class="text-muted flex-shrink-0" style="font-size:11px;">{{ fc }} favori{{ 's' if fc > 1 else '' }}</span>
+          {% endif %}
         </div>
         {% else %}
         <div class="d-flex align-items-center gap-2 mb-2" onclick="event.stopPropagation()">
