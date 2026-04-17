@@ -136,22 +136,57 @@
     </div>
     {% endif %}
 
-    {% set socials = [
-      ('LinkedIn',  'in',  'https://linkedin.com/in/', profile_user.linkedin),
-      ('Instagram', 'ig',  'https://instagram.com/',   profile_user.instagram),
-      ('Facebook',  'fb',  'https://facebook.com/',    profile_user.facebook),
-      ('TikTok',    'tt',  'https://tiktok.com/@',     profile_user.tiktok),
-      ('YouTube',   'yt',  'https://youtube.com/@',    profile_user.youtube)
-    ] %}
-    {% if socials | selectattr(3) | list %}
+    {% set has_socials = profile_user.linkedin or profile_user.instagram or profile_user.facebook or profile_user.tiktok or profile_user.youtube %}
+    {% if has_socials %}
     <div class="profile-extra-block">
-      <div class="profile-extra-label">Réseaux</div>
+      <div class="profile-extra-label">R&#233;seaux</div>
       <div class="d-flex gap-2 flex-wrap mt-1">
-        {% for name, abbr, base, handle in socials %}
-          {% if handle %}
-            <a href="{{ base }}{{ handle }}" target="_blank" class="social-link" title="{{ name }}">{{ abbr }}</a>
-          {% endif %}
-        {% endfor %}
+
+        {% if profile_user.instagram %}
+        <a href="https://instagram.com/{{ profile_user.instagram }}" target="_blank" class="social-pill" style="background:#fce8f3; color:#bc1888;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#bc1888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
+          </svg>
+          Instagram
+        </a>
+        {% endif %}
+
+        {% if profile_user.linkedin %}
+        <a href="https://linkedin.com/in/{{ profile_user.linkedin }}" target="_blank" class="social-pill" style="background:#e8f0fb; color:#0a66c2;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0a66c2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/>
+          </svg>
+          LinkedIn
+        </a>
+        {% endif %}
+
+        {% if profile_user.facebook %}
+        <a href="https://facebook.com/{{ profile_user.facebook }}" target="_blank" class="social-pill" style="background:#e7f0fd; color:#1877f2;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1877f2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>
+          </svg>
+          Facebook
+        </a>
+        {% endif %}
+
+        {% if profile_user.tiktok %}
+        <a href="https://tiktok.com/@{{ profile_user.tiktok }}" target="_blank" class="social-pill" style="background:#f0f0f0; color:#010101;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#010101" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 12a4 4 0 1 0 4 4V4a5 5 0 0 0 5 5"/>
+          </svg>
+          TikTok
+        </a>
+        {% endif %}
+
+        {% if profile_user.youtube %}
+        <a href="https://youtube.com/@{{ profile_user.youtube }}" target="_blank" class="social-pill" style="background:#fde8e8; color:#ff0000;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#ff0000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46A2.78 2.78 0 0 0 1.46 6.42 29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58 2.78 2.78 0 0 0 1.95 1.95C5.12 20 12 20 12 20s6.88 0 8.59-.47a2.78 2.78 0 0 0 1.95-1.95A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z"/><polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02"/>
+          </svg>
+          YouTube
+        </a>
+        {% endif %}
+
       </div>
     </div>
     {% endif %}
@@ -385,14 +420,14 @@
   text-transform: uppercase; letter-spacing: .07em;
   color: #6366f1; margin-bottom: 4px;
 }
-.social-link {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 34px; height: 34px; border-radius: 8px;
-  border: 1px solid var(--bs-border-color);
-  font-size: 1rem; text-decoration: none;
-  transition: border-color .15s, transform .12s;
+.social-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  border-radius: 20px; padding: 4px 12px;
+  font-size: 12px; font-weight: 500;
+  text-decoration: none; white-space: nowrap;
+  transition: opacity .12s, transform .12s;
 }
-.social-link:hover { border-color: #6366f1; transform: translateY(-2px); }
+.social-pill:hover { opacity: .82; transform: translateY(-1px); }
 .activity-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
 .activity-recent { background: #22c55e; }
 .activity-mid    { background: #f59e0b; }
