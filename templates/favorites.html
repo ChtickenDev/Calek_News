@@ -1,5 +1,6 @@
 {% extends "layout.html" %}
 {% from '_macros.html' import ifs_badge, render_folder_tree with context %}
+{% block main_class %} physara-no-pad{% endblock %}
 {% block content %}
 {% macro share_dropdown(article_id) %}
 <div class="dropdown" onclick="event.stopPropagation()">
@@ -484,7 +485,7 @@
 <style>
 /* ===================== SIDEBAR LAYOUT ===================== */
 /* Annuler le padding du container Bootstrap pour cette page */
-main.container {
+main.physara-no-pad {
   padding-left: 0 !important;
   padding-right: 0 !important;
   padding-top: 0 !important;
