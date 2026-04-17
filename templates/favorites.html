@@ -199,11 +199,8 @@
   <!-- Contenu principal -->
   <div class="physara-favorites-main">
 
-    <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+    <div class="mb-3">
       <h3 class="mb-0">{{ t('favorites.title') }}</h3>
-      <div class="d-flex gap-2">
-        <a href="{{ url_for('favorites') }}" class="btn btn-sm btn-outline-secondary">{{ t('favorites.all') }}</a>
-      </div>
     </div>
 
 {% if active_folder %}
@@ -486,12 +483,18 @@
 {% block scripts %}
 <style>
 /* ===================== SIDEBAR LAYOUT ===================== */
+/* Annuler le padding du container Bootstrap pour cette page */
+main.container {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  padding-top: 0 !important;
+}
 .physara-favorites-layout {
   display: flex;
   gap: 0;
   min-height: calc(100vh - 60px);
-  margin: -24px -12px 0;   /* annule py-4 (1.5rem=24px) + padding container (12px) */
-  width: calc(100% + 24px);
+  width: 100%;
+  margin: 0;
 }
 .physara-sidebar {
   width: 220px;
@@ -614,7 +617,7 @@
 
 /* Mobile : sidebar masquée */
 @media (max-width: 991px) {
-  .physara-favorites-layout { margin: -16px -8px 0; width: calc(100% + 16px); }
+  .physara-favorites-layout { width: 100%; margin: 0; }
   .physara-sidebar { display: none; }
   .physara-favorites-main { padding: 16px; }
 }
