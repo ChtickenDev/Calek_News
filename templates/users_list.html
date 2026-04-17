@@ -10,34 +10,6 @@
 
 <hr class="mb-4">
 
-{% if top_contributors %}
-<div class="top-contributors mb-4">
-  <h6 class="section-label mb-3">🏆 Top contributeurs du mois</h6>
-  <div class="d-flex gap-3 flex-wrap">
-    {% for u in top_contributors %}
-    {% set rank = loop.index %}
-    {% set score = top_scores[u.id] %}
-    <div class="top-contrib-card" onclick="window.location='{{ url_for('user_profile', user_id=u.id) }}'">
-      <div class="top-contrib-rank rank-{{ rank }}">{{ ['🥇','🥈','🥉'][rank-1] }}</div>
-      {% if u.photo_filename %}
-        <img src="{{ url_for('static', filename='uploads/avatars/' + u.photo_filename) }}"
-             class="top-contrib-avatar" alt="">
-      {% else %}
-        <div class="top-contrib-avatar avatar-initials-dynamic" data-seed="{{ u.email }}">
-          {{ (u.name or u.email)[0].upper() }}
-        </div>
-      {% endif %}
-      <div class="top-contrib-name text-truncate">{{ u.name or u.email.split('@')[0] }}</div>
-      <div class="top-contrib-score">
-        <span title="Favoris partagés ce mois">{{ score.favs }} 📎</span>
-        <span title="Likes reçus ce mois">{{ score.likes }} ♥</span>
-      </div>
-    </div>
-    {% endfor %}
-  </div>
-</div>
-{% endif %}
-
 <!-- Recherche -->
 <div class="mb-4" style="max-width: 420px;">
   <div class="input-group">
@@ -146,37 +118,6 @@
 .activity-old    { background: #ef4444; }
 .activity-none   { background: #94a3b8; }
 
-.section-label {
-  font-size: .75rem; font-weight: 700;
-  text-transform: uppercase; letter-spacing: .08em;
-  color: #6366f1;
-}
-.top-contributors {
-  padding: 1.25rem 1.5rem;
-  border-radius: 1rem;
-  border: 1px solid var(--bs-border-color);
-  background: var(--bs-body-bg);
-}
-.top-contrib-card {
-  display: flex; flex-direction: column; align-items: center;
-  gap: 6px; padding: 12px 16px;
-  border-radius: 12px; cursor: pointer;
-  border: 1px solid var(--bs-border-color);
-  transition: border-color .15s, transform .12s;
-  min-width: 110px; text-align: center;
-  background: var(--bs-body-bg);
-  position: relative;
-}
-.top-contrib-card:hover { border-color: #6366f1; transform: translateY(-2px); }
-.top-contrib-rank { font-size: 1.4rem; line-height: 1; }
-.top-contrib-avatar {
-  width: 52px; height: 52px; border-radius: 50%;
-  object-fit: cover;
-  display: flex; align-items: center; justify-content: center;
-  font-weight: 700; font-size: 1.2rem; color: #fff;
-}
-.top-contrib-name { font-size: .82rem; font-weight: 600; max-width: 100px; }
-.top-contrib-score { font-size: .72rem; color: var(--bs-secondary-color); display: flex; gap: 8px; }
 </style>
 <script>
 // Calcul indicateur d'activité côté JS
