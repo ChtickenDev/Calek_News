@@ -2,6 +2,15 @@
 {% from '_macros.html' import ifs_badge, render_folder_tree, render_mobile_folder_tree with context %}
 {% block main_container %}container-fluid{% endblock %}
 {% block main_class %} physara-no-pad{% endblock %}
+
+{% block mobile_page_title %}Mes favoris{% endblock %}
+{% block mobile_action %}
+<a href="{{ url_for('my_drafts') }}" class="mobile-ctx-btn">
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+  Recherche
+</a>
+{% endblock %}
+
 {% block content %}
 {% macro share_dropdown(article_id) %}
 <div class="dropdown" onclick="event.stopPropagation()">

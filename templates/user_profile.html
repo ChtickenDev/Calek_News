@@ -2,6 +2,22 @@
 {% from '_macros.html' import ifs_badge, render_folder_tree_readonly, render_mobile_folder_tree_readonly with context %}
 {% block main_container %}container-fluid{% endblock %}
 {% block main_class %} physara-no-pad{% endblock %}
+
+{% block mobile_page_title %}
+  {%- if profile_user.id == current_user.id -%}
+    Mon profil
+  {%- else -%}
+    {{ profile_user.name or profile_user.email.split('@')[0] }}
+  {%- endif -%}
+{% endblock %}
+{% block mobile_action %}
+  {% if profile_user.id == current_user.id %}
+    <a href="{{ url_for('me') }}" class="mobile-ctx-btn">&#9998; Modifier</a>
+  {% else %}
+    <a href="{{ url_for('users_list') }}" class="mobile-ctx-btn">&#8592; Profils</a>
+  {% endif %}
+{% endblock %}
+
 {% block content %}
 
 <!-- En-tête profil enrichi -->

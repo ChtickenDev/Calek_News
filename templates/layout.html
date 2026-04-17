@@ -161,6 +161,43 @@
     border-bottom: 2px solid #1a1a2e;
   }
 
+  /* ---- Mobile top navbar : titre + bouton contextuel ---- */
+  .mobile-page-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--bs-body-color);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+  }
+  .mobile-ctx-btn {
+    background: #eef5fc;
+    color: #4a90d9 !important;
+    border-radius: 12px;
+    padding: 3px 10px;
+    font-size: 12px;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+    border: none;
+    font-family: inherit;
+    cursor: pointer;
+    line-height: 1.5;
+    transition: background .12s;
+  }
+  .mobile-ctx-btn:hover { background: #daeaf8; }
+  [data-bs-theme="dark"] .mobile-ctx-btn {
+    background: rgba(74, 144, 217, .15);
+    color: #4a90d9 !important;
+  }
+  [data-bs-theme="dark"] .mobile-ctx-btn:hover {
+    background: rgba(74, 144, 217, .25);
+  }
+
   /* ---- Bottom navigation bar (mobile only) ---- */
   .physara-bottom-nav {
     position: fixed;
@@ -216,10 +253,21 @@
 
 <nav class="navbar navbar-expand-lg sticky-top shadow-sm bg-body border-bottom">
   <div class="container-fluid">
-    <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="{{ url_for('index') }}">
+
+    <!-- Brand desktop uniquement -->
+    <a class="navbar-brand fw-bold d-none d-lg-flex align-items-center gap-2" href="{{ url_for('index') }}">
       <img src="{{ url_for('static', filename='img/physara-logo.png') }}" alt="Physara" class="logo-img" style="height:34px;width:auto;object-fit:contain">
       <span>Physara</span>
     </a>
+
+    <!-- Barre mobile : logo + titre page + bouton contextuel -->
+    <div class="d-flex d-lg-none align-items-center flex-grow-1 gap-2 overflow-hidden">
+      <a href="{{ url_for('index') }}" class="flex-shrink-0" style="line-height:0;">
+        <img src="{{ url_for('static', filename='img/physara-logo.png') }}" alt="Physara" style="height:28px;width:auto;object-fit:contain;">
+      </a>
+      <span class="mobile-page-title">{% block mobile_page_title %}Physara{% endblock %}</span>
+      <div class="ms-auto flex-shrink-0 ps-1">{% block mobile_action %}{% endblock %}</div>
+    </div>
 
     <div class="d-none">
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
@@ -334,7 +382,8 @@
     </svg>
     <span>Profils</span>
   </a>
-  <a href="{{ url_for('me') }}" class="physara-bottom-item{% if request.endpoint == 'me' %} active{% endif %}">
+  <a href="{{ url_for('user_profile', user_id=current_user.id) }}"
+     class="physara-bottom-item{% if request.endpoint == 'user_profile' and request.view_args.get('user_id') == current_user.id %} active{% endif %}">
     {% if current_user.photo_filename %}
       <img src="{{ url_for('static', filename='uploads/avatars/' + current_user.photo_filename) }}"
            class="physara-bottom-avatar" style="object-fit:cover;" alt="">
