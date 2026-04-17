@@ -397,6 +397,15 @@ class Like(db.Model):
         db.UniqueConstraint("user_id", "article_id", name="_user_like_uc"),
     )
 
+
+class TrustedDevice(db.Model):
+    __tablename__ = 'trusted_device'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    token = db.Column(db.String(64), unique=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_used_at = db.Column(db.DateTime, default=datetime.utcnow)
+
 # -----------------------------------------------------------------------------
 # Helpers & schema upgrade (SQLite)
 # -----------------------------------------------------------------------------
@@ -840,6 +849,53 @@ def ensure_google_schema():
     if "google_id" not in user_cols:
         db.session.execute(text('ALTER TABLE "user" ADD COLUMN google_id VARCHAR(100)'))
         db.session.commit()
+
+
+def ensure_trusted_device_schema():
+    """Crée la table trusted_device si absente."""
+    with db.engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS trusted_device (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+                token VARCHAR(64) NOT NULL UNIQUE,
+                created_at TIMESTAMP DEFAULT NOW(),
+                last_used_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        conn.commit()
+
+
+import secrets as _secrets
+
+def is_trusted_device(user_id):
+    """Retourne True si le cookie de l'appareil correspond à un token valide en base."""
+    token = request.cookies.get('physara_device_token')
+    if not token:
+        return False
+    device = TrustedDevice.query.filter_by(user_id=user_id, token=token).first()
+    if device:
+        device.last_used_at = datetime.utcnow()
+        db.session.commit()
+        return True
+    return False
+
+
+def set_trusted_device(response, user_id):
+    """Génère un token et pose un cookie longue durée sur la réponse."""
+    token = _secrets.token_hex(32)
+    device = TrustedDevice(user_id=user_id, token=token)
+    db.session.add(device)
+    db.session.commit()
+    response.set_cookie(
+        'physara_device_token',
+        token,
+        max_age=10 * 365 * 24 * 3600,
+        httponly=True,
+        secure=not app.debug,
+        samesite='Lax'
+    )
+    return response
 
 
 # -----------------------------------------------------------------------------
@@ -2221,8 +2277,19 @@ def login():
         pw = request.form["password"]
         u = User.query.filter_by(email=email).first()
         if u and u.check_password(pw):
-            login_user(u)
-            return redirect(url_for("index"))
+            if is_trusted_device(u.id):
+                login_user(u)
+                return redirect(url_for("feed"))
+            # Envoyer le code 2FA
+            code = str(random.randint(100000, 999999))
+            session['_2fa_code'] = code
+            session['_2fa_exp']  = (datetime.utcnow() + timedelta(minutes=10)).isoformat()
+            session['_2fa_uid']  = u.id
+            if not send_2fa_email(u.email, code):
+                flash("Impossible d'envoyer le code de verification. Verifiez la config email.", "danger")
+                return redirect(url_for('login'))
+            flash(f"Un code de verification a ete envoye a {u.email}.", "info")
+            return redirect(url_for('auth_verify'))
         flash("Identifiants invalides.", "danger")
     return render_template("login.html")
 
@@ -2280,6 +2347,11 @@ def auth_google_callback():
             u.google_id = google_id
             db.session.commit()
 
+    # Appareil de confiance → login direct sans 2FA
+    if is_trusted_device(u.id):
+        login_user(u)
+        return redirect(url_for('feed'))
+
     # Générer et envoyer le code 2FA
     code = str(random.randint(100000, 999999))
     session['_2fa_code'] = code
@@ -2287,14 +2359,13 @@ def auth_google_callback():
     session['_2fa_uid']  = u.id
 
     if not send_2fa_email(u.email, code):
-        # Nettoyage session et message d'erreur
         session.pop('_2fa_code', None)
         session.pop('_2fa_exp',  None)
         session.pop('_2fa_uid',  None)
-        flash("Impossible d'envoyer le code de vérification. Vérifiez la config email.", "danger")
+        flash("Impossible d'envoyer le code de verification. Verifiez la config email.", "danger")
         return redirect(url_for('login'))
 
-    flash(f"Un code de vérification a été envoyé à {u.email}.", "info")
+    flash(f"Un code de verification a ete envoye a {u.email}.", "info")
     return redirect(url_for('auth_verify'))
 
 
@@ -2334,7 +2405,13 @@ def auth_verify():
             flash("Compte introuvable.", "danger")
             return redirect(url_for('login'))
 
+        remember = request.form.get('remember_device') == 'on'
         login_user(u)
+        if remember:
+            from flask import make_response
+            response = make_response(redirect(url_for('feed')))
+            set_trusted_device(response, u.id)
+            return response
         return redirect(url_for('feed'))
 
     return render_template('auth_verify.html')
@@ -3778,6 +3855,7 @@ def upgrade_db():
     ensure_favorite_columns()
     ensure_userdraft_schema()
     ensure_google_schema()
+    ensure_trusted_device_schema()
     flash("Base mise à niveau ✅", "success")
     return redirect(url_for("index"))
 
@@ -4410,6 +4488,7 @@ if __name__ == "__main__":
         ensure_folder_schema()
         ensure_event_schema()
         ensure_google_schema()
+        ensure_trusted_device_schema()
         db.session.execute(text("UPDATE article SET featured=0 WHERE featured IS NULL"))
         db.session.commit()
     app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)
