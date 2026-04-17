@@ -48,6 +48,24 @@
     .card-btn-fav  { background: #f59e0b; color: #fff !important; border-color: #f59e0b; }
     .card-btn-liked { background: #e74c3c; color: #fff !important; border-color: #e74c3c; }
     .card-btn-public { background: #10b981; color: #fff !important; border-color: #10b981; }
+    /* ---- Card IFS tinted header ---- */
+    .card-ifs-header { margin: -16px -16px 12px -16px; padding: 10px 16px 8px; border-radius: 12px 12px 0 0; border-top: 3px solid transparent; }
+    .card-ifs-h-red     { background: #fef2f2; border-top-color: #e74c3c; }
+    .card-ifs-h-orange  { background: #fff7ed; border-top-color: #e67e22; }
+    .card-ifs-h-yellow  { background: #fefce8; border-top-color: #f1c40f; }
+    .card-ifs-h-green   { background: #f0fdf4; border-top-color: #2ecc71; }
+    .card-ifs-h-dkgreen { background: #f0fdf4; border-top-color: #27ae60; }
+    .card-ifs-h-blue    { background: #eff6ff; border-top-color: #2980b9; }
+    .card-ifs-h-none    { background: var(--bs-secondary-bg); border-top-color: var(--bs-border-color); }
+    [data-bs-theme="dark"] .card-ifs-h-red     { background: #2a1212; }
+    [data-bs-theme="dark"] .card-ifs-h-orange  { background: #2a1a08; }
+    [data-bs-theme="dark"] .card-ifs-h-yellow  { background: #26230a; }
+    [data-bs-theme="dark"] .card-ifs-h-green   { background: #0d2218; }
+    [data-bs-theme="dark"] .card-ifs-h-dkgreen { background: #0d2218; }
+    [data-bs-theme="dark"] .card-ifs-h-blue    { background: #0d1a2a; }
+    /* Thumbs-up fill toggle */
+    .like-btn .thumb-svg { fill: none; transition: fill .15s; }
+    .like-btn.card-btn-liked .thumb-svg { fill: currentColor; }
     .card-actions .dropdown-toggle::after { display: none !important; }
     .nav-profile-btn::after { display: none !important; }
     /* Side cards (formulaires, filtres) */

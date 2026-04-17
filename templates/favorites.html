@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% from '_macros.html' import ifs_badge, render_folder_tree, render_mobile_folder_tree with context %}
+{% from '_macros.html' import ifs_badge, ifs_header_class, render_folder_tree, render_mobile_folder_tree with context %}
 {% block main_container %}container-fluid{% endblock %}
 {% block main_class %} physara-no-pad{% endblock %}
 
@@ -274,18 +274,20 @@
     <div class="col-md-6 col-lg-4">
       <div class="article-card" data-article-id="{{ a.id }}" role="button" tabindex="0">
 
-        <div class="card-top">
-          {{ ifs_badge(sc) }}
-          {% if a.domain %}<span class="card-domain">{{ a.domain }}</span>{% endif %}
-          <button class="card-top-action" style="margin-left:auto;"
-                  data-title="{{ a.title|e }}"
-                  data-authors="{{ (a.authors or '')|e }}"
-                  data-journal="{{ (a.journal or '')|e }}"
-                  data-date="{{ a.published_date.strftime('%Y-%m-%d') if a.published_date else '' }}"
-                  data-doi="{{ (a.doi or '')|e }}"
-                  data-sc="{{ sc or 0 }}"
-                  data-domain="{{ (a.domain or '')|e }}"
-                  onclick="event.stopPropagation(); openCiteModal(this.dataset.title, this.dataset.authors, this.dataset.journal, this.dataset.date, this.dataset.doi, '', +this.dataset.sc, this.dataset.domain)">{{ t('btn.cite') }}</button>
+        <div class="card-ifs-header {{ ifs_header_class(sc) }}">
+          <div class="d-flex align-items-center gap-1 flex-wrap">
+            {{ ifs_badge(sc) }}
+            {% if a.domain %}<span class="card-domain">{{ a.domain }}</span>{% endif %}
+            <button class="card-top-action ms-auto"
+                    data-title="{{ a.title|e }}"
+                    data-authors="{{ (a.authors or '')|e }}"
+                    data-journal="{{ (a.journal or '')|e }}"
+                    data-date="{{ a.published_date.strftime('%Y-%m-%d') if a.published_date else '' }}"
+                    data-doi="{{ (a.doi or '')|e }}"
+                    data-sc="{{ sc or 0 }}"
+                    data-domain="{{ (a.domain or '')|e }}"
+                    onclick="event.stopPropagation(); openCiteModal(this.dataset.title, this.dataset.authors, this.dataset.journal, this.dataset.date, this.dataset.doi, '', +this.dataset.sc, this.dataset.domain)">{{ t('btn.cite') }}</button>
+          </div>
         </div>
 
         <div class="card-title" onclick="event.stopPropagation(); openArticleModal({{ a.id }})">{{ a.title }}</div>
@@ -361,24 +363,26 @@
     <div class="col-md-6 col-lg-4">
       <div class="article-card" data-article-id="{{ a.id }}" role="button" tabindex="0">
 
-        <div class="card-top">
-          {{ ifs_badge(sc) }}
-          {% if a.domain %}<span class="card-domain">{{ a.domain }}</span>{% endif %}
-          <div style="margin-left:auto; display:flex; gap:4px;" onclick="event.stopPropagation()">
-            <button class="card-top-action{% if f.is_public %} card-top-action-public{% endif %}"
-                    id="vis-btn-{{ a.id }}"
-                    onclick="event.stopPropagation(); toggleVisibility({{ a.id }}, this)">
-              {{ t('btn.public') if f.is_public else t('btn.private') }}
-            </button>
-            <button class="card-top-action"
-                    data-title="{{ a.title|e }}"
-                    data-authors="{{ (a.authors or '')|e }}"
-                    data-journal="{{ (a.journal or '')|e }}"
-                    data-date="{{ a.published_date.strftime('%Y-%m-%d') if a.published_date else '' }}"
-                    data-doi="{{ (a.doi or '')|e }}"
-                    data-sc="{{ sc or 0 }}"
-                    data-domain="{{ (a.domain or '')|e }}"
-                    onclick="event.stopPropagation(); openCiteModal(this.dataset.title, this.dataset.authors, this.dataset.journal, this.dataset.date, this.dataset.doi, '', +this.dataset.sc, this.dataset.domain)">{{ t('btn.cite') }}</button>
+        <div class="card-ifs-header {{ ifs_header_class(sc) }}">
+          <div class="d-flex align-items-center gap-1 flex-wrap" onclick="event.stopPropagation()">
+            {{ ifs_badge(sc) }}
+            {% if a.domain %}<span class="card-domain">{{ a.domain }}</span>{% endif %}
+            <div class="ms-auto d-flex gap-1">
+              <button class="card-top-action{% if f.is_public %} card-top-action-public{% endif %}"
+                      id="vis-btn-{{ a.id }}"
+                      onclick="event.stopPropagation(); toggleVisibility({{ a.id }}, this)">
+                {{ t('btn.public') if f.is_public else t('btn.private') }}
+              </button>
+              <button class="card-top-action"
+                      data-title="{{ a.title|e }}"
+                      data-authors="{{ (a.authors or '')|e }}"
+                      data-journal="{{ (a.journal or '')|e }}"
+                      data-date="{{ a.published_date.strftime('%Y-%m-%d') if a.published_date else '' }}"
+                      data-doi="{{ (a.doi or '')|e }}"
+                      data-sc="{{ sc or 0 }}"
+                      data-domain="{{ (a.domain or '')|e }}"
+                      onclick="event.stopPropagation(); openCiteModal(this.dataset.title, this.dataset.authors, this.dataset.journal, this.dataset.date, this.dataset.doi, '', +this.dataset.sc, this.dataset.domain)">{{ t('btn.cite') }}</button>
+            </div>
           </div>
         </div>
 

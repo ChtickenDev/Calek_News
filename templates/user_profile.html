@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% from '_macros.html' import ifs_badge, render_folder_tree_readonly, render_mobile_folder_tree_readonly with context %}
+{% from '_macros.html' import ifs_badge, ifs_header_class, render_folder_tree_readonly, render_mobile_folder_tree_readonly with context %}
 {% block main_container %}container-fluid{% endblock %}
 {% block main_class %} physara-no-pad{% endblock %}
 
@@ -268,22 +268,45 @@
       <div class="col-md-6 col-lg-4">
         <div class="article-card" data-article-id="{{ a.id }}" role="button" tabindex="0">
 
-          <!-- Ligne badges + Citer -->
-          <div class="card-top">
-            {{ ifs_badge(sc) }}
-            {% if a.domain %}<span class="card-domain">{{ a.domain }}</span>{% endif %}
-            <div style="margin-left:auto; display:flex; align-items:center; gap:4px;" onclick="event.stopPropagation()">
-              <span class="badge bg-success-subtle text-success border border-success-subtle"
-                    style="font-size:11px; font-weight:500; padding:3px 7px;">Public</span>
-              <button class="card-top-action"
-                      data-title="{{ a.title|e }}"
-                      data-authors="{{ (a.authors or '')|e }}"
-                      data-journal="{{ (a.journal or '')|e }}"
-                      data-date="{{ a.published_date.strftime('%Y-%m-%d') if a.published_date else '' }}"
-                      data-doi="{{ (a.doi or '')|e }}"
-                      data-sc="{{ sc or 0 }}"
-                      data-domain="{{ (a.domain or '')|e }}"
-                      onclick="event.stopPropagation(); openCiteModal(this.dataset.title, this.dataset.authors, this.dataset.journal, this.dataset.date, this.dataset.doi, '', +this.dataset.sc, this.dataset.domain)">Citer</button>
+          <!-- Header teinté IFS -->
+          <div class="card-ifs-header {{ ifs_header_class(sc) }}">
+            <!-- Ligne 1 : avatar + nom profil + date -->
+            <div class="d-flex align-items-center gap-2 mb-2" onclick="event.stopPropagation()">
+              <a href="{{ url_for('user_profile', user_id=profile_user.id) }}" onclick="event.stopPropagation()" style="text-decoration:none;flex-shrink:0;">
+                {% if profile_user.photo_filename %}
+                  <img src="{{ url_for('static', filename='uploads/avatars/' + profile_user.photo_filename) }}"
+                       style="width:22px;height:22px;border-radius:50%;object-fit:cover;" alt="">
+                {% else %}
+                  <span class="avatar-initials-dynamic"
+                        data-seed="{{ profile_user.email }}"
+                        style="width:22px;height:22px;border-radius:50%;background:#6366f1;color:#fff;font-weight:700;font-size:9px;display:inline-flex;align-items:center;justify-content:center;">
+                    {{ (profile_user.name or profile_user.email)[0].upper() }}
+                  </span>
+                {% endif %}
+              </a>
+              <a href="{{ url_for('user_profile', user_id=profile_user.id) }}"
+                 class="text-decoration-none fw-semibold text-body text-truncate flex-grow-1" style="font-size:12px;min-width:0;" onclick="event.stopPropagation()">
+                {{ profile_user.name or profile_user.email.split('@')[0] }}
+              </a>
+              <span class="text-muted flex-shrink-0" style="font-size:11px;">{{ f.created_at.strftime('%d %b %Y') }}</span>
+            </div>
+            <!-- Ligne 2 : IFS + domaine + Citer -->
+            <div class="d-flex align-items-center gap-1 flex-wrap" onclick="event.stopPropagation()">
+              {{ ifs_badge(sc) }}
+              {% if a.domain %}<span class="card-domain">{{ a.domain }}</span>{% endif %}
+              <div class="ms-auto d-flex align-items-center gap-1">
+                <span class="badge bg-success-subtle text-success border border-success-subtle"
+                      style="font-size:11px;font-weight:500;padding:2px 6px;">Public</span>
+                <button class="card-top-action"
+                        data-title="{{ a.title|e }}"
+                        data-authors="{{ (a.authors or '')|e }}"
+                        data-journal="{{ (a.journal or '')|e }}"
+                        data-date="{{ a.published_date.strftime('%Y-%m-%d') if a.published_date else '' }}"
+                        data-doi="{{ (a.doi or '')|e }}"
+                        data-sc="{{ sc or 0 }}"
+                        data-domain="{{ (a.domain or '')|e }}"
+                        onclick="event.stopPropagation(); openCiteModal(this.dataset.title, this.dataset.authors, this.dataset.journal, this.dataset.date, this.dataset.doi, '', +this.dataset.sc, this.dataset.domain)">Citer</button>
+              </div>
             </div>
           </div>
 
@@ -328,7 +351,8 @@
                     data-article-id="{{ a.id }}"
                     data-liked="{{ 'true' if user_liked else 'false' }}"
                     onclick="event.stopPropagation(); toggleLike({{ a.id }}, this)">
-              Like&nbsp;&#183;&nbsp;<span class="like-count">{{ like_count }}</span>
+              <svg class="thumb-svg" width="13" height="13" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+              Utile&#160;&#183;&#160;<span class="like-count">{{ like_count }}</span>
             </button>
           </div>
 

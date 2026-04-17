@@ -28,6 +28,20 @@
 {%- endmacro %}
 
 {#
+  ifs_header_class(sc) — retourne la classe CSS du header teinté correspondant à la couleur IFS.
+#}
+{% macro ifs_header_class(sc) -%}
+{%- if sc is none -%}card-ifs-h-none
+{%- elif sc >= 100 -%}card-ifs-h-blue
+{%- elif sc >= 80  -%}card-ifs-h-dkgreen
+{%- elif sc >= 60  -%}card-ifs-h-green
+{%- elif sc >= 40  -%}card-ifs-h-yellow
+{%- elif sc >= 20  -%}card-ifs-h-orange
+{%- else            -%}card-ifs-h-red
+{%- endif -%}
+{%- endmacro %}
+
+{#
   render_mobile_folder_tree(folder, active_folder, depth) — accordéon mobile.
   Nécessite import with context pour accéder à folder_article_counts.
 #}

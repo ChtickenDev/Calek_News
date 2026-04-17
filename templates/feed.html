@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% from '_macros.html' import ifs_badge %}
+{% from '_macros.html' import ifs_badge, ifs_header_class %}
 
 {% block mobile_page_title %}Mon feed{% endblock %}
 {% block mobile_action %}
@@ -42,68 +42,73 @@
   <div class="col-md-6 col-lg-4">
     <div class="article-card" data-article-id="{{ a.id }}" role="button" tabindex="0">
 
-      <!-- Sharer ou badge suggéré -->
-      {% if item.suggested %}
-      <div style="margin-bottom:12px;">
-        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle suggested-badge">
-          ✦ {{ t('feed.suggested') }}
-        </span>
-      </div>
-      {% else %}
-      <div class="d-flex align-items-center gap-2" style="margin-bottom:12px;" onclick="event.stopPropagation()">
-        {% if first.user.photo_filename %}
-          <img src="{{ url_for('static', filename='uploads/avatars/' + first.user.photo_filename) }}"
-               class="avatar-circle {% if first.is_followed %}avatar-followed{% endif %}"
-               style="object-fit:cover;" alt="">
-        {% else %}
-          <div class="avatar-circle avatar-initials-dynamic" data-seed="{{ first.user.email }}">
-            {{ (first.user.name or first.user.email)[0].upper() }}
-          </div>
-        {% endif %}
-        <div class="flex-grow-1 min-w-0">
-          <a href="{{ url_for('user_profile', user_id=first.user.id) }}"
-             class="text-decoration-none fw-semibold text-body d-block text-truncate" style="font-size:13px;">
-            {{ first.user.name or first.user.email.split('@')[0] }}
-            {% if first.is_followed %}
-              <span class="badge bg-success-subtle text-success ms-1" style="font-size:11px;">{{ t('feed.following_badge') }}</span>
-            {% endif %}
-          </a>
-          <span class="text-muted" style="font-size:12px;">{{ first.fav.created_at.strftime('%d %b %Y') }}</span>
-          <span class="badge bg-secondary ms-1" style="font-size:12px; cursor:help;"
-                title="Social:{{ item.score_detail.social }} | Pertinence:{{ item.score_detail.pertinence }} | Qualité:{{ item.score_detail.qualite }} | Fraîcheur:{{ item.score_detail.fraicheur }} | Pénalités:{{ item.score_detail.penalites }}">
-            ⚡ {{ item.score }}
+      <!-- Header teinté IFS -->
+      <div class="card-ifs-header {{ ifs_header_class(sc) }}">
+        {% if item.suggested %}
+        <div class="mb-2">
+          <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle suggested-badge">
+            ✦ {{ t('feed.suggested') }}
           </span>
         </div>
-        {% if total > 1 %}
-          <button class="btn btn-link btn-sm p-0 text-muted flex-shrink-0"
-                  style="font-size:0.75rem; white-space:nowrap;"
-                  onclick="event.stopPropagation(); openArticleModal({{ a.id }}, true)">
-            +{{ total - 1 }} autre{{ 's' if total - 1 > 1 else '' }}
-          </button>
+        {% else %}
+        <div class="d-flex align-items-center gap-2 mb-2" onclick="event.stopPropagation()">
+          <a href="{{ url_for('user_profile', user_id=first.user.id) }}" onclick="event.stopPropagation()" style="text-decoration:none;flex-shrink:0;">
+            {% if first.user.photo_filename %}
+              <img src="{{ url_for('static', filename='uploads/avatars/' + first.user.photo_filename) }}"
+                   class="avatar-circle {% if first.is_followed %}avatar-followed{% endif %}"
+                   style="object-fit:cover;" alt="">
+            {% else %}
+              <div class="avatar-circle avatar-initials-dynamic" data-seed="{{ first.user.email }}">
+                {{ (first.user.name or first.user.email)[0].upper() }}
+              </div>
+            {% endif %}
+          </a>
+          <div class="flex-grow-1 min-w-0">
+            <a href="{{ url_for('user_profile', user_id=first.user.id) }}"
+               class="text-decoration-none fw-semibold text-body d-block text-truncate" style="font-size:13px;" onclick="event.stopPropagation()">
+              {{ first.user.name or first.user.email.split('@')[0] }}
+              {% if first.is_followed %}
+                <span class="ms-1" style="font-size:11px;padding:2px 8px;border-radius:4px;border:0.5px solid #22c55e;color:#22c55e;background:transparent;">{{ t('feed.following_badge') }}</span>
+              {% endif %}
+            </a>
+          </div>
+          <div class="d-flex align-items-center gap-1 flex-shrink-0">
+            <span class="text-muted" style="font-size:11px;">{{ first.fav.created_at.strftime('%d %b %Y') }}</span>
+            <span class="text-muted" style="font-size:11px;cursor:help;"
+                  title="Social:{{ item.score_detail.social }} | Pertinence:{{ item.score_detail.pertinence }} | Qualité:{{ item.score_detail.qualite }} | Fraîcheur:{{ item.score_detail.fraicheur }} | Pénalités:{{ item.score_detail.penalites }}">
+              &#x26A1; {{ item.score }}
+            </span>
+            {% if total > 1 %}
+              <button class="btn btn-link btn-sm p-0 text-muted"
+                      style="font-size:0.75rem;white-space:nowrap;"
+                      onclick="event.stopPropagation(); openArticleModal({{ a.id }}, true)">
+                +{{ total - 1 }} autre{{ 's' if total - 1 > 1 else '' }}
+              </button>
+            {% endif %}
+          </div>
+        </div>
         {% endif %}
+        <!-- IFS + domaine + Citer -->
+        <div class="d-flex align-items-center gap-1 flex-wrap">
+          {{ ifs_badge(sc) }}
+          {% if a.domain %}<span class="card-domain">{{ a.domain }}</span>{% endif %}
+          <button class="card-top-action ms-auto"
+                  data-title="{{ a.title|e }}"
+                  data-authors="{{ (a.authors or '')|e }}"
+                  data-journal="{{ (a.journal or '')|e }}"
+                  data-date="{{ a.published_date.strftime('%Y-%m-%d') if a.published_date else '' }}"
+                  data-doi="{{ (a.doi or '')|e }}"
+                  data-sc="{{ sc or 0 }}"
+                  data-domain="{{ (a.domain or '')|e }}"
+                  onclick="event.stopPropagation(); openCiteModal(this.dataset.title, this.dataset.authors, this.dataset.journal, this.dataset.date, this.dataset.doi, '', +this.dataset.sc, this.dataset.domain)">{{ t('btn.cite') }}</button>
+        </div>
       </div>
-      {% endif %}
 
       {% if first and first.fav.public_note %}
         <div class="public-note-box mb-2" style="font-size:0.78rem;" onclick="event.stopPropagation()">
           {{ first.fav.public_note }}
         </div>
       {% endif %}
-
-      <!-- IFS + domaine + Citer -->
-      <div class="card-top">
-        {{ ifs_badge(sc) }}
-        {% if a.domain %}<span class="card-domain">{{ a.domain }}</span>{% endif %}
-        <button class="card-top-action" style="margin-left:auto;"
-                data-title="{{ a.title|e }}"
-                data-authors="{{ (a.authors or '')|e }}"
-                data-journal="{{ (a.journal or '')|e }}"
-                data-date="{{ a.published_date.strftime('%Y-%m-%d') if a.published_date else '' }}"
-                data-doi="{{ (a.doi or '')|e }}"
-                data-sc="{{ sc or 0 }}"
-                data-domain="{{ (a.domain or '')|e }}"
-                onclick="event.stopPropagation(); openCiteModal(this.dataset.title, this.dataset.authors, this.dataset.journal, this.dataset.date, this.dataset.doi, '', +this.dataset.sc, this.dataset.domain)">{{ t('btn.cite') }}</button>
-      </div>
 
       <!-- Titre -->
       <div class="card-title" onclick="event.stopPropagation(); openArticleModal({{ a.id }})">{{ a.title }}</div>
@@ -156,7 +161,8 @@
                 data-article-id="{{ a.id }}"
                 data-liked="{{ 'true' if user_liked else 'false' }}"
                 onclick="event.stopPropagation(); toggleLike({{ a.id }}, this)">
-          Like · <span class="like-count">{{ like_count }}</span>
+          <svg class="thumb-svg" width="13" height="13" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+          Utile&#160;&#183;&#160;<span class="like-count">{{ like_count }}</span>
         </button>
       </div>
 
