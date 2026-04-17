@@ -4,14 +4,14 @@
 
 {% block content %}
 
-<div class="d-flex align-items-center justify-content-between mb-1 flex-wrap gap-2">
+<div class="d-none d-md-flex align-items-center justify-content-between mb-1 flex-wrap gap-2">
   <div>
     <h3 class="mb-0">{{ t('users.title') }}</h3>
     <p class="text-muted small mb-0">{{ users|length }} membre{{ 's' if users|length > 1 else '' }} sur la plateforme</p>
   </div>
 </div>
 
-<hr class="mb-4">
+<hr class="d-none d-md-block mb-4">
 
 <!-- Recherche -->
 <div class="mb-4" style="max-width: 420px;">

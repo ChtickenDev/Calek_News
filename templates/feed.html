@@ -11,7 +11,7 @@
 
 {% block content %}
 
-<div class="d-flex align-items-center justify-content-between mb-1 flex-wrap gap-2">
+<div class="d-none d-md-flex align-items-center justify-content-between mb-1 flex-wrap gap-2">
   <div>
     <h3 class="mb-0">{% if discovery %}{{ t('feed.discovery_title') }}{% else %}{{ t('feed.title') }}{% endif %}</h3>
     <p class="text-muted small mb-0">
@@ -21,7 +21,7 @@
   <a href="{{ url_for('users_list') }}" class="btn btn-follow-pill">{{ t('feed.find_profiles') }}</a>
 </div>
 
-<hr class="mb-4">
+<hr class="d-none d-md-block mb-4">
 
 {% if not items %}
   <div class="text-center py-5 text-muted">
