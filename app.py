@@ -3328,40 +3328,31 @@ def feed():
     # ── Mode découverte : aucun abonnement → articles les plus partagés en dossiers publics ──
     if discovery:
         from sqlalchemy import func as sqlfunc
-        articles_decouverte = (
-            db.session.query(Article)
-            .join(FolderArticle, FolderArticle.article_id == Article.id)
+
+        # Sous-requête : premier dossier public (min id) ayant cet article, par article
+        first_fa_subq = (
+            db.session.query(
+                FolderArticle.article_id,
+                sqlfunc.min(FolderArticle.id).label('min_id')
+            )
             .join(Folder, Folder.id == FolderArticle.folder_id)
             .filter(Folder.is_public == True)
-            .group_by(Article.id)
-            .order_by(sqlfunc.count(FolderArticle.id).desc(), Article.published_date.desc())
+            .group_by(FolderArticle.article_id)
+            .subquery()
+        )
+
+        articles_decouverte = (
+            db.session.query(Article, User)
+            .join(first_fa_subq, first_fa_subq.c.article_id == Article.id)
+            .join(FolderArticle, FolderArticle.id == first_fa_subq.c.min_id)
+            .join(Folder, Folder.id == FolderArticle.folder_id)
+            .join(User, User.id == Folder.user_id)
+            .order_by(Article.published_date.desc())
             .limit(30)
             .all()
         )
 
-        art_ids = [a.id for a in articles_decouverte]
-
-        # Nombre de dossiers publics contenant chaque article
-        fav_count_rows = (
-            db.session.query(FolderArticle.article_id, sqlfunc.count(FolderArticle.id))
-            .join(Folder, Folder.id == FolderArticle.folder_id)
-            .filter(Folder.is_public == True,
-                    FolderArticle.article_id.in_(art_ids or [-1]))
-            .group_by(FolderArticle.article_id)
-            .all()
-        )
-        fav_counts_map = {r[0]: r[1] for r in fav_count_rows}
-
-        items = [{
-            "article":      a,
-            "sharers":      [],
-            "total_sharers": fav_counts_map.get(a.id, 0),
-            "latest_at":    a.published_date or datetime.utcnow(),
-            "score":        0,
-            "score_detail": {},
-            "suggested":    False,
-            "fav_count":    fav_counts_map.get(a.id, 0),
-        } for a in articles_decouverte]
+        art_ids = [a.id for a, _ in articles_decouverte]
 
         like_counts = {}
         liked_ids   = set()
@@ -3378,9 +3369,10 @@ def feed():
         user_fav_article_ids = {f.article_id for f in Favorite.query.filter_by(user_id=current_user.id).all()}
 
         return render_template('feed.html',
-            items=items,
+            items=[],
+            articles_decouverte=articles_decouverte,
             followed_ids=followed_ids,
-            discovery=discovery,
+            discovery=True,
             is_decouverte=True,
             like_counts=like_counts,
             liked_ids=liked_ids,
@@ -3673,6 +3665,7 @@ def feed():
 
     return render_template('feed.html',
         items=items,
+        articles_decouverte=[],
         followed_ids=followed_ids,
         discovery=discovery,
         is_decouverte=False,

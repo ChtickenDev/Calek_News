@@ -24,11 +24,138 @@
 <hr class="d-none d-md-block mb-4">
 
 {% if is_decouverte %}
+
+{# ── Bannière découverte ── #}
 <div style="background:#f0f7ff; border:0.5px solid #c8dff5; border-radius:10px; padding:10px 16px; margin-bottom:16px; font-size:13px; color:#4a90d9;">
   Tu ne suis personne encore — voici les articles les plus partagés par la communauté.
   <a href="{{ url_for('users_list') }}" style="color:#4a90d9; font-weight:500; margin-left:8px;">Trouver des profils →</a>
 </div>
+
+{% if articles_decouverte %}
+<div class="row gy-3">
+  {% for article, first_user in articles_decouverte %}
+  {% set a = article %}
+  {% set like_count = like_counts.get(a.id, 0) %}
+  {% set user_liked = a.id in liked_ids %}
+  {% set sc = (reliability_score(a)[0]) if reliability_score is defined else None %}
+  {% set already_following = first_user.id in followed_ids %}
+
+  <div class="col-md-6 col-lg-4">
+    <div class="article-card" data-article-id="{{ a.id }}" role="button" tabindex="0">
+
+      <div class="card-ifs-header {{ ifs_header_class(sc) }}">
+        <div class="d-flex align-items-center gap-2 mb-2" onclick="event.stopPropagation()">
+          <a href="{{ url_for('user_profile', user_id=first_user.id) }}" onclick="event.stopPropagation()" style="text-decoration:none;flex-shrink:0;">
+            {% if first_user.photo_filename %}
+              <img src="{{ url_for('static', filename='uploads/avatars/' + first_user.photo_filename) }}"
+                   class="avatar-circle" style="object-fit:cover;" alt="">
+            {% else %}
+              <div class="avatar-circle avatar-initials-dynamic" data-seed="{{ first_user.email }}">
+                {{ (first_user.name or first_user.email)[0].upper() }}
+              </div>
+            {% endif %}
+          </a>
+          <div class="flex-grow-1 min-w-0">
+            <a href="{{ url_for('user_profile', user_id=first_user.id) }}"
+               class="text-decoration-none fw-semibold text-body d-block text-truncate" style="font-size:13px;" onclick="event.stopPropagation()">
+              {{ first_user.name or first_user.email.split('@')[0] }}
+            </a>
+          </div>
+          <div class="flex-shrink-0">
+            {% if already_following %}
+              <span style="font-size:10px;padding:2px 8px;border-radius:4px;border:0.5px solid #22c55e;color:#22c55e;background:transparent;">Abonné·e</span>
+            {% else %}
+              <a href="#" onclick="event.stopPropagation(); event.preventDefault(); followUser({{ first_user.id }}, this)"
+                 style="font-size:10px; color:#4a90d9; border:0.5px solid #4a90d9; border-radius:4px; padding:2px 8px; text-decoration:none;">Suivre</a>
+            {% endif %}
+          </div>
+        </div>
+        <div class="d-flex align-items-center gap-1 flex-wrap">
+          {{ ifs_badge(sc) }}
+          {% if a.domain %}<span class="card-domain">{{ a.domain }}</span>{% endif %}
+          <button class="card-top-action ms-auto"
+                  data-title="{{ a.title|e }}"
+                  data-authors="{{ (a.authors or '')|e }}"
+                  data-journal="{{ (a.journal or '')|e }}"
+                  data-date="{{ a.published_date.strftime('%Y-%m-%d') if a.published_date else '' }}"
+                  data-doi="{{ (a.doi or '')|e }}"
+                  data-sc="{{ sc or 0 }}"
+                  data-domain="{{ (a.domain or '')|e }}"
+                  onclick="event.stopPropagation(); openCiteModal(this.dataset.title, this.dataset.authors, this.dataset.journal, this.dataset.date, this.dataset.doi, '', +this.dataset.sc, this.dataset.domain)">{{ t('btn.cite') }}</button>
+        </div>
+      </div>
+
+      <div class="card-title" onclick="event.stopPropagation(); openArticleModal({{ a.id }})">{{ a.title }}</div>
+
+      <div class="card-meta">
+        {% if a.authors %}
+        <div class="card-meta-row">
+          <span class="card-meta-key">Auteurs</span>
+          <span class="card-meta-val">{{ a.authors }}</span>
+        </div>
+        {% endif %}
+        {% if a.journal %}
+        <div class="card-meta-row">
+          <span class="card-meta-key">Revue</span>
+          <span class="card-meta-val">{{ a.journal }}</span>
+        </div>
+        {% endif %}
+        {% if a.published_date %}
+        <div class="card-meta-row">
+          <span class="card-meta-key">Date</span>
+          <span class="card-meta-val card-meta-date">{{ a.published_date.strftime('%d %b %Y') }}</span>
+        </div>
+        {% endif %}
+      </div>
+
+      <hr class="card-sep">
+
+      <div class="card-abstract">
+        {% if a.abstract %}
+          {% set _abstract_text = a.clean_abstract or (a.abstract|striptags) %}
+          {{ _abstract_text[:400] }}{% if _abstract_text|length > 400 %}…{% endif %}
+        {% else %}
+          {{ t('article.no_abstract') }}
+        {% endif %}
+      </div>
+
+      <div class="card-actions" onclick="event.stopPropagation()">
+        {% if a.doi %}<a class="card-btn" href="https://doi.org/{{ a.doi }}" target="_blank" onclick="event.stopPropagation()">Article</a>{% endif %}
+        {% set is_fav = a.id in fav_ids %}
+        <button class="card-btn fav-btn{% if is_fav %} card-btn-fav{% endif %}"
+                data-article-id="{{ a.id }}"
+                data-faved="{{ 'true' if is_fav else 'false' }}"
+                onclick="event.stopPropagation(); toggleFav({{ a.id }}, this)">
+          Favori
+        </button>
+        <span class="like-btn"
+              style="margin-left:auto; display:flex; align-items:center; gap:4px; font-size:11px; color:{% if user_liked %}#4a90d9{% else %}var(--bs-secondary-color){% endif %}; cursor:pointer; border:0.5px solid var(--bs-border-color); border-radius:6px; padding:5px 10px;"
+              data-article-id="{{ a.id }}"
+              data-liked="{{ 'true' if user_liked else 'false' }}"
+              onclick="event.stopPropagation(); toggleLike({{ a.id }}, this)">
+          <svg width="13" height="13" viewBox="0 0 24 24"
+               fill="{{ '#4a90d9' if user_liked else 'none' }}"
+               stroke="{{ '#4a90d9' if user_liked else 'currentColor' }}"
+               stroke-width="2">
+            <path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3H14z"/>
+            <path d="M7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"/>
+          </svg>
+          Utile&#160;·&#160;<span class="like-count">{{ like_count }}</span>
+        </span>
+      </div>
+
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+  <div class="text-center py-5 text-muted">
+    <p class="fs-5">{{ t('feed.empty') }}</p>
+    <a href="{{ url_for('users_list') }}" class="btn btn-follow-pill mt-2">{{ t('feed.find_profiles_cta') }}</a>
+  </div>
 {% endif %}
+
+{% else %}{# ── Feed normal ── #}
 
 {% if not items %}
   <div class="text-center py-5 text-muted">
@@ -56,19 +183,6 @@
           <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle suggested-badge">
             ✦ {{ t('feed.suggested') }}
           </span>
-        </div>
-        {% elif is_decouverte %}
-        <div class="d-flex align-items-center gap-2 mb-2">
-          <div class="avatar-circle" style="background:#e8f0fb; color:#4a90d9; font-size:0.7rem; font-weight:700; flex-shrink:0;">
-            &#9679;
-          </div>
-          <div class="flex-grow-1 min-w-0">
-            <span class="fw-semibold text-body d-block text-truncate" style="font-size:13px;">Communauté Physara</span>
-          </div>
-          {% set fc = item.fav_count %}
-          {% if fc %}
-          <span class="text-muted flex-shrink-0" style="font-size:11px;">{{ fc }} favori{{ 's' if fc > 1 else '' }}</span>
-          {% endif %}
         </div>
         {% else %}
         <div class="d-flex align-items-center gap-2 mb-2" onclick="event.stopPropagation()">
@@ -194,6 +308,8 @@
   {% endfor %}
 </div>
 {% endif %}
+
+{% endif %}{# ── /Feed normal ── #}
 
 <!-- Modal article -->
 <div class="modal fade" id="articleModal" tabindex="-1" aria-hidden="true">
