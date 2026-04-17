@@ -50,6 +50,50 @@
   render_folder_tree(folder, active_folder, depth) — arborescence dossier récursive.
   Nécessite import with context pour accéder à folder_article_counts.
 #}
+{#
+  render_folder_tree_readonly(folder, active_folder, depth) — arborescence lecture seule (profil public).
+  Nécessite import with context pour accéder à folder_article_counts.
+#}
+{% macro render_folder_tree_readonly(folder, active_folder, depth=0) %}
+<div class="physara-folder-tree-item">
+  <a href="?folder={{ folder.id }}"
+     class="physara-folder-item {% if active_folder and active_folder.id == folder.id %}active{% endif %}">
+    <span class="physara-folder-color-dot" style="background: {{ folder.color or '#6366f1' }};"></span>
+    <span class="physara-folder-name">{{ folder.name }}</span>
+    <span class="physara-folder-count">{{ folder_article_counts.get(folder.id, 0) if folder_article_counts is defined else '' }}</span>
+    {% if folder.children.filter_by(is_public=True).count() > 0 %}
+      <span class="physara-folder-chevron">&#8250;</span>
+    {% endif %}
+  </a>
+  {% if folder.children.filter_by(is_public=True).count() > 0 %}
+  <div class="physara-folder-children">
+    {% for child in folder.children if child.is_public %}
+      {{ render_folder_tree_readonly(child, active_folder, depth + 1) }}
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{#
+  render_mobile_folder_tree_readonly(folder, active_folder, profile_user_id, depth) — accordéon mobile lecture seule.
+  Nécessite import with context pour accéder à folder_article_counts.
+#}
+{% macro render_mobile_folder_tree_readonly(folder, active_folder, profile_user_id, depth=0) %}
+<a href="/user/{{ profile_user_id }}?folder={{ folder.id }}"
+   class="physara-mobile-folder-row {% if active_folder and active_folder.id == folder.id %}active{% endif %}"
+   style="padding-left: {{ 16 + depth * 20 }}px;">
+  <span class="physara-mobile-folder-dot" style="background: {{ folder.color or '#6366f1' }};"></span>
+  <span class="physara-mobile-folder-name">{{ folder.name }}</span>
+  <span class="physara-mobile-folder-count">{{ folder_article_counts.get(folder.id, 0) if folder_article_counts is defined else '' }}</span>
+</a>
+{% if folder.children.filter_by(is_public=True).count() > 0 %}
+  {% for child in folder.children if child.is_public %}
+    {{ render_mobile_folder_tree_readonly(child, active_folder, profile_user_id, depth + 1) }}
+  {% endfor %}
+{% endif %}
+{% endmacro %}
+
 {% macro render_folder_tree(folder, active_folder, depth=0) %}
 <div class="physara-folder-tree-item" data-folder-id="{{ folder.id }}">
   <div class="physara-folder-item {% if active_folder and active_folder.id == folder.id %}active{% endif %}"

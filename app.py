@@ -3193,21 +3193,56 @@ def user_profile(user_id):
         follower_id=current_user.id, followed_id=user_id
     ).first() is not None
 
-    # Favoris publics
-    public_favs = (
+    # Tous les favoris publics (avant filtre dossier)
+    all_public_favs = (
         Favorite.query
         .options(joinedload(Favorite.article))
         .filter_by(user_id=u.id, is_public=True)
         .order_by(Favorite.created_at.desc())
         .all()
     )
-    public_favs = [f for f in public_favs if f.article is not None]
+    all_public_favs = [f for f in all_public_favs if f.article is not None]
+    total_public_count = len(all_public_favs)
 
     # Dossiers publics
     public_folders = Folder.query.filter_by(user_id=u.id, is_public=True).order_by(Folder.name.asc()).all()
+    root_public_folders = [fd for fd in public_folders if fd.parent_id is None]
 
-    # Nombre d'articles par dossier
-    folder_article_counts = {f.id: FolderArticle.query.filter_by(folder_id=f.id).count() for f in public_folders}
+    # Nombre d'articles publics par dossier
+    public_article_ids = {f.article_id for f in all_public_favs}
+    folder_article_counts = {}
+    for fd in public_folders:
+        fa_ids = {fa.article_id for fa in FolderArticle.query.filter_by(folder_id=fd.id).all()}
+        folder_article_counts[fd.id] = len(fa_ids & public_article_ids)
+
+    # Dossier actif via ?folder=<id>
+    active_folder = None
+    folder_id_param = request.args.get('folder', type=int)
+    if folder_id_param:
+        candidate = Folder.query.filter_by(id=folder_id_param, user_id=u.id, is_public=True).first()
+        if candidate:
+            active_folder = candidate
+
+    # Filtrer les favoris si dossier actif
+    if active_folder:
+        fa_ids = {fa.article_id for fa in FolderArticle.query.filter_by(folder_id=active_folder.id).all()}
+        public_favs = [f for f in all_public_favs if f.article_id in fa_ids]
+    else:
+        public_favs = all_public_favs
+
+    # Likes pour les articles affichés
+    article_ids = [f.article_id for f in public_favs]
+    like_counts = {}
+    liked_ids = set()
+    if article_ids:
+        rows = (db.session.query(Like.article_id, func.count(Like.id))
+                .filter(Like.article_id.in_(article_ids))
+                .group_by(Like.article_id).all())
+        like_counts = {r[0]: r[1] for r in rows}
+        liked_ids = {lk.article_id for lk in Like.query.filter(
+            Like.user_id == current_user.id,
+            Like.article_id.in_(article_ids)
+        ).all()}
 
     followers_count = Follow.query.filter_by(followed_id=u.id).count()
     following_count = Follow.query.filter_by(follower_id=u.id).count()
@@ -3217,7 +3252,12 @@ def user_profile(user_id):
                            is_following=is_following,
                            public_favs=public_favs,
                            public_folders=public_folders,
+                           root_public_folders=root_public_folders,
                            folder_article_counts=folder_article_counts,
+                           active_folder=active_folder,
+                           total_public_count=total_public_count,
+                           like_counts=like_counts,
+                           liked_ids=liked_ids,
                            followers_count=followers_count,
                            following_count=following_count)
 

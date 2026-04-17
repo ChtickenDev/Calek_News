@@ -1,7 +1,11 @@
 {% extends "layout.html" %}
+{% from '_macros.html' import ifs_badge, render_folder_tree_readonly, render_mobile_folder_tree_readonly with context %}
+{% block main_container %}container-fluid{% endblock %}
+{% block main_class %} physara-no-pad{% endblock %}
 {% block content %}
 
 <!-- En-tête profil enrichi -->
+<div class="profile-header-wrap">
 <div class="profile-header mb-4">
   <div class="d-flex align-items-start gap-4 flex-wrap">
 
@@ -28,7 +32,7 @@
             {{ "Se désabonner" if is_following else "Suivre" }}
           </button>
         {% else %}
-          <a href="{{ url_for('me') }}" class="btn btn-sm btn-outline-secondary">✎ Modifier mon profil</a>
+          <a href="{{ url_for('me') }}" class="btn btn-sm btn-outline-secondary">&#9998; Modifier mon profil</a>
         {% endif %}
       </div>
 
@@ -38,7 +42,7 @@
           <strong>
             {% set prof = profile_user.profession_autre if profile_user.profession == 'Autre' and profile_user.profession_autre else profile_user.profession %}
             {% if profile_user.est_etudiant %}
-              Étudiant·e{% if prof %} en {{ prof|lower }}{% endif %}{% if profile_user.annee_etudes %} · {{ profile_user.annee_etudes }}e année{% endif %}
+              Etudiant·e{% if prof %} en {{ prof|lower }}{% endif %}{% if profile_user.annee_etudes %} · {{ profile_user.annee_etudes }}e année{% endif %}
             {% else %}
               {{ prof }}
             {% endif %}
@@ -51,8 +55,8 @@
 
       <!-- Localisation + expérience -->
       <div class="d-flex flex-wrap gap-3 small text-muted mb-2">
-        {% if profile_user.ville %}<span>📍 {{ profile_user.ville }}</span>{% endif %}
-        {% if profile_user.annees_experience %}<span>🕐 {{ profile_user.annees_experience }} an{{ 's' if profile_user.annees_experience > 1 else '' }} d'expérience</span>{% endif %}
+        {% if profile_user.ville %}<span>&#128205; {{ profile_user.ville }}</span>{% endif %}
+        {% if profile_user.annees_experience %}<span>&#128336; {{ profile_user.annees_experience }} an{{ 's' if profile_user.annees_experience > 1 else '' }} d'expérience</span>{% endif %}
       </div>
 
       <!-- Stats -->
@@ -61,7 +65,7 @@
         {% if profile_user.abonnements_publics or profile_user.id == current_user.id %}
           <span><strong>{{ following_count }}</strong> abonnement{{ 's' if following_count > 1 else '' }}</span>
         {% endif %}
-        <span><strong>{{ public_favs|length }}</strong> favori{{ 's' if public_favs|length > 1 else '' }} public{{ 's' if public_favs|length > 1 else '' }}</span>
+        <span><strong>{{ total_public_count }}</strong> favori{{ 's' if total_public_count > 1 else '' }} public{{ 's' if total_public_count > 1 else '' }}</span>
       </div>
 
       <!-- Activité -->
@@ -123,116 +127,257 @@
   </div>
   {% endif %}
 </div>
+</div><!-- /.profile-header-wrap -->
 
-<!-- Dossiers publics -->
-{% if public_folders %}
-<h5 class="mb-3">Dossiers publics</h5>
-<div class="folders-grid mb-4">
-  {% for f in public_folders %}
-  <div class="folder-tile" onclick="window.location='{{ url_for('folder_view', folder_id=f.id) }}'">
-    <div class="folder-icon-wrap">
-      <div class="folder-icon" style="--folder-color: {{ f.color or '#6366f1' }};">
-        <div class="folder-tab"></div>
-        <div class="folder-body"></div>
+
+{% if current_user.is_authenticated and current_user.id == profile_user.id %}
+{# ============================================================
+   VUE PROPRIÉTAIRE : sidebar dossiers + cartes articles feed
+   ============================================================ #}
+<div class="physara-favorites-layout">
+
+  <!-- Sidebar dossiers publics -->
+  <aside class="physara-sidebar" id="profileSidebar">
+    <div class="physara-sidebar-header">
+      <span class="physara-sidebar-title">Dossiers publics</span>
+      <button class="physara-sidebar-toggle" onclick="toggleProfileSidebar()">&#8249;</button>
+    </div>
+
+    <a href="{{ url_for('user_profile', user_id=profile_user.id) }}"
+       class="physara-folder-item {% if not active_folder %}active{% endif %}">
+      <span style="font-size:14px; flex-shrink:0;">&#128218;</span>
+      <span class="physara-folder-name">Tous</span>
+      <span class="physara-folder-count">{{ total_public_count }}</span>
+    </a>
+
+    {% for folder in root_public_folders %}
+      {{ render_folder_tree_readonly(folder, active_folder) }}
+    {% endfor %}
+  </aside>
+
+  <!-- Contenu principal -->
+  <div class="physara-favorites-main">
+
+    <!-- Titre de section -->
+    {% if active_folder %}
+    <h5 class="mb-3">{{ active_folder.name }}</h5>
+    {% else %}
+    <h5 class="mb-3">Favoris publics
+      <span class="badge bg-secondary-subtle text-secondary ms-1" style="font-size:0.75rem; font-weight:500;">{{ total_public_count }}</span>
+    </h5>
+    {% endif %}
+
+    <!-- Accordéon dossiers mobile (d-block d-lg-none) -->
+    <div class="physara-folder-accordion d-block d-lg-none" id="profileMobileAccordion">
+      <div class="physara-folder-accordion-header" onclick="toggleProfileMobileFolders()">
+        <div class="physara-folder-accordion-left">
+          <span class="physara-folder-accordion-title">Dossiers publics</span>
+          <span class="physara-folder-accordion-count">{{ root_public_folders|length }}</span>
+        </div>
+        <span class="physara-folder-accordion-chevron" id="profileMobileChevron">&#8250;</span>
+      </div>
+      <div class="physara-folder-accordion-body" id="profileMobileBody">
+        <a href="{{ url_for('user_profile', user_id=profile_user.id) }}"
+           class="physara-mobile-folder-row {% if not active_folder %}active{% endif %}">
+          <span class="physara-mobile-folder-name">Tous</span>
+          <span class="physara-mobile-folder-count">{{ total_public_count }}</span>
+        </a>
+        <div class="physara-mobile-folder-sep"></div>
+        {% for folder in root_public_folders %}
+          {{ render_mobile_folder_tree_readonly(folder, active_folder, profile_user.id) }}
+        {% endfor %}
       </div>
     </div>
-    <div class="folder-name text-truncate">{{ f.name }}</div>
-    <div class="folder-count text-muted">
-      {% set count = folder_article_counts.get(f.id, 0) %}
-      {{ count }} article{{ 's' if count > 1 else '' }}
-    </div>
-  </div>
-  {% endfor %}
-</div>
-{% endif %}
 
-<!-- Favoris publics -->
-<h5 class="mb-3">Favoris publics</h5>
+    <!-- Cartes articles -->
+    {% if public_favs %}
+    <div class="row gy-3">
+      {% for f in public_favs %}
+      {% set a = f.article %}
+      {% set sc = (reliability_score(a)[0]) if reliability_score is defined else None %}
+      {% set like_count = like_counts.get(a.id, 0) %}
+      {% set user_liked = a.id in liked_ids %}
+      <div class="col-md-6 col-lg-4">
+        <div class="article-card" data-article-id="{{ a.id }}" role="button" tabindex="0">
 
-{% if public_favs %}
-<div class="row gy-3">
-  {% for f in public_favs %}
-  {% set a = f.article %}
-  {% set sc = (reliability_score(a)[0]) if reliability_score is defined else None %}
-  {% set ifs_cls = 'badge-ifs-success' if sc is not none and sc>=80
-                    else ('badge-ifs-primary' if sc is not none and sc>=60
-                    else ('badge-ifs-warning' if sc is not none and sc>=40 else 'badge-ifs-danger')) %}
-  <div class="col-md-6 col-lg-4">
-    <div class="card h-100 article-card p-3" data-article-id="{{ a.id }}" role="button" tabindex="0">
-      <div class="d-flex flex-wrap gap-2 mb-2 align-items-center">
-        {% if sc is not none %}<span class="badge badge-ifs {{ ifs_cls }}">IFS: {{ sc }}</span>{% endif %}
-        {% if a.domain %}<span class="badge badge-soft">{{ a.domain }}</span>{% endif %}
-        {% if a.study_type %}<span class="badge badge-soft">{{ a.study_type }}</span>{% endif %}
+          <!-- Ligne badges + Citer -->
+          <div class="card-top">
+            {{ ifs_badge(sc) }}
+            {% if a.domain %}<span class="card-domain">{{ a.domain }}</span>{% endif %}
+            <div style="margin-left:auto; display:flex; align-items:center; gap:4px;" onclick="event.stopPropagation()">
+              <span class="badge bg-success-subtle text-success border border-success-subtle"
+                    style="font-size:11px; font-weight:500; padding:3px 7px;">Public</span>
+              <button class="card-top-action"
+                      data-title="{{ a.title|e }}"
+                      data-authors="{{ (a.authors or '')|e }}"
+                      data-journal="{{ (a.journal or '')|e }}"
+                      data-date="{{ a.published_date.strftime('%Y-%m-%d') if a.published_date else '' }}"
+                      data-doi="{{ (a.doi or '')|e }}"
+                      data-sc="{{ sc or 0 }}"
+                      data-domain="{{ (a.domain or '')|e }}"
+                      onclick="event.stopPropagation(); openCiteModal(this.dataset.title, this.dataset.authors, this.dataset.journal, this.dataset.date, this.dataset.doi, '', +this.dataset.sc, this.dataset.domain)">Citer</button>
+            </div>
+          </div>
+
+          <!-- Titre -->
+          <div class="card-title" onclick="event.stopPropagation(); openArticleModal({{ a.id }})">{{ a.title }}</div>
+
+          <!-- Méta -->
+          <div class="card-meta">
+            {% if a.authors %}<div class="card-meta-row"><span class="card-meta-key">Auteurs</span><span class="card-meta-val">{{ a.authors }}</span></div>{% endif %}
+            {% if a.journal %}<div class="card-meta-row"><span class="card-meta-key">Revue</span><span class="card-meta-val">{{ a.journal }}</span></div>{% endif %}
+            {% if a.published_date %}<div class="card-meta-row"><span class="card-meta-key">Date</span><span class="card-meta-val card-meta-date">{{ a.published_date.strftime('%d %b %Y') }}</span></div>{% endif %}
+          </div>
+
+          <hr class="card-sep">
+
+          {% if f.public_note %}
+            <div class="public-note-box mb-2" style="font-size:0.82rem;">{{ f.public_note }}</div>
+          {% endif %}
+
+          <!-- Résumé -->
+          <div class="card-abstract">
+            {% if a.abstract %}
+              {% set _abstract_text = a.clean_abstract or (a.abstract|striptags) %}
+              {{ _abstract_text[:400] }}{% if _abstract_text|length > 400 %}&#8230;{% endif %}
+            {% else %}
+              Résumé non disponible.
+            {% endif %}
+          </div>
+
+          <!-- Actions -->
+          <div class="card-actions" onclick="event.stopPropagation()">
+            {% if a.doi %}<a class="card-btn" href="https://doi.org/{{ a.doi }}" target="_blank" onclick="event.stopPropagation()">Article</a>{% endif %}
+            <button class="card-btn like-btn{% if user_liked %} card-btn-liked{% endif %}"
+                    data-article-id="{{ a.id }}"
+                    data-liked="{{ 'true' if user_liked else 'false' }}"
+                    onclick="event.stopPropagation(); toggleLike({{ a.id }}, this)">
+              Like · <span class="like-count">{{ like_count }}</span>
+            </button>
+          </div>
+
+        </div>
       </div>
-      <h6 class="fw-bold line-clamp-2 mb-1">{{ a.title }}</h6>
-      {% if a.authors %}<p class="text-muted small mb-1">{{ a.authors }}</p>{% endif %}
-      <div class="small text-muted mb-2 d-flex flex-wrap gap-2">
-        {% if a.journal %}<span class="badge badge-soft badge-journal">{{ a.journal }}</span>{% endif %}
-        {% if a.published_date %}<span>Paru le {{ a.published_date.strftime('%d %b %Y') }}</span>{% endif %}
-      </div>
-      {% if f.public_note %}
-        <div class="public-note-box mb-2">{{ f.public_note }}</div>
-      {% endif %}
-      {% if a.abstract %}
-        <p class="small line-clamp-3 mb-3">{{ (a.abstract|striptags)[:320] }}{% if a.abstract|length > 320 %}…{% endif %}</p>
-      {% else %}
-        <p class="small text-muted mb-3 fst-italic">Résumé non disponible.</p>
-      {% endif %}
-      <div class="mt-auto d-flex gap-2">
-        {% if a.url %}<a class="btn btn-sm btn-primary" href="{{ a.url }}" target="_blank" onclick="event.stopPropagation()">Ouvrir</a>{% endif %}
-        {% if a.doi %}<a class="btn btn-sm btn-outline-primary" href="https://doi.org/{{ a.doi }}" target="_blank" onclick="event.stopPropagation()">DOI</a>{% endif %}
-      </div>
+      {% endfor %}
     </div>
-  </div>
-  {% endfor %}
-</div>
+    {% else %}
+      <p class="text-muted">Aucun favori public{% if active_folder %} dans ce dossier{% endif %}.</p>
+    {% endif %}
+
+  </div><!-- /.physara-favorites-main -->
+</div><!-- /.physara-favorites-layout -->
+
+
 {% else %}
-  <p class="text-muted">Aucun favori public pour le moment.</p>
-{% endif %}
+{# ============================================================
+   VUE VISITEUR : grille simple sans sidebar
+   ============================================================ #}
+<div class="profile-visitor-wrap">
 
-<!-- Modal article -->
-<div class="modal fade" id="articleModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-xl modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 id="am-title" class="modal-title"></h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <div class="d-flex flex-wrap gap-2 mb-2">
-          <span id="am-journal" class="badge badge-soft badge-journal"></span>
-          <span id="am-ifs" class="badge badge-ifs"></span>
-          <span id="am-domain" class="badge badge-soft"></span>
-          <span id="am-studytype" class="badge badge-soft"></span>
+  <!-- Dossiers publics -->
+  {% if public_folders %}
+  <h5 class="mb-3">Dossiers publics</h5>
+  <div class="folders-grid mb-4">
+    {% for fd in public_folders %}
+    <div class="folder-tile" onclick="window.location='{{ url_for('folder_view', folder_id=fd.id) }}'">
+      <div class="folder-icon-wrap">
+        <div class="folder-icon" style="--folder-color: {{ fd.color or '#6366f1' }};">
+          <div class="folder-tab"></div>
+          <div class="folder-body"></div>
         </div>
-        <p id="am-authors" class="small text-muted mb-2"></p>
-        <div class="small text-muted mb-3"><span id="am-pubdate"></span></div>
-        <div class="mb-3">
-          <div class="d-flex align-items-center justify-content-between">
-            <strong>Indice de fiabilité : <span id="am-rel-level">—</span></strong>
-            <span id="am-rel-score" class="small text-muted"></span>
-          </div>
-          <div class="progress mt-2" style="height:10px;">
-            <div id="am-rel-bar" class="progress-bar" role="progressbar" style="width:0%;"></div>
-          </div>
-          <ul id="am-rel-reasons" class="small mt-2 mb-0"></ul>
-        </div>
-        <h6 class="mb-2">Résumé</h6>
-        <div id="am-abstract" class="mb-0"></div>
       </div>
-      <div class="modal-footer">
-        <a id="am-url" href="#" target="_blank" class="btn btn-primary" style="display:none;">Ouvrir</a>
-        <a id="am-doi" href="#" target="_blank" class="btn btn-outline-primary" style="display:none;">DOI</a>
-        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fermer</button>
+      <div class="folder-name text-truncate">{{ fd.name }}</div>
+      <div class="folder-count text-muted">
+        {% set count = folder_article_counts.get(fd.id, 0) %}
+        {{ count }} article{{ 's' if count > 1 else '' }}
       </div>
     </div>
+    {% endfor %}
   </div>
-</div>
+  {% endif %}
+
+  <!-- Favoris publics -->
+  <h5 class="mb-3">Favoris publics</h5>
+
+  {% if public_favs %}
+  <div class="row gy-3">
+    {% for f in public_favs %}
+    {% set a = f.article %}
+    {% set sc = (reliability_score(a)[0]) if reliability_score is defined else None %}
+    {% set like_count = like_counts.get(a.id, 0) %}
+    {% set user_liked = a.id in liked_ids %}
+    <div class="col-md-6 col-lg-4">
+      <div class="article-card" data-article-id="{{ a.id }}" role="button" tabindex="0">
+
+        <div class="card-top">
+          {{ ifs_badge(sc) }}
+          {% if a.domain %}<span class="card-domain">{{ a.domain }}</span>{% endif %}
+          <button class="card-top-action" style="margin-left:auto;"
+                  data-title="{{ a.title|e }}"
+                  data-authors="{{ (a.authors or '')|e }}"
+                  data-journal="{{ (a.journal or '')|e }}"
+                  data-date="{{ a.published_date.strftime('%Y-%m-%d') if a.published_date else '' }}"
+                  data-doi="{{ (a.doi or '')|e }}"
+                  data-sc="{{ sc or 0 }}"
+                  data-domain="{{ (a.domain or '')|e }}"
+                  onclick="event.stopPropagation(); openCiteModal(this.dataset.title, this.dataset.authors, this.dataset.journal, this.dataset.date, this.dataset.doi, '', +this.dataset.sc, this.dataset.domain)">Citer</button>
+        </div>
+
+        <div class="card-title" onclick="event.stopPropagation(); openArticleModal({{ a.id }})">{{ a.title }}</div>
+
+        <div class="card-meta">
+          {% if a.authors %}<div class="card-meta-row"><span class="card-meta-key">Auteurs</span><span class="card-meta-val">{{ a.authors }}</span></div>{% endif %}
+          {% if a.journal %}<div class="card-meta-row"><span class="card-meta-key">Revue</span><span class="card-meta-val">{{ a.journal }}</span></div>{% endif %}
+          {% if a.published_date %}<div class="card-meta-row"><span class="card-meta-key">Date</span><span class="card-meta-val card-meta-date">{{ a.published_date.strftime('%d %b %Y') }}</span></div>{% endif %}
+        </div>
+
+        <hr class="card-sep">
+
+        {% if f.public_note %}
+          <div class="public-note-box mb-2" style="font-size:0.82rem;">{{ f.public_note }}</div>
+        {% endif %}
+
+        <div class="card-abstract">
+          {% if a.abstract %}
+            {% set _abstract_text = a.clean_abstract or (a.abstract|striptags) %}
+            {{ _abstract_text[:400] }}{% if _abstract_text|length > 400 %}&#8230;{% endif %}
+          {% else %}
+            Résumé non disponible.
+          {% endif %}
+        </div>
+
+        <div class="card-actions" onclick="event.stopPropagation()">
+          {% if a.doi %}<a class="card-btn" href="https://doi.org/{{ a.doi }}" target="_blank" onclick="event.stopPropagation()">Article</a>{% endif %}
+          <button class="card-btn like-btn{% if user_liked %} card-btn-liked{% endif %}"
+                  data-article-id="{{ a.id }}"
+                  data-liked="{{ 'true' if user_liked else 'false' }}"
+                  onclick="event.stopPropagation(); toggleLike({{ a.id }}, this)">
+            Like · <span class="like-count">{{ like_count }}</span>
+          </button>
+        </div>
+
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+    <p class="text-muted">Aucun favori public pour le moment.</p>
+  {% endif %}
+
+</div><!-- /.profile-visitor-wrap -->
+{% endif %}
 
 {% endblock %}
 
 {% block scripts %}
 <style>
+/* ==================== PROFIL HEADER ==================== */
+.profile-header-wrap {
+  padding: 1.5rem 1.5rem 0;
+}
+.profile-visitor-wrap {
+  padding: 0 1.5rem 1.5rem;
+}
 .profile-avatar-img {
   width: 96px; height: 96px;
   border-radius: 50%; object-fit: cover;
@@ -275,6 +420,7 @@
   border-radius: 0 6px 6px 0;
   padding: 6px 10px; font-size: 0.82rem;
 }
+/* Dossiers grille visiteur */
 .folders-grid { display: flex; flex-wrap: wrap; gap: 16px; }
 .folder-tile { width: 130px; cursor: pointer; padding: 12px 10px 10px; border-radius: 12px; border: 2px solid transparent; transition: border-color .15s, transform .12s; text-align: center; background: var(--bs-body-bg); }
 .folder-tile:hover { transform: translateY(-2px); border-color: var(--bs-border-color); }
@@ -284,10 +430,107 @@
 .folder-body { position: absolute; bottom: 0; left: 0; width: 64px; height: 44px; background: var(--folder-color); border-radius: 0 6px 6px 6px; }
 .folder-name { font-size: 0.82rem; font-weight: 600; margin-bottom: 2px; }
 .folder-count { font-size: 0.72rem; }
-.badge-ifs { background: var(--bs-warning-bg-subtle,#fff3cd); color:#6c4b00; border:1px solid rgba(0,0,0,.08); }
+
+/* ==================== SIDEBAR LAYOUT (propriétaire) ==================== */
+:root { --navbar-h: 53px; }
+.physara-favorites-layout {
+  display: flex; align-items: stretch;
+  min-height: calc(100vh - var(--navbar-h));
+  width: 100%; margin: 0;
+}
+.physara-sidebar {
+  position: sticky; top: var(--navbar-h);
+  height: calc(100vh - var(--navbar-h));
+  overflow-y: auto; align-self: flex-start;
+  width: 220px; background: var(--bs-body-bg);
+  border-right: 1px solid var(--bs-border-color);
+  display: flex; flex-direction: column;
+  flex-shrink: 0; transition: width 0.2s ease; overflow: hidden;
+}
+.physara-sidebar.collapsed { width: 48px; }
+.physara-sidebar-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 14px 10px; border-bottom: 1px solid var(--bs-border-color); flex-shrink: 0;
+}
+.physara-sidebar-title {
+  font-size: 11px; font-weight: 600; color: var(--bs-secondary-color);
+  text-transform: uppercase; letter-spacing: 0.07em; white-space: nowrap;
+}
+.physara-sidebar-toggle {
+  width: 22px; height: 22px; border-radius: 6px;
+  background: var(--bs-secondary-bg); border: none; cursor: pointer;
+  font-size: 13px; color: var(--bs-secondary-color); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.physara-sidebar.collapsed .physara-sidebar-title,
+.physara-sidebar.collapsed .physara-folder-name,
+.physara-sidebar.collapsed .physara-folder-count,
+.physara-sidebar.collapsed .physara-folder-children { display: none !important; }
+.physara-folder-item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 14px; cursor: pointer;
+  text-decoration: none; color: var(--bs-body-color);
+  font-size: 0.87rem; overflow: hidden;
+}
+.physara-folder-item:hover { background: var(--bs-secondary-bg); }
+.physara-folder-item.active { background: var(--bs-secondary-bg); font-weight: 600; }
+.physara-folder-color-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.physara-folder-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.physara-folder-count {
+  font-size: 10px; color: var(--bs-secondary-color);
+  background: var(--bs-secondary-bg); padding: 1px 6px; border-radius: 8px; flex-shrink: 0; white-space: nowrap;
+}
+.physara-folder-chevron { font-size: 12px; color: var(--bs-secondary-color); flex-shrink: 0; width: 16px; text-align: center; }
+.physara-folder-children { padding-left: 12px; border-left: 1px solid var(--bs-border-color); margin-left: 20px; display: none; }
+.physara-folder-tree-item.expanded > .physara-folder-children { display: block; }
+.physara-favorites-main { flex: 1; padding: 24px 28px; overflow-y: auto; min-width: 0; }
+
+/* Mobile : sidebar masquée */
+@media (max-width: 991px) {
+  .physara-favorites-layout { width: 100%; margin: 0; }
+  .physara-sidebar { display: none; }
+  .physara-favorites-main { padding: 16px; }
+  .profile-header-wrap { padding: 1rem 1rem 0; }
+  .profile-visitor-wrap { padding: 0 1rem 1rem; }
+}
+/* Accordéon mobile */
+.physara-folder-accordion {
+  background: var(--bs-body-bg); border: 1px solid var(--bs-border-color);
+  border-radius: 12px; margin-bottom: 16px; overflow: hidden;
+}
+.physara-folder-accordion-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px; cursor: pointer; user-select: none;
+}
+.physara-folder-accordion-left { display: flex; align-items: center; gap: 8px; }
+.physara-folder-accordion-title { font-size: 13px; font-weight: 600; color: var(--bs-body-color); }
+.physara-folder-accordion-count {
+  font-size: 11px; color: var(--bs-secondary-color);
+  background: var(--bs-secondary-bg); padding: 1px 8px; border-radius: 10px;
+}
+.physara-folder-accordion-chevron { font-size: 13px; color: var(--bs-secondary-color); transition: transform 0.2s; display: inline-block; }
+.physara-folder-accordion.open .physara-folder-accordion-chevron { transform: rotate(90deg); }
+.physara-folder-accordion-body { border-top: 1px solid var(--bs-border-color); display: none; }
+.physara-folder-accordion.open .physara-folder-accordion-body { display: block; }
+.physara-mobile-folder-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px; cursor: pointer;
+  text-decoration: none; color: var(--bs-body-color);
+}
+.physara-mobile-folder-row:hover { background: var(--bs-secondary-bg); }
+.physara-mobile-folder-row.active { background: var(--bs-secondary-bg); }
+.physara-mobile-folder-row.active .physara-mobile-folder-name { font-weight: 600; }
+.physara-mobile-folder-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.physara-mobile-folder-name { font-size: 13px; flex: 1; }
+.physara-mobile-folder-count {
+  font-size: 11px; color: var(--bs-secondary-color);
+  background: var(--bs-secondary-bg); padding: 1px 7px; border-radius: 8px;
+}
+.physara-mobile-folder-sep { height: 1px; background: var(--bs-border-color); margin: 0 16px; }
 </style>
 
 <script>
+/* ---- Activité ---- */
 document.querySelectorAll('.activity-indicator').forEach(el => {
   const date = new Date(el.dataset.date);
   const diffDays = Math.floor((new Date() - date) / 86400000);
@@ -299,6 +542,7 @@ document.querySelectorAll('.activity-indicator').forEach(el => {
   el.innerHTML=`<span class="activity-dot ${dotClass}"></span><span class="text-muted">${label}</span>`;
 });
 
+/* ---- Follow / Unfollow ---- */
 async function toggleFollow(userId, isFollowing) {
   const url = isFollowing ? `/unfollow/${userId}` : `/follow/${userId}`;
   const res = await fetch(url, {method:'POST'});
@@ -306,43 +550,48 @@ async function toggleFollow(userId, isFollowing) {
   if (data.ok) location.reload();
 }
 
-let articleModalInstance = null;
-async function openArticleModal(id) {
-  try {
-    document.querySelectorAll('.modal-backdrop').forEach(bd => bd.remove());
-    const res = await fetch(`/api/article/${id}`);
-    const data = await res.json();
-    document.getElementById('am-title').textContent = data.title || "Sans titre";
-    document.getElementById('am-authors').textContent = data.authors || "";
-    const setBadge = (id, val) => { const el=document.getElementById(id); if(val){el.textContent=val;el.style.display="";}else el.style.display="none"; };
-    setBadge('am-journal', data.journal); setBadge('am-domain', data.domain); setBadge('am-studytype', data.study_type);
-    const sc = (data.reliability && data.reliability.score) || null;
-    const ifs = document.getElementById('am-ifs');
-    if(sc!==null){ifs.textContent=`IFS: ${sc}`;ifs.style.display='';}else ifs.style.display='none';
-    const bar = document.getElementById('am-rel-bar');
-    bar.style.width=`${sc||0}%`; bar.className='progress-bar';
-    if(sc>=80) bar.classList.add('bg-success'); else if(sc>=60) bar.classList.add('bg-primary'); else if(sc>=40) bar.classList.add('bg-warning'); else bar.classList.add('bg-danger');
-    document.getElementById('am-rel-level').textContent=(data.reliability&&data.reliability.level)||"—";
-    document.getElementById('am-rel-score').textContent=`${sc||0}/100`;
-    document.getElementById('am-rel-reasons').innerHTML=((data.reliability&&data.reliability.reasons)||[]).map(r=>`<li>${r}</li>`).join('')||'<li>Aucune raison listée</li>';
-    const fmt=iso=>{if(!iso)return null;try{const d=new Date(iso);return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'});}catch{return null;}};
-    document.getElementById('am-pubdate').textContent=fmt(data.published_date)?`Paru le ${fmt(data.published_date)}`:"";
-    document.getElementById('am-abstract').innerHTML=data.abstract?`<p>${data.abstract}</p>`:"<p class='text-muted fst-italic'>Résumé non disponible.</p>";
-    const urlBtn=document.getElementById('am-url'); if(data.url){urlBtn.href=data.url;urlBtn.style.display="";}else urlBtn.style.display="none";
-    const doiBtn=document.getElementById('am-doi'); if(data.doi){doiBtn.href=`https://doi.org/${data.doi}`;doiBtn.style.display="";}else doiBtn.style.display="none";
-    const modalEl=document.getElementById('articleModal');
-    if(!articleModalInstance) articleModalInstance=new bootstrap.Modal(modalEl);
-    articleModalInstance.show();
-  } catch(e){ console.error(e); }
+/* ---- Sidebar profil (desktop) ---- */
+function toggleProfileSidebar() {
+  const s = document.getElementById('profileSidebar');
+  if (!s) return;
+  const btn = s.querySelector('.physara-sidebar-toggle');
+  s.classList.toggle('collapsed');
+  btn.textContent = s.classList.contains('collapsed') ? '\u203a' : '\u2039';
+  localStorage.setItem('profileSidebarCollapsed', s.classList.contains('collapsed'));
+}
+document.addEventListener('DOMContentLoaded', () => {
+  if (localStorage.getItem('profileSidebarCollapsed') === 'true') {
+    const s = document.getElementById('profileSidebar');
+    if (s) { s.classList.add('collapsed'); const btn = s.querySelector('.physara-sidebar-toggle'); if (btn) btn.textContent = '\u203a'; }
+  }
+});
+
+/* ---- Accordéon mobile dossiers ---- */
+function toggleProfileMobileFolders() {
+  const acc = document.getElementById('profileMobileAccordion');
+  if (acc) acc.classList.toggle('open');
 }
 
-document.querySelectorAll('.card[data-article-id]').forEach(card => {
-  card.querySelectorAll('a,button,form').forEach(el => el.addEventListener('click', e => e.stopPropagation()));
-  card.addEventListener('click', () => { const id=card.getAttribute('data-article-id'); if(id) openArticleModal(id); });
-  card.addEventListener('keydown', e => {
-    if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return;
-    if(e.key==='Enter'||e.key===' '){ e.preventDefault(); const id=card.getAttribute('data-article-id'); if(id) openArticleModal(id); }
+/* ---- Expansion arborescence sidebar ---- */
+document.querySelectorAll('.physara-folder-chevron').forEach(chevron => {
+  chevron.addEventListener('click', function(e) {
+    e.stopPropagation();
+    const item = this.closest('.physara-folder-tree-item');
+    if (item) item.classList.toggle('expanded');
   });
 });
+
+/* ---- Like ---- */
+async function toggleLike(articleId, btn) {
+  const liked = btn.dataset.liked === 'true';
+  const url = liked ? `/unlike/${articleId}` : `/like/${articleId}`;
+  const res = await fetch(url, {method: 'POST'});
+  const data = await res.json();
+  if (data.ok) {
+    btn.dataset.liked = data.liked ? 'true' : 'false';
+    btn.className = `card-btn like-btn${data.liked ? ' card-btn-liked' : ''}`;
+    btn.querySelector('.like-count').textContent = data.count;
+  }
+}
 </script>
 {% endblock %}
