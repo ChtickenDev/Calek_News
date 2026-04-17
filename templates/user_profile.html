@@ -347,13 +347,20 @@
               Favori{% if user_favorited %} &#10003;{% endif %}
             </button>
             {% endif %}
-            <button class="card-btn like-btn{% if user_liked %} card-btn-liked{% endif %}"
-                    data-article-id="{{ a.id }}"
-                    data-liked="{{ 'true' if user_liked else 'false' }}"
-                    onclick="event.stopPropagation(); toggleLike({{ a.id }}, this)">
-              <svg class="thumb-svg" width="13" height="13" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
-              Utile&#160;&#183;&#160;<span class="like-count">{{ like_count }}</span>
-            </button>
+            <span class="like-btn"
+                  style="margin-left:auto; display:flex; align-items:center; gap:4px; font-size:11px; color:{% if user_liked %}#4a90d9{% else %}var(--bs-secondary-color){% endif %}; cursor:pointer; border:0.5px solid var(--bs-border-color); border-radius:6px; padding:5px 10px;"
+                  data-article-id="{{ a.id }}"
+                  data-liked="{{ 'true' if user_liked else 'false' }}"
+                  onclick="event.stopPropagation(); toggleLike({{ a.id }}, this)">
+              <svg width="13" height="13" viewBox="0 0 24 24"
+                   fill="{{ '#4a90d9' if user_liked else 'none' }}"
+                   stroke="{{ '#4a90d9' if user_liked else 'currentColor' }}"
+                   stroke-width="2">
+                <path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3H14z"/>
+                <path d="M7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"/>
+              </svg>
+              Utile&#160;·&#160;<span class="like-count">{{ like_count }}</span>
+            </span>
           </div>
 
         </div>
