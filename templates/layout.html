@@ -145,6 +145,62 @@
     transition: background .15s;
   }
   .cite-copy-btn:hover { background: #6366f1; color: #fff; border-color: #6366f1; }
+
+  /* ---- Navbar desktop : active indicator ---- */
+  .navbar { min-height: 52px; }
+  .navbar-nav .nav-link {
+    color: #555;
+    font-weight: 400;
+    border-bottom: 2px solid transparent;
+    padding-bottom: 4px;
+    transition: color .15s, border-color .15s;
+  }
+  .navbar-nav .nav-link.active {
+    color: #1a1a2e !important;
+    font-weight: 600;
+    border-bottom: 2px solid #1a1a2e;
+  }
+
+  /* ---- Bottom navigation bar (mobile only) ---- */
+  .physara-bottom-nav {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: 56px;
+    background: var(--bs-body-bg);
+    border-top: 0.5px solid var(--bs-border-color);
+    display: flex;
+    z-index: 1050;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .physara-bottom-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    font-size: 10px;
+    color: #aaa;
+    text-decoration: none;
+  }
+  .physara-bottom-item.active {
+    color: #1a1a2e;
+    font-weight: 600;
+  }
+  [data-bs-theme="dark"] .physara-bottom-item { color: #6b7280; }
+  [data-bs-theme="dark"] .physara-bottom-item.active { color: #e2e8f0; }
+  .physara-bottom-item svg { width: 20px; height: 20px; }
+  .physara-bottom-avatar {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: #e74c3c;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; color: #fff; font-weight: 600;
+  }
+
+  /* ---- Mobile : padding pour éviter que le contenu passe sous la barre ---- */
+  @media (max-width: 991.98px) {
+    main.container { padding-bottom: 72px; }
+  }
   </style>
 </head>
 <body>
@@ -156,7 +212,7 @@
       <span>Physara</span>
     </a>
 
-    <div class="d-flex align-items-center gap-2 d-lg-none">
+    <div class="d-none">
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
               aria-controls="navbarNav" aria-expanded="false" aria-label="Ouvrir la navigation">
         ☰
@@ -237,6 +293,51 @@
     </div>
   </div>
 </nav>
+
+{% if current_user.is_authenticated %}
+<nav class="physara-bottom-nav d-lg-none" aria-label="Navigation principale">
+  <a href="{{ url_for('feed') }}" class="physara-bottom-item{% if request.endpoint == 'feed' %} active{% endif %}">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+      <polyline points="9 22 9 12 15 12 15 22"></polyline>
+    </svg>
+    <span>Feed</span>
+  </a>
+  <a href="{{ url_for('favorites') }}" class="physara-bottom-item{% if request.endpoint == 'favorites' %} active{% endif %}">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+    </svg>
+    <span>Favoris</span>
+  </a>
+  <a href="{{ url_for('my_drafts') }}" class="physara-bottom-item{% if request.endpoint == 'my_drafts' %} active{% endif %}">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="11" cy="11" r="8"></circle>
+      <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+    </svg>
+    <span>Recherche</span>
+  </a>
+  <a href="{{ url_for('users_list') }}" class="physara-bottom-item{% if request.endpoint == 'users_list' %} active{% endif %}">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+      <circle cx="9" cy="7" r="4"></circle>
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+      <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+    </svg>
+    <span>Profils</span>
+  </a>
+  <a href="{{ url_for('me') }}" class="physara-bottom-item{% if request.endpoint == 'me' %} active{% endif %}">
+    {% if current_user.photo_filename %}
+      <img src="{{ url_for('static', filename='uploads/avatars/' + current_user.photo_filename) }}"
+           class="physara-bottom-avatar" style="object-fit:cover;" alt="">
+    {% else %}
+      <span class="physara-bottom-avatar avatar-initials-dynamic" data-seed="{{ current_user.email }}">
+        {{ (current_user.name or current_user.email)[0].upper() }}
+      </span>
+    {% endif %}
+    <span>Moi</span>
+  </a>
+</nav>
+{% endif %}
 
 <main class="container py-4">
   {% with messages = get_flashed_messages(with_categories=true) %}
