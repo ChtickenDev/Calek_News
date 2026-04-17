@@ -236,7 +236,14 @@
           {{ ifs_badge(sc) }}
           {% if a.domain %}<span class="card-domain">{{ a.domain }}</span>{% endif %}
           <button class="card-top-action" style="margin-left:auto;"
-                  onclick="event.stopPropagation(); openCiteModal({{ a.title|tojson }}, {{ (a.authors or '')|tojson }}, {{ (a.journal or '')|tojson }}, {{ (a.published_date.strftime('%Y-%m-%d') if a.published_date else '')|tojson }}, {{ (a.doi or '')|tojson }}, '', {{ sc or 0 }}, {{ (a.domain or '')|tojson }})">{{ t('btn.cite') }}</button>
+                  data-title="{{ a.title|e }}"
+                  data-authors="{{ (a.authors or '')|e }}"
+                  data-journal="{{ (a.journal or '')|e }}"
+                  data-date="{{ a.published_date.strftime('%Y-%m-%d') if a.published_date else '' }}"
+                  data-doi="{{ (a.doi or '')|e }}"
+                  data-sc="{{ sc or 0 }}"
+                  data-domain="{{ (a.domain or '')|e }}"
+                  onclick="event.stopPropagation(); openCiteModal(this.dataset.title, this.dataset.authors, this.dataset.journal, this.dataset.date, this.dataset.doi, '', +this.dataset.sc, this.dataset.domain)">{{ t('btn.cite') }}</button>
         </div>
 
         <div class="card-title" onclick="event.stopPropagation(); openArticleModal({{ a.id }})">{{ a.title }}</div>
@@ -322,7 +329,14 @@
               {{ t('btn.public') if f.is_public else t('btn.private') }}
             </button>
             <button class="card-top-action"
-                    onclick="event.stopPropagation(); openCiteModal({{ a.title|tojson }}, {{ (a.authors or '')|tojson }}, {{ (a.journal or '')|tojson }}, {{ (a.published_date.strftime('%Y-%m-%d') if a.published_date else '')|tojson }}, {{ (a.doi or '')|tojson }}, '', {{ sc or 0 }}, {{ (a.domain or '')|tojson }})">{{ t('btn.cite') }}</button>
+                    data-title="{{ a.title|e }}"
+                    data-authors="{{ (a.authors or '')|e }}"
+                    data-journal="{{ (a.journal or '')|e }}"
+                    data-date="{{ a.published_date.strftime('%Y-%m-%d') if a.published_date else '' }}"
+                    data-doi="{{ (a.doi or '')|e }}"
+                    data-sc="{{ sc or 0 }}"
+                    data-domain="{{ (a.domain or '')|e }}"
+                    onclick="event.stopPropagation(); openCiteModal(this.dataset.title, this.dataset.authors, this.dataset.journal, this.dataset.date, this.dataset.doi, '', +this.dataset.sc, this.dataset.domain)">{{ t('btn.cite') }}</button>
           </div>
         </div>
 

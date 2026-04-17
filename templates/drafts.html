@@ -115,7 +115,15 @@
     <div class="article-card" data-article-id="{{ a.id }}" role="button" tabindex="0">
 
       <!-- Cite button (abs top-right) -->
-      <button class="card-cite-btn" onclick="event.stopPropagation(); openCiteModal({{ a.title|tojson }}, {{ (a.authors or '')|tojson }}, {{ (a.journal or '')|tojson }}, {{ (a.published_date.strftime('%Y-%m-%d') if a.published_date else '')|tojson }}, {{ (a.doi or '')|tojson }}, '', {{ sc or 0 }}, {{ (a.domain or '')|tojson }})">{{ t('btn.cite') }}</button>
+      <button class="card-cite-btn"
+              data-title="{{ a.title|e }}"
+              data-authors="{{ (a.authors or '')|e }}"
+              data-journal="{{ (a.journal or '')|e }}"
+              data-date="{{ a.published_date.strftime('%Y-%m-%d') if a.published_date else '' }}"
+              data-doi="{{ (a.doi or '')|e }}"
+              data-sc="{{ sc or 0 }}"
+              data-domain="{{ (a.domain or '')|e }}"
+              onclick="event.stopPropagation(); openCiteModal(this.dataset.title, this.dataset.authors, this.dataset.journal, this.dataset.date, this.dataset.doi, '', +this.dataset.sc, this.dataset.domain)">{{ t('btn.cite') }}</button>
 
       <!-- IFS + domaine -->
       <div class="card-top">
