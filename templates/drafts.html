@@ -25,7 +25,7 @@
     </div>
 
     <!-- Filtres sur une ligne -->
-    <div class="d-flex flex-wrap gap-2 align-items-end">
+    <div id="search-filters" class="d-flex flex-wrap gap-2 align-items-end">
 
       <div>
         <label class="form-label small mb-1">Tri PubMed</label>
@@ -258,7 +258,84 @@
 {% endblock %}
 
 {% block scripts %}
+<style>
+@media (max-width: 767px) {
+  /* Bouton Rechercher : pill compact */
+  #pubmed-form .d-flex.gap-2.mb-3 .btn[type="submit"] {
+    border-radius: 20px !important;
+    padding: 8px 16px !important;
+    font-size: 13px !important;
+    white-space: nowrap !important;
+  }
+
+  /* Filtres : rangée scrollable horizontalement */
+  #search-filters {
+    display: block !important;
+    overflow-x: auto !important;
+    white-space: nowrap !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding-bottom: 4px !important;
+    margin-top: 10px !important;
+  }
+
+  /* Chaque bloc filtre : inline */
+  #search-filters > div {
+    display: inline-block !important;
+    white-space: normal !important;
+    vertical-align: top !important;
+    margin-right: 0 !important;
+  }
+
+  /* Masquer les labels */
+  #search-filters label {
+    display: none !important;
+  }
+
+  /* Selects compacts */
+  #search-filters select {
+    display: inline-block !important;
+    font-size: 11px !important;
+    border: 0.5px solid var(--bs-border-color) !important;
+    border-radius: 6px !important;
+    padding: 5px 8px !important;
+    margin-right: 6px !important;
+    background: var(--bs-body-bg) !important;
+    color: var(--bs-secondary-color) !important;
+    min-width: 0 !important;
+  }
+
+  /* Supprimer le ms-auto du bloc tri résultats */
+  #search-filters .ms-auto {
+    margin-left: 0 !important;
+  }
+
+  /* Le sous-div d-flex du tri résultats : inline */
+  #search-filters .ms-auto > .d-flex {
+    display: inline-flex !important;
+  }
+
+  /* Masquer le bouton OK */
+  #search-filters button[type="submit"] {
+    display: none !important;
+  }
+
+  /* Masquer les dates personnalisées sur mobile */
+  #custom-dates {
+    display: none !important;
+  }
+}
+</style>
 <script>
+/* Mobile : tri résultats auto-submit sans bouton OK */
+if (window.innerWidth <= 767) {
+  const sortSel = document.querySelector('select[name="sort"]');
+  if (sortSel) {
+    sortSel.addEventListener('change', () => {
+      document.getElementById('sort-form').submit();
+    });
+  }
+}
+
 /* Favoris AJAX */
 document.querySelectorAll('.favorite-form')?.forEach(form => {
   form.addEventListener('submit', async (e) => {
