@@ -416,13 +416,11 @@
       </div>
 
       <!-- Footer -->
-      <div class="modal-footer px-4 py-3 border-top d-flex align-items-center justify-content-between flex-wrap gap-2">
-        <div class="d-flex align-items-center gap-2 flex-wrap">
-          <a id="am-url" href="#" target="_blank" class="btn btn-primary btn-sm" style="display:none;">Ouvrir</a>
-          <a id="am-doi" href="#" target="_blank" class="btn btn-outline-secondary btn-sm" style="display:none;">Article</a>
-          <button type="button" class="btn btn-outline-secondary btn-sm" id="am-cite-btn" style="display:none;" onclick="toggleCiteBox()">Citer</button>
-          <button type="button" class="btn btn-link btn-sm text-muted" data-bs-dismiss="modal" style="text-decoration:none;">Fermer</button>
-        </div>
+      <div class="modal-footer px-4 py-3 border-top d-flex align-items-center flex-wrap gap-2">
+        <a id="am-url" href="#" target="_blank" class="btn btn-sm" style="background:#1a1a2e;color:#fff;border:none;display:none;">Ouvrir</a>
+        <a id="am-doi" href="#" target="_blank" class="btn btn-sm btn-outline-secondary" style="display:none;">Article</a>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="am-cite-btn" style="display:none;" onclick="toggleCiteBox()">Citer</button>
+        <button type="button" class="btn btn-sm btn-link text-muted" data-bs-dismiss="modal" style="text-decoration:none;">Fermer</button>
         <div id="am-cite-box" style="display:none; width:100%;">
           <div class="cite-box">
             <div class="cite-box-label">Vancouver</div>
@@ -430,24 +428,6 @@
             <button class="cite-copy-btn" onclick="copyCite()">Copier</button>
           </div>
         </div>
-
-        {# ---- Formulaire "Proposer la publication" ---- #}
-        {% if current_user.is_authenticated %}
-        <form id="proposal-form" action="/propose" method="post" class="d-flex align-items-center gap-2">
-          <input type="hidden" id="pf-article-id" name="article_id" value="">
-          <label class="small d-flex align-items-center gap-1 mb-0">
-            <input id="pf-share" type="checkbox" name="share_name" class="form-check-input">
-            <span>Afficher mon nom</span>
-          </label>
-          <input id="pf-note" type="text" name="note" class="form-control form-control-sm"
-                placeholder="(optionnel) Un mot pour l’équipe" style="max-width:260px;">
-          <button id="pf-submit" type="submit" class="btn btn-sm btn-success">Proposer la publication</button>
-        </form>
-        {% else %}
-        <div id="proposal-form" class="text-muted small">
-          Connectez-vous pour proposer une publication.
-        </div>
-        {% endif %}
       </div>
 
     </div>
