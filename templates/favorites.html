@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% from '_macros.html' import ifs_badge, render_folder_tree with context %}
+{% from '_macros.html' import ifs_badge, render_folder_tree, render_mobile_folder_tree with context %}
 {% block main_container %}container-fluid{% endblock %}
 {% block main_class %} physara-no-pad{% endblock %}
 {% block content %}
@@ -203,6 +203,30 @@
 
     <div class="mb-3">
       <h3 class="mb-0">{{ t('favorites.title') }}</h3>
+    </div>
+
+    <!-- Accordéon dossiers mobile uniquement -->
+    <div class="physara-folder-accordion d-block d-lg-none" id="mobilefolderAccordion">
+      <div class="physara-folder-accordion-header" onclick="toggleMobileFolders()">
+        <div class="physara-folder-accordion-left">
+          <span class="physara-folder-accordion-title">Dossiers</span>
+          <span class="physara-folder-accordion-count">{{ root_folders|length }}</span>
+        </div>
+        <span class="physara-folder-accordion-chevron" id="mobileFolderChevron">&#8250;</span>
+      </div>
+      <div class="physara-folder-accordion-body" id="mobileFolderBody">
+        <a href="{{ url_for('favorites') }}" class="physara-mobile-folder-row {% if not active_folder %}active{% endif %}">
+          <span class="physara-mobile-folder-name">Tous</span>
+          <span class="physara-mobile-folder-count">{{ total_count }}</span>
+        </a>
+        <div class="physara-mobile-folder-sep"></div>
+        {% for folder in root_folders %}
+          {{ render_mobile_folder_tree(folder, active_folder) }}
+        {% endfor %}
+        <div class="physara-mobile-folder-add" onclick="openNewFolderModal(null)">
+          + Nouveau dossier
+        </div>
+      </div>
     </div>
 
 {% if active_folder %}
@@ -631,6 +655,53 @@ main.physara-no-pad {
   .physara-favorites-main { padding: 16px; }
 }
 
+/* ===================== ACCORDÉON MOBILE DOSSIERS ===================== */
+.physara-folder-accordion {
+  background: var(--bs-body-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: 12px;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+.physara-folder-accordion-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px; cursor: pointer; user-select: none;
+}
+.physara-folder-accordion-left { display: flex; align-items: center; gap: 8px; }
+.physara-folder-accordion-title { font-size: 13px; font-weight: 600; color: var(--bs-body-color); }
+.physara-folder-accordion-count {
+  font-size: 11px; color: var(--bs-secondary-color);
+  background: var(--bs-secondary-bg); padding: 1px 8px; border-radius: 10px;
+}
+.physara-folder-accordion-chevron {
+  font-size: 13px; color: var(--bs-secondary-color);
+  transition: transform 0.2s; display: inline-block;
+}
+.physara-folder-accordion.open .physara-folder-accordion-chevron { transform: rotate(90deg); }
+.physara-folder-accordion-body { border-top: 1px solid var(--bs-border-color); display: none; }
+.physara-folder-accordion.open .physara-folder-accordion-body { display: block; }
+.physara-mobile-folder-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px; cursor: pointer;
+  text-decoration: none; color: var(--bs-body-color);
+}
+.physara-mobile-folder-row:hover { background: var(--bs-secondary-bg); }
+.physara-mobile-folder-row.active { background: var(--bs-secondary-bg); }
+.physara-mobile-folder-row.active .physara-mobile-folder-name { font-weight: 600; }
+.physara-mobile-folder-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.physara-mobile-folder-name { font-size: 13px; flex: 1; }
+.physara-mobile-folder-count {
+  font-size: 11px; color: var(--bs-secondary-color);
+  background: var(--bs-secondary-bg); padding: 1px 7px; border-radius: 8px;
+}
+.physara-mobile-folder-sep { height: 1px; background: var(--bs-border-color); margin: 0 16px; }
+.physara-mobile-folder-add {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 16px; font-size: 12px; color: var(--bs-secondary-color);
+  border-top: 1px solid var(--bs-border-color); cursor: pointer;
+}
+.physara-mobile-folder-add:hover { background: var(--bs-secondary-bg); }
+
 /* ===================== ANCIEN CSS DOSSIERS (dropdown) ===================== */
 /* Grille dossiers */
 .folders-grid {
@@ -882,15 +953,22 @@ function toggleFolderExpand(folderId) {
   localStorage.setItem(`folderExpanded_${folderId}`, expanded ? '1' : '0');
 }
 
+function toggleMobileFolders() {
+  const acc = document.getElementById('mobilefolderAccordion');
+  if (!acc) return;
+  acc.classList.toggle('open');
+  localStorage.setItem('mobileFoldersOpen', acc.classList.contains('open'));
+}
+
 document.addEventListener('DOMContentLoaded', () => {
-  // Restaurer état collapsed de la sidebar
+  // Restaurer état collapsed de la sidebar desktop
   const s = document.getElementById('favSidebar');
   if (s && localStorage.getItem('favSidebarCollapsed') === 'true') {
     s.classList.add('collapsed');
     const btn = s.querySelector('.physara-sidebar-toggle');
     if (btn) btn.textContent = '\u203a';
   }
-  // Restaurer état déplié des dossiers
+  // Restaurer état déplié des dossiers desktop
   document.querySelectorAll('.physara-folder-tree-item[data-folder-id]').forEach(item => {
     const id = item.dataset.folderId;
     if (localStorage.getItem(`folderExpanded_${id}`) === '1') {
@@ -899,6 +977,11 @@ document.addEventListener('DOMContentLoaded', () => {
       if (chevron) chevron.textContent = '\u02c5';
     }
   });
+  // Restaurer état accordéon mobile
+  const acc = document.getElementById('mobilefolderAccordion');
+  if (acc && localStorage.getItem('mobileFoldersOpen') === 'true') {
+    acc.classList.add('open');
+  }
 });
 
 // --- Dossiers ---

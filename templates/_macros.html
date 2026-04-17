@@ -28,6 +28,25 @@
 {%- endmacro %}
 
 {#
+  render_mobile_folder_tree(folder, active_folder, depth) — accordéon mobile.
+  Nécessite import with context pour accéder à folder_article_counts.
+#}
+{% macro render_mobile_folder_tree(folder, active_folder, depth=0) %}
+<div class="physara-mobile-folder-row {% if active_folder and active_folder.id == folder.id %}active{% endif %}"
+     onclick="navigateFolder({{ folder.id }})"
+     style="padding-left: {{ 16 + depth * 20 }}px;">
+  <span class="physara-mobile-folder-dot" style="background: {{ folder.color or '#6366f1' }};"></span>
+  <span class="physara-mobile-folder-name">{{ folder.name }}</span>
+  <span class="physara-mobile-folder-count">{{ folder_article_counts.get(folder.id, 0) if folder_article_counts is defined else '' }}</span>
+</div>
+{% if folder.children.count() > 0 %}
+  {% for child in folder.children %}
+    {{ render_mobile_folder_tree(child, active_folder, depth + 1) }}
+  {% endfor %}
+{% endif %}
+{% endmacro %}
+
+{#
   render_folder_tree(folder, active_folder, depth) — arborescence dossier récursive.
   Nécessite import with context pour accéder à folder_article_counts.
 #}
