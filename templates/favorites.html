@@ -57,7 +57,7 @@
   </ul>
 </div>
 {% endmacro %}
-<!-- Modal import Zotero (fichier JSON) -->
+<!-- Modal import Zotero (fichier RDF) -->
 <div class="modal fade" id="zoteroImportModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
@@ -69,19 +69,18 @@
         <div class="p-3 rounded mb-3" style="background:var(--bs-secondary-bg);font-size:13px;line-height:1.7;">
           <div style="font-weight:600;margin-bottom:6px;">Comment exporter depuis Zotero ?</div>
           <ol style="padding-left:16px;margin:0;">
-            <li>Ouvrez Zotero Desktop</li>
+            <li>Ouvrez <strong>Zotero Desktop</strong></li>
             <li>Cliquez sur <strong>Fichier &#8594; Exporter la biblioth&#232;que</strong></li>
-            <li>Choisissez le format <strong>Zotero JSON</strong></li>
-            <li>Cochez <strong>Exporter les notes</strong> si souhait&#233;</li>
-            <li>Enregistrez le fichier <code>.json</code></li>
+            <li>Choisissez le format <strong>Zotero RDF</strong></li>
+            <li>Enregistrez le fichier <code>.rdf</code></li>
             <li>Importez-le ci-dessous</li>
           </ol>
         </div>
-        <div style="font-size:12px;color:var(--bs-secondary-color);margin-bottom:10px;">
-          &#9888;&#65039; Seuls les articles d&#233;j&#224; pr&#233;sents dans vos favoris Physara seront organis&#233;s. Les nouveaux articles Zotero ne seront pas import&#233;s.
+        <div class="mb-3" style="font-size:12px;color:var(--bs-secondary-color);">
+          &#9888;&#65039; Seuls les articles d&#233;j&#224; pr&#233;sents dans vos favoris Physara seront organis&#233;s dans les dossiers. Les nouveaux articles Zotero ne seront pas import&#233;s.
         </div>
         <form id="zoteroImportForm" enctype="multipart/form-data">
-          <input type="file" name="zotero_file" accept=".json" class="form-control form-control-sm">
+          <input type="file" name="zotero_file" accept=".rdf" class="form-control form-control-sm">
         </form>
       </div>
       <div class="modal-footer border-top">
@@ -1428,7 +1427,7 @@ async function submitZoteroImport() {
   const form = document.getElementById('zoteroImportForm');
   const fileInput = form.querySelector('input[type="file"]');
   if (!fileInput.files.length) {
-    alert('Veuillez s\u00e9lectionner un fichier JSON Zotero.');
+    alert('Veuillez s\u00e9lectionner un fichier RDF Zotero (.rdf).');
     return;
   }
   const formData = new FormData(form);

@@ -2761,108 +2761,148 @@ def favorite_set_public_note(article_id):
 @app.route('/zotero/export', methods=['POST'])
 @login_required
 def zotero_export():
-    """Génère un fichier JSON Zotero téléchargeable contenant tous les favoris organisés par dossiers."""
+    """Génère un fichier Zotero RDF téléchargeable contenant tous les favoris organisés par dossiers."""
     import uuid as _uuid
+    import re as _re
+    from xml.sax.saxutils import escape as _xe
 
-    # 1. Récupérer tous les favoris de l'utilisateur
     favs = (Favorite.query
             .options(joinedload(Favorite.article))
             .filter_by(user_id=current_user.id)
             .all())
     favs = [f for f in favs if f.article]
 
-    # 2. Récupérer tous les dossiers de l'utilisateur
     folders = Folder.query.filter_by(user_id=current_user.id).all()
+    folder_uuid = {fd.id: str(_uuid.uuid4()) for fd in folders}
+    article_uuid = {f.article_id: str(_uuid.uuid4()) for f in favs}
 
-    # 3. Construire le mapping folder_id → collection_key
-    folder_key = {f.id: _uuid.uuid4().hex[:8].upper() for f in folders}
+    # folder_id → [article_id, ...]
+    folder_to_articles = {}
+    for fa in (FolderArticle.query
+               .join(Folder, Folder.id == FolderArticle.folder_id)
+               .filter(Folder.user_id == current_user.id).all()):
+        folder_to_articles.setdefault(fa.folder_id, []).append(fa.article_id)
 
-    # 4. Construire les collections Zotero
-    collections = {}
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"',
+        '         xmlns:z="http://www.zotero.org/namespaces/export#"',
+        '         xmlns:dc="http://purl.org/dc/elements/1.1/"',
+        '         xmlns:bib="http://purl.org/net/biblio#"',
+        '         xmlns:foaf="http://xmlns.com/foaf/0.1/"',
+        '         xmlns:link="http://purl.org/rss/1.0/modules/link/"',
+        '         xmlns:dcterms="http://purl.org/dc/terms/">',
+        '',
+    ]
+
     for fd in folders:
-        key = folder_key[fd.id]
-        parent_key = folder_key[fd.parent_id] if fd.parent_id and fd.parent_id in folder_key else False
-        collections[key] = {
-            "key": key,
-            "name": fd.name,
-            "parentCollection": parent_key,
-            "relations": {}
-        }
+        fu = folder_uuid[fd.id]
+        lines.append(f'  <z:Collection rdf:about="urn:uuid:{fu}">')
+        lines.append(f'    <dc:title>{_xe(fd.name)}</dc:title>')
+        for art_id in folder_to_articles.get(fd.id, []):
+            if art_id in article_uuid:
+                lines.append(f'    <dcterms:hasPart rdf:resource="urn:uuid:{article_uuid[art_id]}"/>')
+        for sub in folders:
+            if sub.parent_id == fd.id:
+                lines.append(f'    <dcterms:hasPart rdf:resource="urn:uuid:{folder_uuid[sub.id]}"/>')
+        lines.append('  </z:Collection>')
+        lines.append('')
 
-    # 5. Construire les articles
-    # Mapping article_id → liste de collection_keys
-    article_colls = {}
-    fa_rows = FolderArticle.query.join(Folder, Folder.id == FolderArticle.folder_id)\
-        .filter(Folder.user_id == current_user.id).all()
-    for fa in fa_rows:
-        ckey = folder_key.get(fa.folder_id)
-        if ckey:
-            article_colls.setdefault(fa.article_id, []).append(ckey)
-
-    items = []
     for f in favs:
         a = f.article
-        creators = []
-        for author in (a.authors or '').split(','):
-            author = author.strip()
-            if not author:
-                continue
-            parts = author.rsplit(' ', 1)
-            if len(parts) == 2:
-                creators.append({"creatorType": "author", "firstName": parts[0].strip(), "lastName": parts[1].strip()})
-            else:
-                creators.append({"creatorType": "author", "firstName": "", "lastName": author})
-        items.append({
-            "itemType": "journalArticle",
-            "title": a.title or "",
-            "creators": creators,
-            "abstractNote": (a.clean_abstract or a.abstract or ""),
-            "publicationTitle": a.journal or "",
-            "date": a.published_date.strftime('%Y-%m-%d') if a.published_date else "",
-            "DOI": a.doi or "",
-            "url": a.url or "",
-            "collections": article_colls.get(a.id, []),
-            "relations": {}
-        })
+        au = article_uuid[a.id]
+        lines.append(f'  <bib:Article rdf:about="urn:uuid:{au}">')
+        lines.append('    <z:itemType>journalArticle</z:itemType>')
+        lines.append(f'    <dc:title>{_xe(a.title or "")}</dc:title>')
+        abstract = _re.sub(r'<[^>]+>', '', a.clean_abstract or a.abstract or '')
+        if abstract:
+            lines.append(f'    <dcterms:abstract>{_xe(abstract)}</dcterms:abstract>')
+        if a.published_date:
+            lines.append(f'    <dc:date>{a.published_date.year}</dc:date>')
+        if a.journal:
+            lines += [
+                '    <bib:journal>',
+                '      <bib:Journal>',
+                f'        <dc:title>{_xe(a.journal)}</dc:title>',
+                '      </bib:Journal>',
+                '    </bib:journal>',
+            ]
+        if a.doi:
+            lines.append(f'    <dc:identifier>DOI:{_xe(a.doi)}</dc:identifier>')
+        if a.url:
+            lines.append(f'    <dc:identifier>{_xe(a.url)}</dc:identifier>')
+        if a.authors:
+            lines.append('    <bib:authors>')
+            lines.append('      <rdf:Seq>')
+            for author in (a.authors or '').split(','):
+                author = author.strip()
+                if not author:
+                    continue
+                parts = author.rsplit(' ', 1)
+                fname, lname = (parts[0].strip(), parts[1].strip()) if len(parts) == 2 else ('', author)
+                lines += [
+                    '        <rdf:li>',
+                    '          <foaf:Person>',
+                    f'            <foaf:surname>{_xe(lname)}</foaf:surname>',
+                    f'            <foaf:givenname>{_xe(fname)}</foaf:givenname>',
+                    '          </foaf:Person>',
+                    '        </rdf:li>',
+                ]
+            lines.append('      </rdf:Seq>')
+            lines.append('    </bib:authors>')
+        lines.append('  </bib:Article>')
+        lines.append('')
 
-    payload = json.dumps({"version": 1, "collections": collections, "items": items},
-                         ensure_ascii=False, indent=2)
+    lines.append('</rdf:RDF>')
 
     from flask import Response
     return Response(
-        payload,
-        mimetype='application/json',
-        headers={"Content-Disposition": 'attachment; filename="physara_export.json"'}
+        '\n'.join(lines),
+        mimetype='application/rdf+xml',
+        headers={"Content-Disposition": 'attachment; filename="physara_export.rdf"'}
     )
 
 
 @app.route('/zotero/import', methods=['POST'])
 @login_required
 def zotero_import():
-    """Import d'un fichier JSON Zotero uploadé. Organise les favoris existants dans des dossiers."""
+    """Import d'un fichier Zotero RDF uploadé. Organise les favoris existants dans des dossiers."""
     import random as _random
 
     file = request.files.get('zotero_file')
-    if not file or not file.filename.endswith('.json'):
-        return jsonify({"success": False, "message": "Fichier JSON requis"}), 400
+    if not file or not file.filename.lower().endswith('.rdf'):
+        return jsonify({"success": False, "message": "Fichier RDF requis (.rdf)"}), 400
 
     try:
-        data = json.load(file)
-    except (ValueError, Exception) as e:
-        return jsonify({"success": False, "message": f"JSON invalide : {e}"}), 400
+        from rdflib import Graph, Namespace, RDF
+        from rdflib.namespace import DC, DCTERMS
+        g = Graph()
+        g.parse(data=file.read(), format='xml')
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Erreur de parsing RDF : {e}"}), 400
+
+    Z = Namespace("http://www.zotero.org/namespaces/export#")
+    BIB = Namespace("http://purl.org/net/biblio#")
 
     _COLORS = ['#6366f1', '#3b82f6', '#22c55e', '#f59e0b', '#ef4444',
                '#ec4899', '#8b5cf6', '#64748b', '#14b8a6']
-    zotero_collections = data.get('collections') or {}
-    zotero_items = data.get('items') or []
 
-    # — A. Traitement des collections → dossiers —
+    # — A. Parser les collections —
+    collections = {}
+    for coll in g.subjects(RDF.type, Z.Collection):
+        title = str(g.value(coll, DC.title) or '').strip()
+        parent_uri = None
+        for parent_coll in g.subjects(DCTERMS.hasPart, coll):
+            if (parent_coll, RDF.type, Z.Collection) in g:
+                parent_uri = str(parent_coll)
+                break
+        collections[str(coll)] = {
+            'title': title,
+            'parent_uri': parent_uri,
+            'parts': [str(p) for p in g.objects(coll, DCTERMS.hasPart)],
+        }
 
-    # Séparer racines et enfants pour respecter l'arborescence
-    roots = {k: v for k, v in zotero_collections.items() if not v.get('parentCollection')}
-    children = {k: v for k, v in zotero_collections.items() if v.get('parentCollection')}
-
-    coll_key_to_folder_id = {}  # zotero_key → folder_id Physara
+    coll_uri_to_folder_id = {}
     folders_created = 0
     folders_matched = 0
 
@@ -2870,16 +2910,15 @@ def zotero_import():
         nonlocal folders_created, folders_matched
         existing = Folder.query.filter(
             Folder.user_id == current_user.id,
-            db.func.lower(Folder.name) == name.strip().lower()
+            db.func.lower(Folder.name) == name.lower()
         ).first()
         if existing:
             folders_matched += 1
             return existing.id
-        color = _random.choice(_COLORS)
         new_folder = Folder(
             user_id=current_user.id,
-            name=name.strip(),
-            color=color,
+            name=name,
+            color=_random.choice(_COLORS),
             is_public=True,
             parent_id=parent_folder_id
         )
@@ -2888,58 +2927,54 @@ def zotero_import():
         folders_created += 1
         return new_folder.id
 
-    # Traiter d'abord les racines
-    for zkey, coll in roots.items():
-        name = (coll.get('name') or '').strip()
-        if not name:
-            continue
-        coll_key_to_folder_id[zkey] = get_or_create_folder(name)
+    # Racines d'abord, puis enfants (multi-passes pour gérer l'imbrication profonde)
+    roots = {k: v for k, v in collections.items() if not v['parent_uri']}
+    remaining = {k: v for k, v in collections.items() if v['parent_uri']}
 
-    # Puis les enfants (un seul niveau de récursion suffit pour la majorité des cas,
-    # mais on itère jusqu'à ce que tous les parents soient résolus)
-    remaining = dict(children)
-    max_passes = 10
-    for _ in range(max_passes):
+    for uri, coll in roots.items():
+        if coll['title']:
+            coll_uri_to_folder_id[uri] = get_or_create_folder(coll['title'])
+
+    for _ in range(10):
         if not remaining:
             break
-        resolved_this_pass = []
-        for zkey, coll in remaining.items():
-            parent_zkey = coll.get('parentCollection')
-            if parent_zkey in coll_key_to_folder_id or not parent_zkey:
-                name = (coll.get('name') or '').strip()
-                if not name:
-                    resolved_this_pass.append(zkey)
-                    continue
-                parent_folder_id = coll_key_to_folder_id.get(parent_zkey)
-                coll_key_to_folder_id[zkey] = get_or_create_folder(name, parent_folder_id)
-                resolved_this_pass.append(zkey)
-        for zkey in resolved_this_pass:
-            remaining.pop(zkey, None)
+        resolved = []
+        for uri, coll in remaining.items():
+            if not coll['title']:
+                resolved.append(uri)
+                continue
+            parent_uri = coll['parent_uri']
+            if parent_uri in coll_uri_to_folder_id or parent_uri not in remaining:
+                parent_folder_id = coll_uri_to_folder_id.get(parent_uri)
+                coll_uri_to_folder_id[uri] = get_or_create_folder(coll['title'], parent_folder_id)
+                resolved.append(uri)
+        for uri in resolved:
+            remaining.pop(uri, None)
 
     db.session.flush()
 
-    # — B. Traitement des items —
-    # Construire un index des favoris de l'utilisateur (article_id → Favorite)
+    # — B. Parser les articles —
     user_favs = Favorite.query.filter_by(user_id=current_user.id).all()
     fav_by_article_id = {f.article_id: f for f in user_favs}
 
     articles_matched = 0
     articles_ignored = 0
 
-    for item in zotero_items:
-        if item.get('itemType') != 'journalArticle':
-            continue
+    for article_node in g.subjects(RDF.type, BIB.Article):
+        title_raw = str(g.value(article_node, DC.title) or '').strip()
+        doi = None
+        for identifier in g.objects(article_node, DC.identifier):
+            id_str = str(identifier)
+            if id_str.startswith('DOI:'):
+                doi = id_str[4:].strip()
+                break
 
-        doi_raw = (item.get('DOI') or '').strip()
-        title_raw = (item.get('title') or '').strip().lower()
-
-        # Chercher l'article dans Physara par DOI, sinon par titre
         article = None
-        if doi_raw:
-            article = Article.query.filter_by(doi=normalize_doi(doi_raw)).first()
+        if doi:
+            article = Article.query.filter_by(doi=normalize_doi(doi)).first()
         if not article and title_raw:
             article = Article.query.filter(
-                db.func.lower(Article.title) == title_raw
+                db.func.lower(Article.title) == title_raw.lower()
             ).first()
 
         if not article or article.id not in fav_by_article_id:
@@ -2947,17 +2982,15 @@ def zotero_import():
             continue
 
         articles_matched += 1
-
-        # Ranger dans les dossiers correspondants
-        item_colls = item.get('collections') or []
-        for zkey in item_colls:
-            folder_id = coll_key_to_folder_id.get(zkey)
-            if not folder_id:
-                continue
-            existing_fa = FolderArticle.query.filter_by(
-                folder_id=folder_id, article_id=article.id).first()
-            if not existing_fa:
-                db.session.add(FolderArticle(folder_id=folder_id, article_id=article.id))
+        article_uri = str(article_node)
+        for coll_uri, coll in collections.items():
+            if article_uri in coll['parts']:
+                folder_id = coll_uri_to_folder_id.get(coll_uri)
+                if not folder_id:
+                    continue
+                if not FolderArticle.query.filter_by(
+                        folder_id=folder_id, article_id=article.id).first():
+                    db.session.add(FolderArticle(folder_id=folder_id, article_id=article.id))
 
     db.session.commit()
 
