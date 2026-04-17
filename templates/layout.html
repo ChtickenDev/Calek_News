@@ -201,6 +201,15 @@
   @media (max-width: 991.98px) {
     main.container { padding-bottom: 72px !important; }
   }
+
+  /* ---- Modal Citation ---- */
+  .cm-tab {
+    padding: 5px 14px; font-size: 12px; border-radius: 20px;
+    border: 1px solid #e0e0e0; background: var(--bs-body-bg);
+    color: #888; cursor: pointer;
+  }
+  .cm-tab:hover { border-color: #bbb; color: #444; }
+  .cm-tab.active { background: #1a1a2e; border-color: #1a1a2e; color: #fff; font-weight: 500; }
   </style>
 </head>
 <body>
@@ -441,6 +450,44 @@
         {% endif %}
       </div>
 
+    </div>
+  </div>
+</div>
+
+<!-- MODALE CITATION -->
+<div class="modal fade" id="citeModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:520px;">
+    <div class="modal-content" style="border-radius:12px; overflow:hidden;">
+      <div class="modal-header border-bottom pb-3 flex-column align-items-start position-relative" style="gap:8px;">
+        <div class="d-flex gap-2 align-items-center">
+          <span id="cm-ifs-badge" class="badge" style="font-size:11px; display:none;"></span>
+          <span id="cm-spec-badge" class="badge" style="font-size:11px; background:#f0f0f0; color:#555; border:1px solid #e8e8e8; display:none;"></span>
+        </div>
+        <h6 id="cm-title" class="fw-semibold mb-2" style="font-size:14px; line-height:1.45; color:var(--bs-body-color);"></h6>
+        <div class="d-flex flex-column gap-1" style="font-size:11px;">
+          <div><span class="text-muted me-2" style="min-width:52px; display:inline-block;">AUTEURS</span><span id="cm-authors" class="text-secondary"></span></div>
+          <div><span class="text-muted me-2" style="min-width:52px; display:inline-block;">REVUE</span><span id="cm-journal" class="text-secondary"></span></div>
+          <div><span class="text-muted me-2" style="min-width:52px; display:inline-block;">DATE</span><span id="cm-date" class="text-secondary"></span></div>
+        </div>
+        <button type="button" class="btn-close position-absolute top-0 end-0 m-3" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-2" style="font-size:11px; color:#bbb;">Format de citation</div>
+        <div class="d-flex gap-2 flex-wrap mb-3" id="cm-format-tabs">
+          <button class="cm-tab active" data-format="vancouver">Vancouver</button>
+          <button class="cm-tab" data-format="apa">APA</button>
+          <button class="cm-tab" data-format="ama">AMA</button>
+          <button class="cm-tab" data-format="nlm">NLM</button>
+          <button class="cm-tab" data-format="mla">MLA</button>
+        </div>
+        <div id="cm-cite-output" class="p-3 rounded"
+             style="background:var(--bs-secondary-bg); border:1px solid var(--bs-border-color); font-size:13px; line-height:1.75; color:var(--bs-body-color);"></div>
+      </div>
+      <div class="modal-footer border-top">
+        <span id="cm-copied-msg" class="text-success me-auto" style="font-size:11px; display:none;">&#10003; Copié dans le presse-papier</span>
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Fermer</button>
+        <button type="button" class="btn btn-sm" style="background:#1a1a2e; color:#fff;" onclick="cmCopy()">Copier</button>
+      </div>
     </div>
   </div>
 </div>
@@ -796,6 +843,105 @@ function copyCite() {
     setTimeout(() => btn.textContent = 'Copier', 2000);
   });
 }
+
+/* ---------- _fallbackCopy (copie clipboard universelle) ---------- */
+function _fallbackCopy(text, indicator) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0;';
+  document.body.appendChild(ta);
+  ta.focus(); ta.select();
+  try {
+    document.execCommand('copy');
+    if (indicator) { indicator.style.display = ''; setTimeout(() => indicator.style.display = 'none', 2500); }
+  } catch(e) {}
+  document.body.removeChild(ta);
+}
+
+/* ---------- Modal Citation ---------- */
+let _cmFormats = {};
+
+function openCiteModal(title, authors, journal, date, doi, pmid, sc, domain) {
+  document.getElementById('cm-title').textContent   = title   || '';
+  document.getElementById('cm-authors').textContent = authors || '';
+  document.getElementById('cm-journal').textContent = journal || '';
+  document.getElementById('cm-date').textContent    = date    || '';
+
+  const ifsBadge  = document.getElementById('cm-ifs-badge');
+  const specBadge = document.getElementById('cm-spec-badge');
+  const scNum = parseFloat(sc) || 0;
+  if (scNum > 0) {
+    const {bg, fg} = _ifsModalColor(scNum);
+    ifsBadge.textContent  = 'IFS ' + scNum;
+    ifsBadge.style.cssText = 'background:' + bg + ';color:' + fg + ';border:none;font-size:11px;';
+    ifsBadge.style.display = '';
+  } else { ifsBadge.style.display = 'none'; }
+  if (domain) { specBadge.textContent = domain; specBadge.style.display = ''; }
+  else { specBadge.style.display = 'none'; }
+
+  const year    = date ? new Date(date).getFullYear() : 's.d.';
+  const doiStr  = doi ? ' doi:' + doi : '';
+  const doiUrl  = doi ? 'https://doi.org/' + doi : '';
+  const pmidStr = pmid ? ' PubMed PMID: ' + pmid : '';
+
+  const authorList  = authors ? authors.split(',').map(a => a.trim()).filter(Boolean) : [];
+  const authorsShort = authorList.length
+    ? authorList.slice(0, 6).join(', ') + (authorList.length > 6 ? ', et al.' : '')
+    : 'Auteur inconnu';
+  const authorsAPA = authorList.length
+    ? authorList.slice(0, 6).map(a => {
+        const parts = a.trim().split(/\s+/);
+        if (parts.length >= 2) {
+          const last = parts[parts.length - 1];
+          const initials = parts.slice(0, -1).map(p => p[0] + '.').join(' ');
+          return last + ', ' + initials;
+        }
+        return a;
+      }).join(', ') + (authorList.length > 6 ? ', et al.' : '')
+    : 'Auteur inconnu';
+  const firstAuthor = authorList.length ? authorList[0] : 'Auteur inconnu';
+
+  _cmFormats = {
+    vancouver: authorsShort + '. ' + title + '. ' + journal + '. ' + year + ';' + doiStr,
+    apa:       authorsAPA  + ' (' + year + '). ' + title + '. ' + journal + '.' + (doiUrl ? ' ' + doiUrl : ''),
+    ama:       authorsShort + '. ' + title + '. ' + journal + '. ' + year + '.' + doiStr,
+    nlm:       authorsShort + '. ' + title + '. ' + journal + '. ' + year + ';' + doiStr + '.' + pmidStr,
+    mla:       firstAuthor + (authorList.length > 1 ? ', et al.' : '') + '. \u201C' + title + '.\u201D <em>' + journal + '</em>, ' + year + '.' + (doi ? ' doi:' + doi : '')
+  };
+
+  document.getElementById('cm-cite-output').innerHTML = _cmFormats.vancouver;
+  document.querySelectorAll('.cm-tab').forEach(t => t.classList.remove('active'));
+  document.querySelector('.cm-tab[data-format="vancouver"]').classList.add('active');
+  document.getElementById('cm-copied-msg').style.display = 'none';
+
+  new bootstrap.Modal(document.getElementById('citeModal')).show();
+}
+
+function cmCopy() {
+  const text = document.getElementById('cm-cite-output').innerText;
+  const msg  = document.getElementById('cm-copied-msg');
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text)
+      .then(() => { msg.style.display = ''; setTimeout(() => msg.style.display = 'none', 2500); })
+      .catch(() => _fallbackCopy(text, msg));
+  } else {
+    _fallbackCopy(text, msg);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  const tabs = document.getElementById('cm-format-tabs');
+  if (tabs) {
+    tabs.addEventListener('click', e => {
+      const btn = e.target.closest('.cm-tab');
+      if (!btn) return;
+      document.querySelectorAll('.cm-tab').forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('cm-cite-output').innerHTML = _cmFormats[btn.dataset.format] || '';
+      document.getElementById('cm-copied-msg').style.display = 'none';
+    });
+  }
+});
 </script>
 
 <script>

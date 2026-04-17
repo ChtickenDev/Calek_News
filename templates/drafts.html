@@ -2,35 +2,6 @@
 {% from '_macros.html' import ifs_badge %}
 {% block content %}
 
-<style>
-  .cite-box-card {
-  background: var(--bs-body-bg);
-  border: 1px solid #6366f1;
-  border-radius: 8px;
-  padding: 10px 14px;
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0; right: 0;
-  z-index: 10;
-  box-shadow: 0 8px 32px rgba(99,102,241,.18);
-}
-.cite-box-label {
-  font-size: 0.7rem; font-weight: 700;
-  text-transform: uppercase; letter-spacing: .07em;
-  color: #6366f1; margin-bottom: 6px;
-}
-.cite-box-text { font-size: 0.82rem; line-height: 1.5; }
-.cite-copy-btn {
-  position: absolute; top: 10px; right: 10px;
-  font-size: 0.75rem; padding: 2px 10px;
-  border-radius: 6px; border: 1px solid var(--bs-border-color);
-  background: var(--bs-body-bg); cursor: pointer;
-  transition: background .15s;
-}
-.cite-copy-btn:hover { background: #6366f1; color: #fff; border-color: #6366f1; }
-.card { position: relative; }
-</style>
-
 <h3 class="mb-3">{{ t('nav.search') }}</h3>
 
 <div class="card side-card p-3 mb-4">
@@ -144,7 +115,7 @@
     <div class="article-card" data-article-id="{{ a.id }}" role="button" tabindex="0">
 
       <!-- Cite button (abs top-right) -->
-      <button class="card-cite-btn" onclick="event.stopPropagation(); showCardCite(this, {{ a.id }})" data-article-id="{{ a.id }}">{{ t('btn.cite') }}</button>
+      <button class="card-cite-btn" onclick="event.stopPropagation(); openCiteModal({{ a.title|tojson }}, {{ (a.authors or '')|tojson }}, {{ (a.journal or '')|tojson }}, {{ (a.published_date.strftime('%Y-%m-%d') if a.published_date else '')|tojson }}, {{ (a.doi or '')|tojson }}, '', {{ sc or 0 }}, {{ (a.domain or '')|tojson }})">{{ t('btn.cite') }}</button>
 
       <!-- IFS + domaine -->
       <div class="card-top">
@@ -385,41 +356,5 @@ document.querySelectorAll('.article-card[data-article-id]').forEach(card=>{
   });
 });
 
-function formatVancouver(data) {
-  const authors = data.authors
-    ? data.authors.split(',').slice(0, 6).map(a => a.trim()).join(', ') +
-      (data.authors.split(',').length > 6 ? ', et al.' : '')
-    : 'Auteur inconnu';
-  const year = data.published_date ? new Date(data.published_date).getFullYear() : 's.d.';
-  const title = data.title || 'Sans titre';
-  const journal = data.journal || '';
-  const doi = data.doi ? ` doi:${data.doi}` : '';
-  return `${authors}. ${title}. ${journal}. ${year};${doi}`;
-}
-
-const _citeCache = {};
-async function showCardCite(btn, articleId) {
-  const card = btn.closest('.article-card');
-  const existing = card.querySelector('.cite-box-card');
-  if (existing) { existing.remove(); card.style.zIndex = ''; return; }
-  document.querySelectorAll('.cite-box-card').forEach(b => {
-    b.closest('.article-card').style.zIndex = '';
-    b.remove();
-  });
-  if (!_citeCache[articleId]) {
-    const res = await fetch(`/api/article/${articleId}`);
-    _citeCache[articleId] = await res.json();
-  }
-  const data = _citeCache[articleId];
-  const box = document.createElement('div');
-  box.className = 'cite-box-card';
-  box.innerHTML = `
-    <div class="cite-box-label">Vancouver</div>
-    <div class="cite-box-text">${formatVancouver(data)}</div>
-    <button class="cite-copy-btn" onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent).then(()=>{this.textContent='Copié !'; setTimeout(()=>this.textContent='Copier',2000)})">Copier</button>
-  `;
-  card.style.zIndex = '10';
-  card.appendChild(box);
-}
 </script>
 {% endblock %}

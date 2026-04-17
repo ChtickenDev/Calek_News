@@ -86,8 +86,7 @@
         {{ ifs_badge(sc) }}
         {% if a.domain %}<span class="card-domain">{{ a.domain }}</span>{% endif %}
         <button class="card-top-action" style="margin-left:auto;"
-                onclick="event.stopPropagation(); showCardCite(this, {{ a.id }})"
-                data-article-id="{{ a.id }}">{{ t('btn.cite') }}</button>
+                onclick="event.stopPropagation(); openCiteModal({{ a.title|tojson }}, {{ (a.authors or '')|tojson }}, {{ (a.journal or '')|tojson }}, {{ (a.published_date.strftime('%Y-%m-%d') if a.published_date else '')|tojson }}, {{ (a.doi or '')|tojson }}, '', {{ sc or 0 }}, {{ (a.domain or '')|tojson }})">{{ t('btn.cite') }}</button>
       </div>
 
       <!-- Titre -->
@@ -254,17 +253,6 @@
 
 .suggested-badge { font-size: 0.72rem; font-weight: 500; border-radius: 20px; padding: 3px 10px; }
 
-.cite-box-card {
-  background: var(--bs-body-bg);
-  border: 1px solid #6366f1;
-  border-radius: 8px;
-  padding: 10px 14px;
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0; right: 0;
-  z-index: 1050;
-  box-shadow: 0 8px 32px rgba(99,102,241,.18);
-}
 </style>
 <script>
 /* Miroir JS de la macro ifs_badge — utilisé pour les badges de modales */
@@ -481,49 +469,5 @@ document.querySelectorAll('.article-card[data-article-id]').forEach(card => {
     if (e.key==='Enter'||e.key===' ') { e.preventDefault(); const id=card.getAttribute('data-article-id'); if(id) openArticleModal(parseInt(id)); }
   });
 });
-const _citeCache = {};
-
-async function showCardCite(btn, articleId) {
-  const card = btn.closest('.article-card');
-  const existing = card.querySelector('.cite-box-card');
-  if (existing) { existing.remove(); card.style.zIndex = ''; return; }
-
-  document.querySelectorAll('.cite-box-card').forEach(b => {
-    b.closest('.article-card').style.zIndex = '';
-    b.remove();
-  });
-
-  // Récupère les données (cache)
-  if (!_citeCache[articleId]) {
-    const res = await fetch(`/api/article/${articleId}`);
-    _citeCache[articleId] = await res.json();
-  }
-  const data = _citeCache[articleId];
-  const citation = formatVancouver(data);
-
-  const box = document.createElement('div');
-  box.className = 'cite-box-card';
-  box.addEventListener('click', e => e.stopPropagation());
-  box.innerHTML = `
-    <div class="cite-box-label">Vancouver</div>
-    <div class="cite-box-text">${citation}</div>
-    <button class="cite-copy-btn" onclick="event.stopPropagation(); _fallbackCopy(this.previousElementSibling.textContent, this)">Copier</button>
-  `;
-  card.style.zIndex = '10';
-  card.appendChild(box);
-}
-function _fallbackCopy(text, btn) {
-  const ta = document.createElement('textarea');
-  ta.value = text;
-  ta.style.position = 'fixed'; ta.style.opacity = '0';
-  document.body.appendChild(ta);
-  ta.focus(); ta.select();
-  try {
-    document.execCommand('copy');
-    btn.textContent = 'Copié !';
-    setTimeout(() => btn.textContent = 'Copier', 2000);
-  } catch(e) { btn.textContent = 'Erreur'; }
-  document.body.removeChild(ta);
-}
 </script>
 {% endblock %}
