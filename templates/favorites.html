@@ -1,5 +1,6 @@
 {% extends "layout.html" %}
 {% from '_macros.html' import ifs_badge, render_folder_tree with context %}
+{% block main_container %}container-fluid{% endblock %}
 {% block main_class %} physara-no-pad{% endblock %}
 {% block content %}
 {% macro share_dropdown(article_id) %}
