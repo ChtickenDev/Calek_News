@@ -146,16 +146,16 @@
 </div><!-- /.profile-header-wrap -->
 
 
-{% if current_user.is_authenticated and current_user.id == profile_user.id %}
 {# ============================================================
-   VUE PROPRIÉTAIRE : sidebar dossiers + cartes articles feed
+   LAYOUT UNIFIÉ : sidebar dossiers publics + cartes feed
+   (propriétaire ET visiteurs connectés)
    ============================================================ #}
 <div class="physara-favorites-layout">
 
   <!-- Sidebar dossiers publics -->
   <aside class="physara-sidebar" id="profileSidebar">
     <div class="physara-sidebar-header">
-      <span class="physara-sidebar-title">Dossiers publics</span>
+      <span class="physara-sidebar-title">Dossiers</span>
       <button class="physara-sidebar-toggle" onclick="toggleProfileSidebar()">&#8249;</button>
     </div>
 
@@ -213,6 +213,7 @@
       {% set sc = (reliability_score(a)[0]) if reliability_score is defined else None %}
       {% set like_count = like_counts.get(a.id, 0) %}
       {% set user_liked = a.id in liked_ids %}
+      {% set user_favorited = a.id in favorited_ids %}
       <div class="col-md-6 col-lg-4">
         <div class="article-card" data-article-id="{{ a.id }}" role="button" tabindex="0">
 
@@ -264,11 +265,19 @@
           <!-- Actions -->
           <div class="card-actions" onclick="event.stopPropagation()">
             {% if a.doi %}<a class="card-btn" href="https://doi.org/{{ a.doi }}" target="_blank" onclick="event.stopPropagation()">Article</a>{% endif %}
+            {% if profile_user.id != current_user.id %}
+            <button class="card-btn favor-btn{% if user_favorited %} card-btn-fav{% endif %}"
+                    data-article-id="{{ a.id }}"
+                    data-favorited="{{ 'true' if user_favorited else 'false' }}"
+                    onclick="event.stopPropagation(); toggleFavoriteFromProfile({{ a.id }}, this)">
+              Favori{% if user_favorited %} &#10003;{% endif %}
+            </button>
+            {% endif %}
             <button class="card-btn like-btn{% if user_liked %} card-btn-liked{% endif %}"
                     data-article-id="{{ a.id }}"
                     data-liked="{{ 'true' if user_liked else 'false' }}"
                     onclick="event.stopPropagation(); toggleLike({{ a.id }}, this)">
-              Like · <span class="like-count">{{ like_count }}</span>
+              Like&nbsp;&#183;&nbsp;<span class="like-count">{{ like_count }}</span>
             </button>
           </div>
 
@@ -282,106 +291,6 @@
 
   </div><!-- /.physara-favorites-main -->
 </div><!-- /.physara-favorites-layout -->
-
-
-{% else %}
-{# ============================================================
-   VUE VISITEUR : grille simple sans sidebar
-   ============================================================ #}
-<div class="profile-visitor-wrap">
-
-  <!-- Dossiers publics -->
-  {% if public_folders %}
-  <h5 class="mb-3">Dossiers publics</h5>
-  <div class="folders-grid mb-4">
-    {% for fd in public_folders %}
-    <div class="folder-tile" onclick="window.location='{{ url_for('folder_view', folder_id=fd.id) }}'">
-      <div class="folder-icon-wrap">
-        <div class="folder-icon" style="--folder-color: {{ fd.color or '#6366f1' }};">
-          <div class="folder-tab"></div>
-          <div class="folder-body"></div>
-        </div>
-      </div>
-      <div class="folder-name text-truncate">{{ fd.name }}</div>
-      <div class="folder-count text-muted">
-        {% set count = folder_article_counts.get(fd.id, 0) %}
-        {{ count }} article{{ 's' if count > 1 else '' }}
-      </div>
-    </div>
-    {% endfor %}
-  </div>
-  {% endif %}
-
-  <!-- Favoris publics -->
-  <h5 class="mb-3">Favoris publics</h5>
-
-  {% if public_favs %}
-  <div class="row gy-3">
-    {% for f in public_favs %}
-    {% set a = f.article %}
-    {% set sc = (reliability_score(a)[0]) if reliability_score is defined else None %}
-    {% set like_count = like_counts.get(a.id, 0) %}
-    {% set user_liked = a.id in liked_ids %}
-    <div class="col-md-6 col-lg-4">
-      <div class="article-card" data-article-id="{{ a.id }}" role="button" tabindex="0">
-
-        <div class="card-top">
-          {{ ifs_badge(sc) }}
-          {% if a.domain %}<span class="card-domain">{{ a.domain }}</span>{% endif %}
-          <button class="card-top-action" style="margin-left:auto;"
-                  data-title="{{ a.title|e }}"
-                  data-authors="{{ (a.authors or '')|e }}"
-                  data-journal="{{ (a.journal or '')|e }}"
-                  data-date="{{ a.published_date.strftime('%Y-%m-%d') if a.published_date else '' }}"
-                  data-doi="{{ (a.doi or '')|e }}"
-                  data-sc="{{ sc or 0 }}"
-                  data-domain="{{ (a.domain or '')|e }}"
-                  onclick="event.stopPropagation(); openCiteModal(this.dataset.title, this.dataset.authors, this.dataset.journal, this.dataset.date, this.dataset.doi, '', +this.dataset.sc, this.dataset.domain)">Citer</button>
-        </div>
-
-        <div class="card-title" onclick="event.stopPropagation(); openArticleModal({{ a.id }})">{{ a.title }}</div>
-
-        <div class="card-meta">
-          {% if a.authors %}<div class="card-meta-row"><span class="card-meta-key">Auteurs</span><span class="card-meta-val">{{ a.authors }}</span></div>{% endif %}
-          {% if a.journal %}<div class="card-meta-row"><span class="card-meta-key">Revue</span><span class="card-meta-val">{{ a.journal }}</span></div>{% endif %}
-          {% if a.published_date %}<div class="card-meta-row"><span class="card-meta-key">Date</span><span class="card-meta-val card-meta-date">{{ a.published_date.strftime('%d %b %Y') }}</span></div>{% endif %}
-        </div>
-
-        <hr class="card-sep">
-
-        {% if f.public_note %}
-          <div class="public-note-box mb-2" style="font-size:0.82rem;">{{ f.public_note }}</div>
-        {% endif %}
-
-        <div class="card-abstract">
-          {% if a.abstract %}
-            {% set _abstract_text = a.clean_abstract or (a.abstract|striptags) %}
-            {{ _abstract_text[:400] }}{% if _abstract_text|length > 400 %}&#8230;{% endif %}
-          {% else %}
-            Résumé non disponible.
-          {% endif %}
-        </div>
-
-        <div class="card-actions" onclick="event.stopPropagation()">
-          {% if a.doi %}<a class="card-btn" href="https://doi.org/{{ a.doi }}" target="_blank" onclick="event.stopPropagation()">Article</a>{% endif %}
-          <button class="card-btn like-btn{% if user_liked %} card-btn-liked{% endif %}"
-                  data-article-id="{{ a.id }}"
-                  data-liked="{{ 'true' if user_liked else 'false' }}"
-                  onclick="event.stopPropagation(); toggleLike({{ a.id }}, this)">
-            Like · <span class="like-count">{{ like_count }}</span>
-          </button>
-        </div>
-
-      </div>
-    </div>
-    {% endfor %}
-  </div>
-  {% else %}
-    <p class="text-muted">Aucun favori public pour le moment.</p>
-  {% endif %}
-
-</div><!-- /.profile-visitor-wrap -->
-{% endif %}
 
 <!-- Modal : Abonnés -->
 <div class="modal fade" id="followersModal" tabindex="-1" aria-labelledby="followersModalLabel" aria-hidden="true">
@@ -437,9 +346,6 @@
 .profile-header-wrap {
   padding: 1.5rem 1.5rem 0;
 }
-.profile-visitor-wrap {
-  padding: 0 1.5rem 1.5rem;
-}
 .profile-avatar-img {
   width: 96px; height: 96px;
   border-radius: 50%; object-fit: cover;
@@ -482,16 +388,6 @@
   border-radius: 0 6px 6px 0;
   padding: 6px 10px; font-size: 0.82rem;
 }
-/* Dossiers grille visiteur */
-.folders-grid { display: flex; flex-wrap: wrap; gap: 16px; }
-.folder-tile { width: 130px; cursor: pointer; padding: 12px 10px 10px; border-radius: 12px; border: 2px solid transparent; transition: border-color .15s, transform .12s; text-align: center; background: var(--bs-body-bg); }
-.folder-tile:hover { transform: translateY(-2px); border-color: var(--bs-border-color); }
-.folder-icon-wrap { display: inline-block; margin-bottom: 8px; }
-.folder-icon { position: relative; width: 64px; height: 52px; display: inline-block; }
-.folder-tab { position: absolute; top: 0; left: 0; width: 28px; height: 10px; background: var(--folder-color); border-radius: 4px 4px 0 0; opacity: 0.85; }
-.folder-body { position: absolute; bottom: 0; left: 0; width: 64px; height: 44px; background: var(--folder-color); border-radius: 0 6px 6px 6px; }
-.folder-name { font-size: 0.82rem; font-weight: 600; margin-bottom: 2px; }
-.folder-count { font-size: 0.72rem; }
 
 /* ==================== SIDEBAR LAYOUT (propriétaire) ==================== */
 :root { --navbar-h: 53px; }
@@ -553,7 +449,6 @@
   .physara-sidebar { display: none; }
   .physara-favorites-main { padding: 16px; }
   .profile-header-wrap { padding: 1rem 1rem 0; }
-  .profile-visitor-wrap { padding: 0 1rem 1rem; }
 }
 /* Accordéon mobile */
 .physara-folder-accordion {
@@ -623,6 +518,21 @@ document.querySelectorAll('.activity-indicator').forEach(el => {
   else { dotClass='activity-none'; const m=Math.floor(diffDays/30); label=m>=12?`Inactif depuis ${Math.floor(m/12)} an${Math.floor(m/12)>1?'s':''}`:`Inactif depuis ${m} mois`; }
   el.innerHTML=`<span class="activity-dot ${dotClass}"></span><span class="text-muted">${label}</span>`;
 });
+
+/* ---- Favori depuis profil ---- */
+async function toggleFavoriteFromProfile(articleId, btn) {
+  const favorited = btn.dataset.favorited === 'true';
+  const url = favorited ? `/unfavorite/${articleId}` : `/favorite/${articleId}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {'Accept': 'application/json'}
+  });
+  const data = await res.json();
+  const nowFav = !favorited;
+  btn.dataset.favorited = nowFav ? 'true' : 'false';
+  btn.textContent = nowFav ? 'Favori \u2713' : 'Favori';
+  btn.className = `card-btn favor-btn${nowFav ? ' card-btn-fav' : ''}`;
+}
 
 /* ---- Follow / Unfollow ---- */
 async function toggleFollow(userId, isFollowing) {

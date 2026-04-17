@@ -3281,6 +3281,16 @@ def user_profile(user_id):
     followers_count = Follow.query.filter_by(followed_id=u.id).count()
     following_count = Follow.query.filter_by(follower_id=u.id).count()
 
+    # Articles déjà mis en favori par le visiteur connecté (parmi ceux affichés)
+    favorited_ids = set()
+    if article_ids:
+        favorited_ids = {
+            fv.article_id for fv in Favorite.query.filter(
+                Favorite.user_id == current_user.id,
+                Favorite.article_id.in_(article_ids)
+            ).all()
+        }
+
     return render_template('user_profile.html',
                            profile_user=u,
                            is_following=is_following,
@@ -3292,6 +3302,7 @@ def user_profile(user_id):
                            total_public_count=total_public_count,
                            like_counts=like_counts,
                            liked_ids=liked_ids,
+                           favorited_ids=favorited_ids,
                            followers_count=followers_count,
                            following_count=following_count)
 
