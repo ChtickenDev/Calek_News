@@ -48,7 +48,10 @@
           <a href="{{ url_for('user_profile', user_id=first_user.id) }}" onclick="event.stopPropagation()" style="text-decoration:none;flex-shrink:0;">
             {% if first_user.photo_filename %}
               <img src="{{ url_for('static', filename='uploads/avatars/' + first_user.photo_filename) }}"
-                   class="avatar-circle" style="object-fit:cover;" alt="">
+                   class="avatar-circle"
+                   width="32" height="32"
+                   style="width:32px;height:32px;border-radius:50%;object-fit:cover;display:block;flex-shrink:0;"
+                   alt="">
             {% else %}
               <div class="avatar-circle avatar-initials-dynamic" data-seed="{{ first_user.email }}">
                 {{ (first_user.name or first_user.email)[0].upper() }}
@@ -190,7 +193,9 @@
             {% if first.user.photo_filename %}
               <img src="{{ url_for('static', filename='uploads/avatars/' + first.user.photo_filename) }}"
                    class="avatar-circle {% if first.is_followed %}avatar-followed{% endif %}"
-                   style="object-fit:cover;" alt="">
+                   width="32" height="32"
+                   style="width:32px;height:32px;border-radius:50%;object-fit:cover;display:block;flex-shrink:0;"
+                   alt="">
             {% else %}
               <div class="avatar-circle avatar-initials-dynamic" data-seed="{{ first.user.email }}">
                 {{ (first.user.name or first.user.email)[0].upper() }}
@@ -577,7 +582,7 @@ async function loadSharers(articleId, scrollTo) {
     list.innerHTML = sharers.map(s => `
       <div class="sharer-row d-flex align-items-start gap-2">
         ${s.photo
-          ? `<img src="/static/uploads/avatars/${s.photo}" class="avatar-circle-sm mt-1" style="object-fit:cover;" alt="">`
+          ? `<img src="/static/uploads/avatars/${s.photo}" class="avatar-circle-sm mt-1" width="28" height="28" style="width:28px;height:28px;border-radius:50%;object-fit:cover;display:block;flex-shrink:0;" alt="">`
           : `<div class="avatar-circle-sm mt-1" style="background:${avatarColor(s.email)}">${s.initial}</div>`
         }
         <div class="flex-grow-1 min-w-0">

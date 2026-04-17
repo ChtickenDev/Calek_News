@@ -11,10 +11,9 @@
   <!-- Anti-flash : applique le thème avant le premier rendu -->
   <script>(function(){var t=localStorage.getItem('theme')||(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.setAttribute('data-bs-theme',t);})();</script>
 
-  <!-- Style critique : évite le flash des avatars avant chargement CSS -->
+  <!-- Style critique : évite le flash de l'avatar de profil avant chargement CSS -->
   <style>
-    .profile-avatar-img,
-    img[src*="/uploads/avatars/"] {
+    .profile-avatar-img {
       width: 96px; height: 96px;
       max-width: 96px;
       border-radius: 50%;
