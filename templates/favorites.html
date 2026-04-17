@@ -494,11 +494,16 @@ main.physara-no-pad {
 .physara-favorites-layout {
   display: flex;
   gap: 0;
+  align-items: flex-start;
   min-height: calc(100vh - 60px);
   width: 100%;
   margin: 0;
 }
 .physara-sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
   width: 220px;
   background: var(--bs-body-bg);
   border-right: 1px solid var(--bs-border-color);
