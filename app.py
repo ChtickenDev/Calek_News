@@ -1811,13 +1811,13 @@ def efetch_pubmed_batch(pmids: list[str]) -> dict[str, dict]:
     return out
 
 
-def fetch_pubmed_query_paged(query: str, page: int = 1, per_page: int = 48,
+def fetch_pubmed_query_paged(query: str, page: int = 1, per_page: int = 30,
                               sort: str = "pub+date", filters: dict = None):
     if not query or not query.strip():
         return [], 0
 
     page = max(1, int(page or 1))
-    per_page = max(1, min(int(per_page or 48), 200))
+    per_page = max(1, min(int(per_page or 30), 200))
     retstart = (page - 1) * per_page
     filters = filters or {}
 
@@ -4222,7 +4222,7 @@ def my_drafts():
         page = 1
     page = max(1, page)
 
-    PER_PAGE = 48
+    PER_PAGE = 30
 
     # ✅ état PubMed stocké PAR utilisateur (évite le "page 2" partagé entre comptes)
     drafts_state = session.get("drafts_state", {}) or {}
@@ -4456,7 +4456,7 @@ def drafts_pull_pubmed():
         "date_to":    request.form.get('date_to') or '',
     }
 
-    PER_PAGE = 48
+    PER_PAGE = 30
     results, total = fetch_pubmed_query_paged(q, page=page, per_page=PER_PAGE,
                                                sort=sort, filters=filters)
 
@@ -4511,7 +4511,7 @@ def drafts_load_pubmed():
         flash("Saisis un terme pour la recherche PubMed.", "warning")
         return redirect(url_for('my_drafts', sort=sort))
 
-    PER_PAGE = 48
+    PER_PAGE = 30
     results, total = fetch_pubmed_query_paged(q_pubmed, page=page, per_page=PER_PAGE)
 
     linked = 0
