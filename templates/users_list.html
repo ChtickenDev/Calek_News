@@ -12,14 +12,15 @@
 
 <!-- Recherche -->
 <div class="mb-4" style="max-width: 420px;">
-  <div class="input-group">
-    <span class="input-group-text border-end-0" style="background:transparent;">
+  <div class="input-group users-search-group">
+    <span class="input-group-text border-end-0" style="background:transparent; border-radius:10px 0 0 10px;">
       <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
       </svg>
     </span>
     <input type="text" id="search-input" class="form-control border-start-0 ps-0"
+           style="border-radius:0 10px 10px 0;"
            placeholder="Rechercher par nom ou email..."
            oninput="filterUsers(this.value)">
   </div>
@@ -33,63 +34,69 @@
   <div class="col-md-6 col-lg-4 user-card-col"
        data-name="{{ (u.name or '')|lower }}"
        data-email="{{ u.email|lower }}">
-    <div class="card p-3 h-100" style="cursor:pointer;" onclick="window.location='{{ url_for('user_profile', user_id=u.id) }}'">
+    <div class="user-card" onclick="window.location='{{ url_for('user_profile', user_id=u.id) }}'">
 
-      <div class="d-flex align-items-center gap-3 mb-2">
+      <div class="d-flex align-items-center gap-3 mb-3">
         <!-- Avatar -->
         {% if u.photo_filename %}
           <img src="{{ url_for('static', filename='uploads/avatars/' + u.photo_filename) }}"
-               class="avatar-circle-lg flex-shrink-0"
+               class="user-card-avatar flex-shrink-0"
                style="object-fit:cover;"
                alt="{{ (u.name or u.email)[0].upper() }}">
         {% else %}
-          <div class="avatar-circle-lg flex-shrink-0 avatar-initials-dynamic" data-seed="{{ u.email }}">
+          <div class="user-card-avatar flex-shrink-0 avatar-initials-dynamic" data-seed="{{ u.email }}">
             {{ (u.name or u.email)[0].upper() }}
           </div>
         {% endif %}
 
-        <!-- Infos -->
+        <!-- Nom + email -->
         <div class="flex-grow-1 min-w-0">
-          <div class="fw-semibold text-truncate">
+          <div class="user-card-name text-truncate">
             {{ u.name or u.email.split('@')[0] }}
             {% if u.id == current_user.id %}
               <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle ms-1"
                     style="font-size:10px; font-weight:500; vertical-align:middle;">Vous</span>
             {% endif %}
           </div>
-          <div class="text-muted small text-truncate">{{ u.email }}</div>
+          <div class="user-card-email text-truncate">{{ u.email }}</div>
         </div>
       </div>
 
       <!-- Stats -->
-      <div class="d-flex gap-3 small text-muted mb-2">
-        <span><strong>{{ s.pub_favs }}</strong> favori{{ 's' if s.pub_favs > 1 else '' }}</span>
-        <span><strong>{{ s.followers }}</strong> abonn{{ 'és' if s.followers > 1 else 'é' }}</span>
+      <div class="user-card-stats mb-2">
+        <span class="user-card-stat-block">
+          <span class="user-card-stat-key">Favoris</span>
+          <span class="user-card-stat-val">{{ s.pub_favs }}</span>
+        </span>
+        <span class="user-card-stat-sep"></span>
+        <span class="user-card-stat-block">
+          <span class="user-card-stat-key">Abonn&#233;s</span>
+          <span class="user-card-stat-val">{{ s.followers }}</span>
+        </span>
       </div>
 
       <!-- Indicateur d'activité -->
-      <div class="small mb-3">
+      <div class="user-card-activity mb-3">
         {% if la %}
-          {% set now = now() if now is defined else none %}
           <span class="activity-indicator" data-date="{{ la.isoformat() }}"></span>
         {% else %}
-          <span class="text-muted fst-italic">{{ t('users.no_share') }}</span>
+          <span class="text-muted fst-italic" style="font-size:12px;">{{ t('users.no_share') }}</span>
         {% endif %}
       </div>
 
       <!-- Actions -->
       <div class="d-flex flex-row gap-2 align-items-center mt-auto">
         {% if u.id == current_user.id %}
-          <a href="{{ url_for('me') }}" class="btn btn-sm btn-outline-secondary"
+          <a href="{{ url_for('me') }}" class="card-btn"
              onclick="event.stopPropagation()">&#9998; Modifier mon profil</a>
         {% elif u.id in followed_ids %}
-          <button class="btn btn-sm btn-success unfollow-btn"
+          <button class="card-btn card-btn-public unfollow-btn"
                   data-user-id="{{ u.id }}"
                   onclick="event.stopPropagation(); unfollowUser({{ u.id }}, this)">
             {{ t('users.unfollow') }}
           </button>
         {% else %}
-          <button class="btn btn-sm btn-primary follow-btn"
+          <button class="card-btn card-btn-primary follow-btn"
                   data-user-id="{{ u.id }}"
                   onclick="event.stopPropagation(); followUser({{ u.id }}, this)">
             {{ t('users.follow') }}
@@ -110,16 +117,87 @@
 
 {% block scripts %}
 <style>
-.avatar-circle-lg {
+/* ==================== CARTE UTILISATEUR ==================== */
+.user-card {
+  background: var(--bs-body-bg);
+  border: 0.5px solid var(--bs-border-color);
+  border-radius: 12px;
+  padding: 16px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .06);
+  transition: box-shadow .15s, transform .12s;
+}
+.user-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .10);
+  transform: translateY(-1px);
+}
+
+/* Avatar */
+.user-card-avatar {
   width: 46px; height: 46px; border-radius: 50%;
   background: #6366f1;
-  color: #fff !important; font-weight: 700; font-size: 1.1rem;
+  color: #fff; font-weight: 700; font-size: 1.1rem;
   display: flex; align-items: center; justify-content: center;
   min-width: 46px;
 }
+
+/* Nom — même style que .card-title */
+.user-card-name {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--bs-body-color);
+  line-height: 1.4;
+}
+
+/* Email — même style que .card-meta-val */
+.user-card-email {
+  font-size: 13px;
+  color: var(--bs-secondary-color);
+}
+
+/* Stats — labels style .card-meta-key, valeurs en gras */
+.user-card-stats {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.user-card-stat-block {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.user-card-stat-key {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--bs-secondary-color);
+}
+.user-card-stat-val {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--bs-body-color);
+  line-height: 1.2;
+}
+.user-card-stat-sep {
+  width: 1px;
+  height: 28px;
+  background: var(--bs-border-color);
+  align-self: center;
+}
+
+/* Activité */
+.user-card-activity {
+  font-size: 12px;
+}
+
+/* Indicateur d'activité */
 .activity-dot {
   display: inline-block;
-  width: 8px; height: 8px; border-radius: 50%;
+  width: 7px; height: 7px; border-radius: 50%;
   margin-right: 5px; vertical-align: middle;
 }
 .activity-recent { background: #22c55e; }
@@ -127,7 +205,21 @@
 .activity-old    { background: #ef4444; }
 .activity-none   { background: #94a3b8; }
 
+/* Barre de recherche */
+.users-search-group .form-control,
+.users-search-group .input-group-text {
+  border-color: var(--bs-border-color);
+  font-size: 14px;
+}
+.users-search-group .form-control:focus {
+  box-shadow: none;
+  border-color: #6366f1;
+}
+.users-search-group .input-group-text {
+  color: var(--bs-secondary-color);
+}
 </style>
+
 <script>
 // Calcul indicateur d'activité côté JS
 document.querySelectorAll('.activity-indicator').forEach(el => {
@@ -177,9 +269,9 @@ async function followUser(userId, btn) {
   const res = await fetch(`/follow/${userId}`, {method: 'POST'});
   const data = await res.json();
   if (data.ok) {
-    btn.className = 'btn btn-sm btn-success unfollow-btn';
+    btn.className = 'card-btn card-btn-public unfollow-btn';
     btn.textContent = _unfollowLabel;
-    btn.onclick = function() { unfollowUser(userId, this); };
+    btn.onclick = function(e) { e.stopPropagation(); unfollowUser(userId, this); };
   }
 }
 
@@ -187,9 +279,9 @@ async function unfollowUser(userId, btn) {
   const res = await fetch(`/unfollow/${userId}`, {method: 'POST'});
   const data = await res.json();
   if (data.ok) {
-    btn.className = 'btn btn-sm btn-primary follow-btn';
+    btn.className = 'card-btn card-btn-primary follow-btn';
     btn.textContent = _followLabel;
-    btn.onclick = function() { followUser(userId, this); };
+    btn.onclick = function(e) { e.stopPropagation(); followUser(userId, this); };
   }
 }
 </script>
