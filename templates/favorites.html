@@ -136,16 +136,26 @@
   <div class="modal-dialog modal-sm modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
-        <h6 class="modal-title mb-0">Renommer le dossier</h6>
+        <h6 class="modal-title mb-0">Renommer / Couleur</h6>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
         <input type="hidden" id="renameFolderId" value="">
-        <input type="text" id="rename-folder-name" class="form-control" placeholder="Nouveau nom">
+        <input type="hidden" id="renameFolderColor" value="#6366f1">
+        <input type="text" id="rename-folder-name" class="form-control mb-3" placeholder="Nouveau nom">
+        <div class="d-flex flex-wrap gap-2 justify-content-center">
+          {% for color in ['#6366f1','#3b82f6','#22c55e','#f59e0b','#ef4444','#ec4899','#8b5cf6','#64748b'] %}
+          <button class="color-swatch color-swatch-lg"
+                  style="background:{{ color }};"
+                  data-color="{{ color }}"
+                  onclick="selectRenameColor(this)">
+          </button>
+          {% endfor %}
+        </div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Annuler</button>
-        <button class="btn btn-primary btn-sm" onclick="renameFolder()">Renommer</button>
+        <button class="btn btn-primary btn-sm" onclick="renameFolder()">Enregistrer</button>
       </div>
     </div>
   </div>
@@ -480,7 +490,8 @@
   display: flex;
   gap: 0;
   min-height: calc(100vh - 60px);
-  margin: -16px -12px 0;
+  margin: -24px -12px 0;   /* annule py-4 (1.5rem=24px) + padding container (12px) */
+  width: calc(100% + 24px);
 }
 .physara-sidebar {
   width: 220px;
@@ -519,37 +530,56 @@
 
 /* Folder items */
 .physara-folder-item {
-  display: flex; align-items: center; gap: 8px;
-  padding: 9px 14px; cursor: pointer; white-space: nowrap;
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 14px; cursor: pointer;
   text-decoration: none; color: var(--bs-body-color);
   position: relative; font-size: 0.87rem;
+  overflow: hidden;
 }
 .physara-folder-item:hover { background: var(--bs-secondary-bg); }
 .physara-folder-item.active { background: var(--bs-secondary-bg); font-weight: 600; }
 .physara-folder-color-dot {
   width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
 }
+.physara-folder-name {
+  flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .physara-folder-count {
   font-size: 10px; color: var(--bs-secondary-color);
   background: var(--bs-secondary-bg); padding: 1px 6px; border-radius: 8px;
-  margin-left: auto; flex-shrink: 0;
+  flex-shrink: 0; white-space: nowrap;
 }
-.physara-folder-chevron { font-size: 11px; color: var(--bs-secondary-color); flex-shrink: 0; }
+.physara-folder-chevron {
+  font-size: 12px; color: var(--bs-secondary-color); flex-shrink: 0;
+  width: 16px; text-align: center; cursor: pointer; line-height: 1;
+  transition: color 0.1s;
+}
+.physara-folder-chevron:hover { color: var(--bs-body-color); }
 .physara-folder-actions {
-  display: none; gap: 4px; margin-left: 4px; flex-shrink: 0;
+  display: none; gap: 2px; flex-shrink: 0; align-items: center;
 }
 .physara-folder-item:hover .physara-folder-actions { display: flex; }
-.physara-folder-actions span {
-  font-size: 11px; color: var(--bs-secondary-color);
-  padding: 1px 4px; border-radius: 3px; cursor: pointer;
+/* Boutons action dossier */
+.pfa-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; border-radius: 4px;
+  background: none; border: none; cursor: pointer;
+  font-size: 12px; color: var(--bs-secondary-color); padding: 0;
+  line-height: 1; flex-shrink: 0;
 }
-.physara-folder-actions span:hover { background: var(--bs-border-color); color: var(--bs-body-color); }
+.pfa-btn:hover { background: var(--bs-secondary-bg); color: var(--bs-body-color); }
+.pfa-btn-delete:hover { background: rgba(220,53,69,.15) !important; color: #dc3545 !important; }
 
-/* Arborescence */
+/* Arborescence — repliée par défaut */
 .physara-folder-children {
   padding-left: 12px;
   border-left: 1px solid var(--bs-border-color);
   margin-left: 20px;
+  display: none;
+}
+.physara-folder-tree-item.expanded > .physara-folder-children {
+  display: block;
 }
 
 /* Add folder */
@@ -584,7 +614,7 @@
 
 /* Mobile : sidebar masquée */
 @media (max-width: 991px) {
-  .physara-favorites-layout { margin: -8px -8px 0; }
+  .physara-favorites-layout { margin: -16px -8px 0; width: calc(100% + 16px); }
   .physara-sidebar { display: none; }
   .physara-favorites-main { padding: 16px; }
 }
@@ -791,9 +821,23 @@ function navigateFolder(folderId) {
   window.location.href = '/folders/' + folderId;
 }
 
-function openRenameFolderModal(folderId, folderName) {
+let selectedRenameColor = '#6366f1';
+
+function selectRenameColor(btn) {
+  document.querySelectorAll('#renameFolderModal .color-swatch-lg').forEach(s => s.classList.remove('swatch-selected'));
+  btn.classList.add('swatch-selected');
+  selectedRenameColor = btn.dataset.color;
+  document.getElementById('renameFolderColor').value = selectedRenameColor;
+}
+
+function openRenameFolderModal(folderId, folderName, folderColor) {
   document.getElementById('renameFolderId').value = folderId;
   document.getElementById('rename-folder-name').value = folderName;
+  selectedRenameColor = folderColor || '#6366f1';
+  document.getElementById('renameFolderColor').value = selectedRenameColor;
+  document.querySelectorAll('#renameFolderModal .color-swatch-lg').forEach(s => {
+    s.classList.toggle('swatch-selected', s.dataset.color === selectedRenameColor);
+  });
   bootstrap.Modal.getOrCreateInstance(document.getElementById('renameFolderModal')).show();
 }
 
@@ -801,10 +845,11 @@ async function renameFolder() {
   const folderId = document.getElementById('renameFolderId').value;
   const name = document.getElementById('rename-folder-name').value.trim();
   if (!name || !folderId) return;
+  const color = document.getElementById('renameFolderColor').value || selectedRenameColor;
   const res = await fetch(`/folders/${folderId}/rename`, {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({name})
+    body: JSON.stringify({name, color})
   });
   const data = await res.json();
   if (data.ok) {
@@ -815,13 +860,33 @@ async function renameFolder() {
   }
 }
 
+function toggleFolderExpand(folderId) {
+  const treeItem = document.querySelector(`.physara-folder-tree-item[data-folder-id="${folderId}"]`);
+  if (!treeItem) return;
+  treeItem.classList.toggle('expanded');
+  const expanded = treeItem.classList.contains('expanded');
+  const chevron = document.querySelector(`.physara-folder-chevron[data-folder-id="${folderId}"]`);
+  if (chevron) chevron.textContent = expanded ? '\u02c5' : '\u203a';
+  localStorage.setItem(`folderExpanded_${folderId}`, expanded ? '1' : '0');
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+  // Restaurer état collapsed de la sidebar
   const s = document.getElementById('favSidebar');
   if (s && localStorage.getItem('favSidebarCollapsed') === 'true') {
     s.classList.add('collapsed');
     const btn = s.querySelector('.physara-sidebar-toggle');
     if (btn) btn.textContent = '\u203a';
   }
+  // Restaurer état déplié des dossiers
+  document.querySelectorAll('.physara-folder-tree-item[data-folder-id]').forEach(item => {
+    const id = item.dataset.folderId;
+    if (localStorage.getItem(`folderExpanded_${id}`) === '1') {
+      item.classList.add('expanded');
+      const chevron = document.querySelector(`.physara-folder-chevron[data-folder-id="${id}"]`);
+      if (chevron) chevron.textContent = '\u02c5';
+    }
+  });
 });
 
 // --- Dossiers ---

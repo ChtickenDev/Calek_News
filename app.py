@@ -2659,12 +2659,15 @@ def folder_rename(folder_id):
     f = Folder.query.filter_by(id=folder_id, user_id=current_user.id).first_or_404()
     data = request.json or {}
     name = (data.get('name') or '').strip()
+    color = (data.get('color') or '').strip()
     if not name:
         return jsonify({"ok": False, "error": "Nom requis"})
     existing = Folder.query.filter_by(user_id=current_user.id, name=name).filter(Folder.id != folder_id).first()
     if existing:
         return jsonify({"ok": False, "error": "Ce nom existe déjà"})
     f.name = name
+    if color:
+        f.color = color
     db.session.commit()
     return jsonify({"ok": True})
 
