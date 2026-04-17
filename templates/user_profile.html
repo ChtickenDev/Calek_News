@@ -61,9 +61,25 @@
 
       <!-- Stats -->
       <div class="d-flex gap-3 small mb-2">
-        <span><strong>{{ followers_count }}</strong> abonné{{ 's' if followers_count > 1 else '' }}</span>
-        {% if profile_user.abonnements_publics or profile_user.id == current_user.id %}
-          <span><strong>{{ following_count }}</strong> abonnement{{ 's' if following_count > 1 else '' }}</span>
+        {% if profile_user.followers_public or profile_user.id == current_user.id %}
+          <span class="profile-stat-link" onclick="openFollowersModal({{ profile_user.id }})">
+            <strong>{{ followers_count }}</strong> abonné{{ 's' if followers_count > 1 else '' }}
+            {% if profile_user.id == current_user.id and not profile_user.followers_public %}
+              <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle ms-1" style="font-size:9px;">Privé</span>
+            {% endif %}
+          </span>
+        {% else %}
+          <span class="text-muted"><strong>{{ followers_count }}</strong> abonné{{ 's' if followers_count > 1 else '' }}</span>
+        {% endif %}
+        {% if profile_user.following_public or profile_user.id == current_user.id %}
+          <span class="profile-stat-link" onclick="openFollowingModal({{ profile_user.id }})">
+            <strong>{{ following_count }}</strong> abonnement{{ 's' if following_count > 1 else '' }}
+            {% if profile_user.id == current_user.id and not profile_user.following_public %}
+              <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle ms-1" style="font-size:9px;">Privé</span>
+            {% endif %}
+          </span>
+        {% elif profile_user.abonnements_publics %}
+          <span class="text-muted"><strong>{{ following_count }}</strong> abonnement{{ 's' if following_count > 1 else '' }}</span>
         {% endif %}
         <span><strong>{{ total_public_count }}</strong> favori{{ 's' if total_public_count > 1 else '' }} public{{ 's' if total_public_count > 1 else '' }}</span>
       </div>
@@ -367,6 +383,52 @@
 </div><!-- /.profile-visitor-wrap -->
 {% endif %}
 
+<!-- Modal : Abonnés -->
+<div class="modal fade" id="followersModal" tabindex="-1" aria-labelledby="followersModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="followersModalLabel">Abonnés</h5>
+        {% if profile_user.id == current_user.id %}
+          <button id="followers-visibility-btn" class="btn btn-sm ms-2
+            {{ 'btn-outline-secondary' if profile_user.followers_public else 'btn-outline-warning' }}"
+            onclick="toggleFollowersVisibility({{ profile_user.id }})"
+            title="{{ 'Rendre privé' if profile_user.followers_public else 'Rendre public' }}">
+            {{ '&#128275; Public' if profile_user.followers_public else '&#128274; Privé' }}
+          </button>
+        {% endif %}
+        <button type="button" class="btn-close ms-auto" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="followers-modal-body">
+        <div class="text-center text-muted py-3">Chargement…</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal : Abonnements -->
+<div class="modal fade" id="followingModal" tabindex="-1" aria-labelledby="followingModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="followingModalLabel">Abonnements</h5>
+        {% if profile_user.id == current_user.id %}
+          <button id="following-visibility-btn" class="btn btn-sm ms-2
+            {{ 'btn-outline-secondary' if profile_user.following_public else 'btn-outline-warning' }}"
+            onclick="toggleFollowingVisibility({{ profile_user.id }})"
+            title="{{ 'Rendre privé' if profile_user.following_public else 'Rendre public' }}">
+            {{ '&#128275; Public' if profile_user.following_public else '&#128274; Privé' }}
+          </button>
+        {% endif %}
+        <button type="button" class="btn-close ms-auto" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="following-modal-body">
+        <div class="text-center text-muted py-3">Chargement…</div>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -527,6 +589,26 @@
   background: var(--bs-secondary-bg); padding: 1px 7px; border-radius: 8px;
 }
 .physara-mobile-folder-sep { height: 1px; background: var(--bs-border-color); margin: 0 16px; }
+
+/* ==================== STATS CLIQUABLES ==================== */
+.profile-stat-link {
+  cursor: pointer; border-radius: 6px; padding: 1px 4px;
+  transition: background .12s;
+}
+.profile-stat-link:hover { background: var(--bs-secondary-bg); text-decoration: underline; }
+
+/* ==================== MODALS FOLLOW LISTS ==================== */
+.follow-user-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 0; border-bottom: 1px solid var(--bs-border-color);
+}
+.follow-user-row:last-child { border-bottom: none; }
+.follow-user-avatar {
+  width: 40px; height: 40px; border-radius: 50%; object-fit: cover;
+  background: #6366f1; color: #fff; font-size: 1.1rem; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.follow-user-name { flex: 1; font-size: 0.9rem; font-weight: 500; }
 </style>
 
 <script>
@@ -591,6 +673,117 @@ async function toggleLike(articleId, btn) {
     btn.dataset.liked = data.liked ? 'true' : 'false';
     btn.className = `card-btn like-btn${data.liked ? ' card-btn-liked' : ''}`;
     btn.querySelector('.like-count').textContent = data.count;
+  }
+}
+
+/* ---- Modals followers / following ---- */
+const _currentUserId = {{ current_user.id if current_user.is_authenticated else 'null' }};
+
+function _renderFollowList(users, containerId) {
+  const body = document.getElementById(containerId);
+  if (!users.length) {
+    body.innerHTML = '<p class="text-muted text-center py-3">Aucun utilisateur.</p>';
+    return;
+  }
+  body.innerHTML = users.map(u => {
+    const initials = u.name ? u.name[0].toUpperCase() : '?';
+    const avatarHtml = u.photo_filename
+      ? `<img src="/static/uploads/avatars/${u.photo_filename}" class="follow-user-avatar" alt="">`
+      : `<div class="follow-user-avatar">${initials}</div>`;
+    const isMe = u.id === _currentUserId;
+    let btnHtml = '';
+    if (!isMe) {
+      if (u.is_following) {
+        btnHtml = `<button class="btn btn-sm btn-outline-secondary" onclick="toggleFollowFromModal(${u.id}, true, this, '${containerId}')">Se désabonner</button>`;
+      } else {
+        btnHtml = `<button class="btn btn-sm btn-primary" onclick="toggleFollowFromModal(${u.id}, false, this, '${containerId}')">Suivre</button>`;
+      }
+    }
+    return `<div class="follow-user-row">
+      <a href="/user/${u.id}" style="text-decoration:none; color:inherit; display:flex; align-items:center; gap:12px; flex:1;">
+        ${avatarHtml}
+        <span class="follow-user-name">${u.name}</span>
+      </a>
+      ${btnHtml}
+    </div>`;
+  }).join('');
+}
+
+async function openFollowersModal(userId) {
+  const modal = new bootstrap.Modal(document.getElementById('followersModal'));
+  modal.show();
+  const body = document.getElementById('followers-modal-body');
+  body.innerHTML = '<div class="text-center text-muted py-3">Chargement…</div>';
+  const res = await fetch(`/user/${userId}/followers`);
+  const data = await res.json();
+  if (data.ok) _renderFollowList(data.users, 'followers-modal-body');
+  else body.innerHTML = `<p class="text-muted text-center py-3">${data.error || 'Liste privée.'}</p>`;
+}
+
+async function openFollowingModal(userId) {
+  const modal = new bootstrap.Modal(document.getElementById('followingModal'));
+  modal.show();
+  const body = document.getElementById('following-modal-body');
+  body.innerHTML = '<div class="text-center text-muted py-3">Chargement…</div>';
+  const res = await fetch(`/user/${userId}/following`);
+  const data = await res.json();
+  if (data.ok) _renderFollowList(data.users, 'following-modal-body');
+  else body.innerHTML = `<p class="text-muted text-center py-3">${data.error || 'Liste privée.'}</p>`;
+}
+
+async function toggleFollowFromModal(userId, isFollowing, btn, containerId) {
+  const url = isFollowing ? `/unfollow/${userId}` : `/follow/${userId}`;
+  const res = await fetch(url, {method: 'POST'});
+  const data = await res.json();
+  if (data.ok) {
+    if (data.following) {
+      btn.textContent = 'Se désabonner';
+      btn.className = 'btn btn-sm btn-outline-secondary';
+      btn.setAttribute('onclick', `toggleFollowFromModal(${userId}, true, this, '${containerId}')`);
+    } else {
+      btn.textContent = 'Suivre';
+      btn.className = 'btn btn-sm btn-primary';
+      btn.setAttribute('onclick', `toggleFollowFromModal(${userId}, false, this, '${containerId}')`);
+    }
+    /* Mettre à jour le compteur dans le header de profil */
+    document.querySelectorAll('.profile-stat-link').forEach(el => {
+      const text = el.textContent;
+      /* simple reload si changement de compte propre */
+    });
+  }
+}
+
+async function toggleFollowersVisibility(userId) {
+  const res = await fetch(`/user/${userId}/toggle-followers-visibility`, {method: 'POST'});
+  const data = await res.json();
+  if (data.ok) {
+    const btn = document.getElementById('followers-visibility-btn');
+    if (data.public) {
+      btn.textContent = '\uD83D\uDD13 Public';
+      btn.className = 'btn btn-sm ms-2 btn-outline-secondary';
+      btn.title = 'Rendre privé';
+    } else {
+      btn.textContent = '\uD83D\uDD12 Privé';
+      btn.className = 'btn btn-sm ms-2 btn-outline-warning';
+      btn.title = 'Rendre public';
+    }
+  }
+}
+
+async function toggleFollowingVisibility(userId) {
+  const res = await fetch(`/user/${userId}/toggle-following-visibility`, {method: 'POST'});
+  const data = await res.json();
+  if (data.ok) {
+    const btn = document.getElementById('following-visibility-btn');
+    if (data.public) {
+      btn.textContent = '\uD83D\uDD13 Public';
+      btn.className = 'btn btn-sm ms-2 btn-outline-secondary';
+      btn.title = 'Rendre privé';
+    } else {
+      btn.textContent = '\uD83D\uDD12 Privé';
+      btn.className = 'btn btn-sm ms-2 btn-outline-warning';
+      btn.title = 'Rendre public';
+    }
   }
 }
 </script>

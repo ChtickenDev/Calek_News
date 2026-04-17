@@ -180,6 +180,8 @@ class User(UserMixin, db.Model):
     tiktok = db.Column(db.String(255))
     youtube = db.Column(db.String(255))
     abonnements_publics = db.Column(db.Boolean, default=True)
+    followers_public = db.Column(db.Boolean, default=True)
+    following_public = db.Column(db.Boolean, default=True)
     google_id      = db.Column(db.String(100), unique=True, nullable=True)
 
     def set_password(self, pw):
@@ -864,6 +866,17 @@ def ensure_trusted_device_schema():
             )
         """))
         conn.commit()
+
+
+def ensure_follow_visibility_schema():
+    """Ajoute les colonnes followers_public / following_public si absentes."""
+    with db.engine.connect() as conn:
+        for col in ('followers_public', 'following_public'):
+            try:
+                conn.execute(text(f'ALTER TABLE "user" ADD COLUMN {col} BOOLEAN DEFAULT TRUE'))
+                conn.commit()
+            except Exception:
+                conn.rollback()
 
 
 import secrets as _secrets
@@ -3098,10 +3111,10 @@ def follow_user(user_id):
     User.query.get_or_404(user_id)
     existing = Follow.query.filter_by(follower_id=current_user.id, followed_id=user_id).first()
     if existing:
-        return jsonify({"ok": True, "status": "already"})
+        return jsonify({"ok": True, "following": True})
     db.session.add(Follow(follower_id=current_user.id, followed_id=user_id))
     db.session.commit()
-    return jsonify({"ok": True, "status": "following"})
+    return jsonify({"ok": True, "following": True})
 
 
 @app.route('/unfollow/<int:user_id>', methods=['POST'])
@@ -3111,7 +3124,67 @@ def unfollow_user(user_id):
     if f:
         db.session.delete(f)
         db.session.commit()
-    return jsonify({"ok": True, "status": "unfollowed"})
+    return jsonify({"ok": True, "following": False})
+
+
+@app.route('/user/<int:user_id>/followers')
+@login_required
+def user_followers(user_id):
+    profile_user = User.query.get_or_404(user_id)
+    if not profile_user.followers_public and profile_user.id != current_user.id:
+        return jsonify({"ok": False, "error": "Liste privée"}), 403
+    rows = Follow.query.filter_by(followed_id=user_id).all()
+    result = []
+    for r in rows:
+        u = User.query.get(r.follower_id)
+        if u:
+            result.append({
+                "id": u.id,
+                "name": u.name or u.email,
+                "photo_filename": u.photo_filename or "",
+                "is_following": Follow.query.filter_by(follower_id=current_user.id, followed_id=u.id).first() is not None
+            })
+    return jsonify({"ok": True, "users": result})
+
+
+@app.route('/user/<int:user_id>/following')
+@login_required
+def user_following(user_id):
+    profile_user = User.query.get_or_404(user_id)
+    if not profile_user.following_public and profile_user.id != current_user.id:
+        return jsonify({"ok": False, "error": "Liste privée"}), 403
+    rows = Follow.query.filter_by(follower_id=user_id).all()
+    result = []
+    for r in rows:
+        u = User.query.get(r.followed_id)
+        if u:
+            result.append({
+                "id": u.id,
+                "name": u.name or u.email,
+                "photo_filename": u.photo_filename or "",
+                "is_following": Follow.query.filter_by(follower_id=current_user.id, followed_id=u.id).first() is not None
+            })
+    return jsonify({"ok": True, "users": result})
+
+
+@app.route('/user/<int:user_id>/toggle-followers-visibility', methods=['POST'])
+@login_required
+def toggle_followers_visibility(user_id):
+    if user_id != current_user.id:
+        return jsonify({"ok": False}), 403
+    current_user.followers_public = not current_user.followers_public
+    db.session.commit()
+    return jsonify({"ok": True, "public": current_user.followers_public})
+
+
+@app.route('/user/<int:user_id>/toggle-following-visibility', methods=['POST'])
+@login_required
+def toggle_following_visibility(user_id):
+    if user_id != current_user.id:
+        return jsonify({"ok": False}), 403
+    current_user.following_public = not current_user.following_public
+    db.session.commit()
+    return jsonify({"ok": True, "public": current_user.following_public})
 
 @app.route('/like/<int:article_id>', methods=['POST'])
 @login_required
@@ -3856,6 +3929,7 @@ def upgrade_db():
     ensure_userdraft_schema()
     ensure_google_schema()
     ensure_trusted_device_schema()
+    ensure_follow_visibility_schema()
     flash("Base mise à niveau ✅", "success")
     return redirect(url_for("index"))
 
@@ -4489,6 +4563,7 @@ if __name__ == "__main__":
         ensure_event_schema()
         ensure_google_schema()
         ensure_trusted_device_schema()
+        ensure_follow_visibility_schema()
         db.session.execute(text("UPDATE article SET featured=0 WHERE featured IS NULL"))
         db.session.commit()
     app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)
