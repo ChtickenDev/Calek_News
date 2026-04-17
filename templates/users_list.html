@@ -50,7 +50,13 @@
 
         <!-- Infos -->
         <div class="flex-grow-1 min-w-0">
-          <div class="fw-semibold text-truncate">{{ u.name or u.email.split('@')[0] }}</div>
+          <div class="fw-semibold text-truncate">
+            {{ u.name or u.email.split('@')[0] }}
+            {% if u.id == current_user.id %}
+              <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle ms-1"
+                    style="font-size:10px; font-weight:500; vertical-align:middle;">Vous</span>
+            {% endif %}
+          </div>
           <div class="text-muted small text-truncate">{{ u.email }}</div>
         </div>
       </div>
@@ -73,7 +79,10 @@
 
       <!-- Actions -->
       <div class="d-flex flex-row gap-2 align-items-center mt-auto">
-        {% if u.id in followed_ids %}
+        {% if u.id == current_user.id %}
+          <a href="{{ url_for('me') }}" class="btn btn-sm btn-outline-secondary"
+             onclick="event.stopPropagation()">&#9998; Modifier mon profil</a>
+        {% elif u.id in followed_ids %}
           <button class="btn btn-sm btn-success unfollow-btn"
                   data-user-id="{{ u.id }}"
                   onclick="event.stopPropagation(); unfollowUser({{ u.id }}, this)">

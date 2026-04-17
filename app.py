@@ -3605,7 +3605,9 @@ def article_sharers(article_id):
 @app.route('/users')
 @login_required
 def users_list():
-    users = User.query.filter(User.id != current_user.id).order_by(User.name).all()
+    me = User.query.get(current_user.id)
+    others = User.query.filter(User.id != current_user.id).order_by(User.name).all()
+    users = ([me] if me else []) + others
     followed = Follow.query.filter_by(follower_id=current_user.id).all()
     followed_ids = {f.followed_id for f in followed}
 
