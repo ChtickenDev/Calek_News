@@ -102,6 +102,114 @@
       </div>
 
     </div>
+
+    <!-- Mobile filter UI (desktop: d-md-none) -->
+    <div id="m-filter-ui" class="d-md-none" style="margin-top:8px;">
+
+      <!-- Barre : pills actifs + bouton + -->
+      <div id="m-filter-bar" style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
+        <button id="m-add-btn" type="button" onclick="mobileTogglePanel()"
+                style="display:inline-flex; align-items:center; gap:5px;
+                       border:1.5px dashed var(--bs-border-color); background:transparent;
+                       border-radius:20px; padding:5px 12px; font-size:12px;
+                       color:var(--bs-secondary-color); cursor:pointer;">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          Filtres
+        </button>
+        <div id="m-pills" style="display:contents;"></div>
+      </div>
+
+      <!-- Lien Réinitialiser -->
+      <div id="m-reset-row" style="display:none; margin-top:5px;">
+        <a href="#" onclick="mobileResetFilters(); return false;"
+           style="font-size:11px; color:var(--bs-secondary-color); text-decoration:none;">Réinitialiser</a>
+      </div>
+
+      <!-- Panel filtres -->
+      <div id="m-panel" style="display:none; margin-top:8px;
+           background:var(--bs-tertiary-bg); border:0.5px solid var(--bs-border-color);
+           border-radius:10px; padding:10px;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+
+          <div style="display:flex; flex-direction:column; gap:3px;">
+            <span style="font-size:10px; color:var(--bs-secondary-color);">Tri PubMed</span>
+            <select id="m-pubmed-sort" onchange="mobileOnChange('pubmed_sort',this)"
+                    style="font-size:11px; border:0.5px solid var(--bs-border-color); border-radius:6px; padding:4px 8px; background:var(--bs-body-bg); color:var(--bs-body-color);">
+              <option value="pub+date">Chronologique</option>
+              <option value="relevance">Populaire</option>
+            </select>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:3px;">
+            <span style="font-size:10px; color:var(--bs-secondary-color);">Type d'étude</span>
+            <select id="m-study-type" onchange="mobileOnChange('study_type',this)"
+                    style="font-size:11px; border:0.5px solid var(--bs-border-color); border-radius:6px; padding:4px 8px; background:var(--bs-body-bg); color:var(--bs-body-color);">
+              <option value="">Tous</option>
+              <option value="rct">RCT</option>
+              <option value="meta">Méta-analyse</option>
+              <option value="systematic">Rev. systématique</option>
+              <option value="review">Revue</option>
+              <option value="clinical">Essai clinique</option>
+            </select>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:3px;">
+            <span style="font-size:10px; color:var(--bs-secondary-color);">Accès</span>
+            <select id="m-access" onchange="mobileOnChange('access',this)"
+                    style="font-size:11px; border:0.5px solid var(--bs-border-color); border-radius:6px; padding:4px 8px; background:var(--bs-body-bg); color:var(--bs-body-color);">
+              <option value="">Tous</option>
+              <option value="fulltext">Full text</option>
+              <option value="free">Free full text</option>
+            </select>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:3px;">
+            <span style="font-size:10px; color:var(--bs-secondary-color);">Langue</span>
+            <select id="m-lang" onchange="mobileOnChange('lang',this)"
+                    style="font-size:11px; border:0.5px solid var(--bs-border-color); border-radius:6px; padding:4px 8px; background:var(--bs-body-bg); color:var(--bs-body-color);">
+              <option value="">Toutes</option>
+              <option value="en">Anglais</option>
+              <option value="fr">Français</option>
+            </select>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:3px;">
+            <span style="font-size:10px; color:var(--bs-secondary-color);">Période</span>
+            <select id="m-date-range" onchange="mobileOnChange('date_range',this)"
+                    style="font-size:11px; border:0.5px solid var(--bs-border-color); border-radius:6px; padding:4px 8px; background:var(--bs-body-bg); color:var(--bs-body-color);">
+              <option value="">Toutes</option>
+              <option value="1y">1 an</option>
+              <option value="5y">5 ans</option>
+              <option value="10y">10 ans</option>
+            </select>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:3px;">
+            <span style="font-size:10px; color:var(--bs-secondary-color);">Tri résultats</span>
+            <select id="m-sort" onchange="mobileOnChange('sort',this)"
+                    style="font-size:11px; border:0.5px solid var(--bs-border-color); border-radius:6px; padding:4px 8px; background:var(--bs-body-bg); color:var(--bs-body-color);">
+              <option value="date_desc">Date ↓</option>
+              <option value="date_asc">Date ↑</option>
+              <option value="ifs_desc">IFS ↓</option>
+              <option value="ifs_asc">IFS ↑</option>
+            </select>
+          </div>
+
+        </div>
+        <div style="display:flex; justify-content:flex-end; margin-top:10px;">
+          <button type="button" onclick="mobileTogglePanel()"
+                  style="font-size:12px; background:transparent; border:0.5px solid var(--bs-border-color);
+                         border-radius:6px; padding:5px 12px; color:var(--bs-secondary-color); cursor:pointer;">
+            Fermer ∧
+          </button>
+        </div>
+      </div>
+
+    </div>
+    <!-- /Mobile filter UI -->
+
   </form>
 
   <!-- Formulaire tri local (hidden) -->
@@ -267,74 +375,112 @@
     font-size: 13px !important;
     white-space: nowrap !important;
   }
-
-  /* Filtres : rangée scrollable horizontalement */
+  /* Masquer les filtres desktop sur mobile */
   #search-filters {
-    display: block !important;
-    overflow-x: auto !important;
-    white-space: nowrap !important;
-    -webkit-overflow-scrolling: touch !important;
-    padding-bottom: 4px !important;
-    margin-top: 10px !important;
-  }
-
-  /* Chaque bloc filtre : inline */
-  #search-filters > div {
-    display: inline-block !important;
-    white-space: normal !important;
-    vertical-align: top !important;
-    margin-right: 0 !important;
-  }
-
-  /* Masquer les labels */
-  #search-filters label {
-    display: none !important;
-  }
-
-  /* Selects compacts */
-  #search-filters select {
-    display: inline-block !important;
-    font-size: 11px !important;
-    border: 0.5px solid var(--bs-border-color) !important;
-    border-radius: 6px !important;
-    padding: 5px 8px !important;
-    margin-right: 6px !important;
-    background: var(--bs-body-bg) !important;
-    color: var(--bs-secondary-color) !important;
-    min-width: 0 !important;
-  }
-
-  /* Supprimer le ms-auto du bloc tri résultats */
-  #search-filters .ms-auto {
-    margin-left: 0 !important;
-  }
-
-  /* Le sous-div d-flex du tri résultats : inline */
-  #search-filters .ms-auto > .d-flex {
-    display: inline-flex !important;
-  }
-
-  /* Masquer le bouton OK */
-  #search-filters button[type="submit"] {
-    display: none !important;
-  }
-
-  /* Masquer les dates personnalisées sur mobile */
-  #custom-dates {
     display: none !important;
   }
 }
 </style>
 <script>
-/* Mobile : tri résultats auto-submit sans bouton OK */
-if (window.innerWidth <= 767) {
-  const sortSel = document.querySelector('select[name="sort"]');
-  if (sortSel) {
-    sortSel.addEventListener('change', () => {
-      document.getElementById('sort-form').submit();
-    });
+/* ── Système de filtres mobile (3 états) ── */
+const M_FILTERS = [
+  { id:'m-pubmed-sort', name:'pubmed_sort', def:'pub+date',  label:'Tri PubMed', useSort:false },
+  { id:'m-study-type',  name:'study_type',  def:'',          label:'Type',       useSort:false },
+  { id:'m-access',      name:'access',      def:'',          label:'Accès',      useSort:false },
+  { id:'m-lang',        name:'lang',        def:'',          label:'Langue',     useSort:false },
+  { id:'m-date-range',  name:'date_range',  def:'',          label:'Période',    useSort:false },
+  { id:'m-sort',        name:'sort',        def:'date_desc', label:'Tri',        useSort:true  },
+];
+
+function mobileInit() {
+  M_FILTERS.forEach(f => {
+    const real   = document.querySelector(`#search-filters select[name="${f.name}"]`);
+    const mirror = document.getElementById(f.id);
+    if (real && mirror) mirror.value = real.value || f.def;
+  });
+  mobileRenderPills();
+}
+
+function mobileOnChange(name, mirrorEl) {
+  const f = M_FILTERS.find(x => x.name === name);
+  if (!f) return;
+  const real = document.querySelector(`#search-filters select[name="${name}"]`);
+  if (real) real.value = mirrorEl.value;
+  mobileStyleMirror(mirrorEl, mirrorEl.value, f.def);
+  mobileRenderPills();
+}
+
+function mobileStyleMirror(el, value, def) {
+  if (value !== def) {
+    el.style.borderColor = '#4a90d9';
+    el.style.background  = '#f0f7ff';
+    el.style.color       = '#4a90d9';
+  } else {
+    el.style.borderColor = '';
+    el.style.background  = '';
+    el.style.color       = '';
   }
 }
+
+function mobileRenderPills() {
+  const pillsEl  = document.getElementById('m-pills');
+  const resetRow = document.getElementById('m-reset-row');
+  if (!pillsEl) return;
+  let html = '', hasActive = false;
+  M_FILTERS.forEach(f => {
+    const mirror = document.getElementById(f.id);
+    if (!mirror) return;
+    mobileStyleMirror(mirror, mirror.value, f.def);
+    if (mirror.value === f.def) return;
+    hasActive = true;
+    const opt  = mirror.querySelector(`option[value="${mirror.value}"]`);
+    const text = opt ? opt.textContent : mirror.value;
+    html += `<span style="display:inline-flex;align-items:center;gap:5px;border:0.5px solid #4a90d9;color:#4a90d9;background:#f0f7ff;border-radius:20px;padding:4px 11px;font-size:12px;">
+      ${f.label}&nbsp;: ${text}
+      <span onclick="mobileRemovePill('${f.id}')" style="cursor:pointer;display:inline-flex;align-items:center;line-height:1;">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </span>
+    </span>`;
+  });
+  pillsEl.innerHTML = html;
+  if (resetRow) resetRow.style.display = hasActive ? '' : 'none';
+}
+
+function mobileRemovePill(mirrorId) {
+  const f = M_FILTERS.find(x => x.id === mirrorId);
+  if (!f) return;
+  const mirror = document.getElementById(mirrorId);
+  const real   = document.querySelector(`#search-filters select[name="${f.name}"]`);
+  if (mirror) mirror.value = f.def;
+  if (real)   real.value   = f.def;
+  mobileRenderPills();
+  f.useSort ? document.getElementById('sort-form').submit()
+            : document.getElementById('pubmed-form').submit();
+}
+
+function mobileTogglePanel() {
+  const panel = document.getElementById('m-panel');
+  if (!panel) return;
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+function mobileResetFilters() {
+  M_FILTERS.forEach(f => {
+    const mirror = document.getElementById(f.id);
+    const real   = document.querySelector(`#search-filters select[name="${f.name}"]`);
+    if (mirror) mirror.value = f.def;
+    if (real)   real.value   = f.def;
+  });
+  mobileRenderPills();
+  document.getElementById('pubmed-form').submit();
+}
+
+if (window.innerWidth <= 767) {
+  document.readyState === 'loading'
+    ? document.addEventListener('DOMContentLoaded', mobileInit)
+    : mobileInit();
+}
+/* ── /Filtres mobile ── */
 
 /* Favoris AJAX */
 document.querySelectorAll('.favorite-form')?.forEach(form => {
