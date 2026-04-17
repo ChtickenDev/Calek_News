@@ -9,7 +9,7 @@
       {% if discovery %}{{ t('feed.discovery_sub') }}{% else %}{{ t('feed.follow_sub') }}{% endif %}
     </p>
   </div>
-  <a href="{{ url_for('users_list') }}" class="btn btn-outline-primary btn-sm">{{ t('feed.find_profiles') }}</a>
+  <a href="{{ url_for('users_list') }}" class="btn btn-follow-pill">{{ t('feed.find_profiles') }}</a>
 </div>
 
 <hr class="mb-4">
@@ -17,7 +17,7 @@
 {% if not items %}
   <div class="text-center py-5 text-muted">
     <p class="fs-5">{{ t('feed.empty') }}</p>
-    <a href="{{ url_for('users_list') }}" class="btn btn-primary mt-2">{{ t('feed.find_profiles_cta') }}</a>
+    <a href="{{ url_for('users_list') }}" class="btn btn-follow-pill mt-2">{{ t('feed.find_profiles_cta') }}</a>
   </div>
 {% else %}
 <div class="row gy-3">
@@ -231,6 +231,26 @@
 
 {% block scripts %}
 <style>
+.btn-follow-pill {
+  background-color: #4a90d9;
+  border-color: #4a90d9;
+  color: #fff;
+  border-radius: 20px;
+  padding: 6px 20px;
+  font-size: 14px;
+  box-shadow: 0 2px 6px rgba(74, 144, 217, 0.3);
+  text-decoration: none;
+  display: inline-block;
+  line-height: 1.5;
+  transition: background-color .15s, border-color .15s, box-shadow .15s;
+}
+.btn-follow-pill:hover {
+  background-color: #3a7fc8;
+  border-color: #3a7fc8;
+  color: #fff;
+  box-shadow: 0 3px 10px rgba(74, 144, 217, 0.4);
+}
+
 .avatar-circle {
   width: 32px; height: 32px; border-radius: 50%;
   background: #94a3b8;
