@@ -3369,7 +3369,7 @@ def feed():
         user_fav_article_ids = {f.article_id for f in Favorite.query.filter_by(user_id=current_user.id).all()}
 
         return render_template('feed.html',
-            items=[],
+            feed_final=[],
             articles_decouverte=articles_decouverte,
             followed_ids=followed_ids,
             discovery=True,
@@ -3377,6 +3377,7 @@ def feed():
             like_counts=like_counts,
             liked_ids=liked_ids,
             fav_ids=user_fav_article_ids,
+            suggested_users=[],
         )
     # ── /Mode découverte ──
 
@@ -3588,83 +3589,59 @@ def feed():
     # --- Séparation followed / other ---
     items_followed = [it for it in feed_final if any(s["is_followed"] for s in it["sharers"])]
 
-    # --- Génération des suggestions ---
-    feed_article_ids = {it["article"].id for it in feed_final}
-    fav_ids  = {f.article_id for f in Favorite.query.filter_by(user_id=current_user.id).all()}
-    seen_ids = {ev.article_id for ev in UserEvent.query.filter_by(
-        user_id=current_user.id, event_type="view").all() if ev.article_id}
-    exclude_ids = feed_article_ids | fav_ids | seen_ids
+    # --- Suggestions d'articles : dossiers publics d'utilisateurs non suivis ---
+    from sqlalchemy import func as sqlfunc
+    all_followed_ids_list = list(followed_ids) + [current_user.id]
 
-    candidates_sugg = Article.query.filter(
-        Article.is_published.is_(True),
-        ~Article.id.in_(exclude_ids or {-1})
-    ).limit(200).all()
+    article_suggestions = (
+        db.session.query(Article, User)
+        .join(FolderArticle, FolderArticle.article_id == Article.id)
+        .join(Folder, Folder.id == FolderArticle.folder_id)
+        .join(User, User.id == Folder.user_id)
+        .filter(Folder.is_public == True)
+        .filter(User.id.notin_(all_followed_ids_list or [-1]))
+        .group_by(Article.id, User.id)
+        .order_by(sqlfunc.count(FolderArticle.id).desc())
+        .limit(10)
+        .all()
+    )
 
-    def suggestion_score(a):
-        s = 0
-        ifs, _, _ = reliability_score(a)
-        s += int(ifs / 10)
-        if a.domain and a.domain in top_domains:     s += 12
-        if a.study_type and a.study_type in top_study_types: s += 8
-        if search_keywords and a.title:
-            matches = search_keywords & set(a.title.lower().split())
-            s += min(len(matches) * 3, 10)
-        if a.published_date:
-            age = (datetime.utcnow() - a.published_date).days
-            if age <= 7:    s += 10
-            elif age <= 30: s += 6
-            elif age <= 90: s += 2
-        s += like_counts.get(a.id, 0) * 2
-        return s
-
-    suggestions_raw = sorted(candidates_sugg, key=suggestion_score, reverse=True)[:20]
-    suggestions = []
-    for a in suggestions_raw:
-        suggestions.append({
-            "article": a,
-            "sharers": [],
-            "total_sharers": 0,
-            "latest_at": a.published_date or a.created_at or now,
-            "score": suggestion_score(a),
-            "score_detail": {"suggested": True},
-            "suggested": True,
-        })
-
-    # --- Mix 70/30 avec intercalation ---
-    TARGET = 50
-    n_followed  = min(len(items_followed), int(TARGET * 0.7))
-    n_suggested = min(len(suggestions), TARGET - n_followed)
-
-    followed_slice  = items_followed[:n_followed]
-    suggested_slice = suggestions[:n_suggested]
-
-    mixed = []
-    s_idx = 0
-    for i, item in enumerate(followed_slice):
-        mixed.append(item)
-        if (i + 1) % 2 == 0 and s_idx < len(suggested_slice):
-            mixed.append(suggested_slice[s_idx])
-            s_idx += 1
-    while s_idx < len(suggested_slice):
-        mixed.append(suggested_slice[s_idx])
-        s_idx += 1
-
-    items = mixed
+    # Intercalation : 1 suggestion toutes les 5 articles normaux
+    feed_with_sugg = []
+    sugg_index = 0
+    for i, item in enumerate(feed_final):
+        feed_with_sugg.append(('normal', item))
+        if (i + 1) % 5 == 0 and sugg_index < len(article_suggestions):
+            feed_with_sugg.append(('suggestion', article_suggestions[sugg_index]))
+            sugg_index += 1
 
     # Étendre like_counts / liked_ids aux articles suggérés
-    sugg_ids = [it["article"].id for it in items if it["suggested"]]
-    if sugg_ids:
+    sugg_art_ids = [a.id for a, _ in article_suggestions]
+    if sugg_art_ids:
         rows2 = db.session.query(Like.article_id, db.func.count(Like.id))\
-            .filter(Like.article_id.in_(sugg_ids))\
+            .filter(Like.article_id.in_(sugg_art_ids))\
             .group_by(Like.article_id).all()
         like_counts.update({r[0]: r[1] for r in rows2})
         liked_ids |= {lk.article_id for lk in Like.query.filter(
             Like.user_id == current_user.id,
-            Like.article_id.in_(sugg_ids)
+            Like.article_id.in_(sugg_art_ids)
         ).all()}
 
+    # Utilisateurs suggérés : 3 non suivis les plus actifs en favoris publics
+    suggested_users = (
+        db.session.query(User, sqlfunc.count(FolderArticle.id).label('fav_count'))
+        .join(Folder, Folder.user_id == User.id)
+        .join(FolderArticle, FolderArticle.folder_id == Folder.id)
+        .filter(Folder.is_public == True)
+        .filter(User.id.notin_(all_followed_ids_list or [-1]))
+        .group_by(User.id)
+        .order_by(sqlfunc.count(FolderArticle.id).desc())
+        .limit(3)
+        .all()
+    )
+
     return render_template('feed.html',
-        items=items,
+        feed_final=feed_with_sugg,
         articles_decouverte=[],
         followed_ids=followed_ids,
         discovery=discovery,
@@ -3672,6 +3649,7 @@ def feed():
         like_counts=like_counts,
         liked_ids=liked_ids,
         fav_ids=user_fav_article_ids,
+        suggested_users=suggested_users,
     )
 
 @app.route('/api/article/<int:article_id>/sharers')
