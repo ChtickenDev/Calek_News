@@ -53,6 +53,8 @@ app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:/
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "local-secret-key")
 app.url_map.strict_slashes = False  # évite les redirections 308/301
+app.config['VAPID_PUBLIC_KEY'] = os.environ.get('VAPID_PUBLIC_KEY', '')
+app.config['VAPID_PRIVATE_KEY'] = os.environ.get('VAPID_PRIVATE_KEY', '')
 
 db = SQLAlchemy(app)
 
@@ -374,6 +376,16 @@ class Follow(db.Model):
     __table_args__ = (
         db.UniqueConstraint("follower_id", "followed_id", name="_follow_uc"),
     )
+
+class PushSubscription(db.Model):
+    __tablename__ = 'push_subscription'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    endpoint = db.Column(db.Text, nullable=False)
+    p256dh = db.Column(db.Text, nullable=False)
+    auth = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
 
 class UserEvent(db.Model):
     __tablename__ = "user_event"
@@ -877,6 +889,66 @@ def ensure_follow_visibility_schema():
                 conn.commit()
             except Exception:
                 conn.rollback()
+
+
+def ensure_push_subscription_schema():
+    with db.engine.connect() as conn:
+        conn.execute(text('''
+            CREATE TABLE IF NOT EXISTS push_subscription (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES "user"(id),
+                endpoint TEXT NOT NULL,
+                p256dh TEXT NOT NULL,
+                auth TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        '''))
+        conn.commit()
+
+
+# --- Push notifications ---
+try:
+    from pywebpush import webpush, WebPushException
+    _WEBPUSH_AVAILABLE = True
+except ImportError:
+    _WEBPUSH_AVAILABLE = False
+
+TEST_PUSH_EMAILS = ['thomasadamsmayhew@gmail.com', 'yan59112@gmail.com']
+
+
+def send_push(user_id, title, body, url='/'):
+    if not _WEBPUSH_AVAILABLE:
+        return
+    subs = PushSubscription.query.filter_by(user_id=user_id).all()
+    for sub in subs:
+        try:
+            webpush(
+                subscription_info={
+                    'endpoint': sub.endpoint,
+                    'keys': {'p256dh': sub.p256dh, 'auth': sub.auth}
+                },
+                data=json.dumps({'title': title, 'body': body, 'url': url}),
+                vapid_private_key=os.environ.get('VAPID_PRIVATE_KEY'),
+                vapid_claims={'sub': 'mailto:contact@physara.fr'}
+            )
+        except WebPushException:
+            db.session.delete(sub)
+            db.session.commit()
+
+
+def send_weekly_digest():
+    users = User.query.filter(User.email.in_(TEST_PUSH_EMAILS)).all()
+    for user in users:
+        count = Article.query.filter(
+            Article.created_at >= datetime.utcnow() - timedelta(days=7)
+        ).count()
+        if count > 0:
+            send_push(
+                user.id,
+                title='Physara — Résumé de la semaine',
+                body=f'{count} nouveaux articles cette semaine sur Physara',
+                url='/feed'
+            )
 
 
 import secrets as _secrets
@@ -2508,6 +2580,47 @@ def set_lang(lang):
 def parametres():
     return render_template('parametres.html')
 
+
+@app.route('/sw.js')
+def service_worker():
+    return app.send_static_file('sw.js')
+
+
+@app.route('/push/subscribe', methods=['POST'])
+@login_required
+def push_subscribe():
+    if current_user.email not in TEST_PUSH_EMAILS:
+        return jsonify({'status': 'not_eligible'}), 200
+    data = request.get_json()
+    existing = PushSubscription.query.filter_by(
+        user_id=current_user.id,
+        endpoint=data['endpoint']
+    ).first()
+    if not existing:
+        sub = PushSubscription(
+            user_id=current_user.id,
+            endpoint=data['endpoint'],
+            p256dh=data['keys']['p256dh'],
+            auth=data['keys']['auth']
+        )
+        db.session.add(sub)
+        db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route('/push/test')
+@login_required
+def push_test():
+    if current_user.email not in TEST_PUSH_EMAILS:
+        return jsonify({'status': 'not_eligible'}), 403
+    send_push(
+        current_user.id,
+        title='Physara — Test notification',
+        body='Les notifications push fonctionnent correctement.',
+        url='/feed'
+    )
+    return jsonify({'status': 'sent'})
+
 @app.route('/')
 def index():
     if current_user.is_authenticated:
@@ -3981,6 +4094,7 @@ def upgrade_db():
     ensure_google_schema()
     ensure_trusted_device_schema()
     ensure_follow_visibility_schema()
+    ensure_push_subscription_schema()
     flash("Base mise à niveau ✅", "success")
     return redirect(url_for("index"))
 
@@ -4615,6 +4729,7 @@ if __name__ == "__main__":
         ensure_google_schema()
         ensure_trusted_device_schema()
         ensure_follow_visibility_schema()
+        ensure_push_subscription_schema()
         db.session.execute(text("UPDATE article SET featured=0 WHERE featured IS NULL"))
         db.session.commit()
     app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)
