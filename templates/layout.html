@@ -1124,7 +1124,7 @@ function urlBase64ToUint8Array(base64String) {
     return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
 }
 
-window.addEventListener('load', function() {
+(function() {
     if (!('serviceWorker' in navigator) || !('PushManager' in navigator)) return;
     navigator.serviceWorker.register('/sw.js').then(function(reg) {
         setTimeout(function() {
@@ -1135,7 +1135,7 @@ window.addEventListener('load', function() {
             });
         }, 1500);
     });
-});
+})();
 
 function activerNotifications() {
     navigator.serviceWorker.ready.then(function(reg) {
