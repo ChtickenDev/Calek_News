@@ -2613,17 +2613,28 @@ def push_subscribe():
 def push_unsubscribe():
     PushSubscription.query.filter_by(user_id=current_user.id).delete()
     db.session.commit()
-    return '''
+    return '''<!DOCTYPE html>
+    <html><head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    </head>
+    <body>
+    <p style="font-family:sans-serif; padding:20px;">Désabonnement en cours...</p>
     <script>
-    navigator.serviceWorker.ready.then(reg =>
-        reg.pushManager.getSubscription().then(sub => {
-            if (sub) sub.unsubscribe();
-        })
-    ).then(() => {
-        alert("Notifications désactivées");
-        window.location = "/feed";
-    });
+    if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.ready.then(function(reg) {
+            return reg.pushManager.getSubscription();
+        }).then(function(sub) {
+            if (sub) return sub.unsubscribe();
+        }).then(function() {
+            window.location.href = "/feed";
+        }).catch(function() {
+            window.location.href = "/feed";
+        });
+    } else {
+        window.location.href = "/feed";
+    }
     </script>
+    </body></html>
     '''
 
 
