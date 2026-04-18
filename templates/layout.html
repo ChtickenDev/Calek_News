@@ -1138,6 +1138,15 @@ function urlBase64ToUint8Array(base64String) {
 })();
 
 function activerNotifications() {
+    const isIphone = /iPhone|iPad/i.test(navigator.userAgent);
+    const isSafari = /Safari/i.test(navigator.userAgent) && !/Chrome/i.test(navigator.userAgent);
+    const isPWA = window.navigator.standalone === true;
+
+    if (isIphone && isSafari && !isPWA) {
+        alert("Pour activer les notifications sur iPhone :\n\n1. Appuie sur le bouton Partager ⎙\n2. Sélectionne \"Sur l'écran d'accueil\"\n3. Ouvre Physara depuis l'écran d'accueil\n4. Appuie à nouveau sur le bouton 🔔");
+        return;
+    }
+
     navigator.serviceWorker.ready.then(function(reg) {
         return reg.pushManager.subscribe({
             userVisibleOnly: true,
