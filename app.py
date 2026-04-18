@@ -2608,6 +2608,25 @@ def push_subscribe():
     return jsonify({'status': 'ok'})
 
 
+@app.route('/push/unsubscribe')
+@login_required
+def push_unsubscribe():
+    PushSubscription.query.filter_by(user_id=current_user.id).delete()
+    db.session.commit()
+    return '''
+    <script>
+    navigator.serviceWorker.ready.then(reg =>
+        reg.pushManager.getSubscription().then(sub => {
+            if (sub) sub.unsubscribe();
+        })
+    ).then(() => {
+        alert("Notifications désactivées");
+        window.location = "/feed";
+    });
+    </script>
+    '''
+
+
 @app.route('/push/test')
 @login_required
 def push_test():
