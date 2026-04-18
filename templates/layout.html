@@ -1124,18 +1124,27 @@ function urlBase64ToUint8Array(base64String) {
     return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
 }
 
-if ('serviceWorker' in navigator && 'PushManager' in navigator) {
-    window.addEventListener('load', function() {
-        navigator.serviceWorker.register('/sw.js').then(function(reg) {
-            return reg.pushManager.getSubscription().then(function(sub) {
-                if (sub) return sub;
-                document.getElementById('push-btn-wrap').style.display = 'block';
+window.addEventListener('load', function() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in navigator)) return;
+    navigator.serviceWorker.register('/sw.js').then(function(reg) {
+        // Attendre que le SW soit actif
+        return new Promise(function(resolve) {
+            if (reg.active) { resolve(reg); return; }
+            const sw = reg.installing || reg.waiting;
+            sw.addEventListener('statechange', function() {
+                if (sw.state === 'activated') resolve(reg);
             });
-        }).catch(function(e) {
-            console.error('SW error:', e);
         });
+    }).then(function(reg) {
+        return reg.pushManager.getSubscription();
+    }).then(function(sub) {
+        if (!sub) {
+            document.getElementById('push-btn-wrap').style.display = 'block';
+        }
+    }).catch(function(e) {
+        console.error('SW error:', e);
     });
-}
+});
 
 function activerNotifications() {
     navigator.serviceWorker.ready.then(function(reg) {
