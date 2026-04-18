@@ -2619,6 +2619,7 @@ def push_unsubscribe():
     </head>
     <body>
     <p style="font-family:sans-serif; padding:20px;">Désabonnement en cours...</p>
+    <p style="font-family:sans-serif; padding:0 20px;"><a href="/feed">Retour au feed →</a></p>
     <script>
     if ("serviceWorker" in navigator) {
         navigator.serviceWorker.ready.then(function(reg) {
@@ -2626,12 +2627,12 @@ def push_unsubscribe():
         }).then(function(sub) {
             if (sub) return sub.unsubscribe();
         }).then(function() {
-            window.location.href = "/feed";
+            setTimeout(function() { window.location.href = "/feed"; }, 500);
         }).catch(function() {
-            window.location.href = "/feed";
+            setTimeout(function() { window.location.href = "/feed"; }, 500);
         });
     } else {
-        window.location.href = "/feed";
+        setTimeout(function() { window.location.href = "/feed"; }, 500);
     }
     </script>
     </body></html>
