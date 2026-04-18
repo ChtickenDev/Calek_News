@@ -1111,38 +1111,46 @@ async function translateAbstract(btn, text, targetEl) {
 {% block scripts %}{% endblock %}
 
 {% if current_user.is_authenticated and current_user.email in ['thomasadamsmayhew@gmail.com', 'yan59112@gmail.com'] %}
+<div id="push-btn-wrap" class="d-md-none" style="position:fixed; bottom:70px; right:16px; z-index:9999; display:none;">
+  <button onclick="activerNotifications()" style="background:#4a90d9; color:white; border:none; border-radius:20px; padding:10px 16px; font-size:13px; box-shadow:0 2px 8px rgba(0,0,0,0.2);">
+    🔔 Activer les notifications
+  </button>
+</div>
 <script>
-(function() {
-  if (!('serviceWorker' in navigator) || !('PushManager' in navigator)) return;
-
+if ('serviceWorker' in navigator && 'PushManager' in navigator) {
+  navigator.serviceWorker.register('/sw.js').then(function(reg) {
+    return reg.pushManager.getSubscription();
+  }).then(function(sub) {
+    if (!sub) {
+      document.getElementById('push-btn-wrap').style.display = 'block';
+    }
+  });
+}
+function activerNotifications() {
   function urlBase64ToUint8Array(base64String) {
     const padding = '='.repeat((4 - base64String.length % 4) % 4);
     const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
     const rawData = atob(base64);
     return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
   }
-
-  const vapidKey = '{{ config.VAPID_PUBLIC_KEY }}';
-  if (!vapidKey) return;
-
-  navigator.serviceWorker.register('/sw.js').then(function(reg) {
-    return reg.pushManager.getSubscription().then(function(sub) {
-      if (sub) return sub;
-      return reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidKey)
-      });
+  navigator.serviceWorker.ready.then(function(reg) {
+    return reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array('{{ config.VAPID_PUBLIC_KEY }}')
     });
   }).then(function(sub) {
-    fetch('/push/subscribe', {
+    return fetch('/push/subscribe', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(sub.toJSON())
     });
-  }).catch(function(err) {
-    console.warn('[Push] Erreur abonnement:', err);
+  }).then(function() {
+    document.getElementById('push-btn-wrap').style.display = 'none';
+    alert('Notifications activées !');
+  }).catch(function(e) {
+    alert('Erreur : ' + e.message);
   });
-})();
+}
 </script>
 {% endif %}
 
