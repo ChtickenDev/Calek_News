@@ -1117,39 +1117,44 @@ async function translateAbstract(btn, text, targetEl) {
   </button>
 </div>
 <script>
-if ('serviceWorker' in navigator && 'PushManager' in navigator) {
-  navigator.serviceWorker.register('/sw.js').then(function(reg) {
-    return reg.pushManager.getSubscription();
-  }).then(function(sub) {
-    if (!sub) {
-      document.getElementById('push-btn-wrap').style.display = 'block';
-    }
-  });
-}
-function activerNotifications() {
-  function urlBase64ToUint8Array(base64String) {
+function urlBase64ToUint8Array(base64String) {
     const padding = '='.repeat((4 - base64String.length % 4) % 4);
     const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
     const rawData = atob(base64);
     return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
-  }
-  navigator.serviceWorker.ready.then(function(reg) {
-    return reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array('{{ config.VAPID_PUBLIC_KEY }}')
+}
+
+if ('serviceWorker' in navigator && 'PushManager' in navigator) {
+    window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/sw.js').then(function(reg) {
+            return reg.pushManager.getSubscription().then(function(sub) {
+                if (sub) return sub;
+                document.getElementById('push-btn-wrap').style.display = 'block';
+            });
+        }).catch(function(e) {
+            console.error('SW error:', e);
+        });
     });
-  }).then(function(sub) {
-    return fetch('/push/subscribe', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(sub.toJSON())
+}
+
+function activerNotifications() {
+    navigator.serviceWorker.ready.then(function(reg) {
+        return reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array('{{ config.VAPID_PUBLIC_KEY }}')
+        });
+    }).then(function(sub) {
+        return fetch('/push/subscribe', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(sub.toJSON())
+        });
+    }).then(function() {
+        document.getElementById('push-btn-wrap').style.display = 'none';
+        alert('Notifications activées !');
+    }).catch(function(e) {
+        alert('Erreur : ' + e.message);
     });
-  }).then(function() {
-    document.getElementById('push-btn-wrap').style.display = 'none';
-    alert('Notifications activées !');
-  }).catch(function(e) {
-    alert('Erreur : ' + e.message);
-  });
 }
 </script>
 {% endif %}
