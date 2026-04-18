@@ -1127,22 +1127,13 @@ function urlBase64ToUint8Array(base64String) {
 window.addEventListener('load', function() {
     if (!('serviceWorker' in navigator) || !('PushManager' in navigator)) return;
     navigator.serviceWorker.register('/sw.js').then(function(reg) {
-        // Attendre que le SW soit actif
-        return new Promise(function(resolve) {
-            if (reg.active) { resolve(reg); return; }
-            const sw = reg.installing || reg.waiting;
-            sw.addEventListener('statechange', function() {
-                if (sw.state === 'activated') resolve(reg);
+        setTimeout(function() {
+            reg.pushManager.getSubscription().then(function(sub) {
+                if (!sub) {
+                    document.getElementById('push-btn-wrap').style.display = 'block';
+                }
             });
-        });
-    }).then(function(reg) {
-        return reg.pushManager.getSubscription();
-    }).then(function(sub) {
-        if (!sub) {
-            document.getElementById('push-btn-wrap').style.display = 'block';
-        }
-    }).catch(function(e) {
-        console.error('SW error:', e);
+        }, 1500);
     });
 });
 
