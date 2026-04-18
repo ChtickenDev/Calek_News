@@ -1130,7 +1130,7 @@ function urlBase64ToUint8Array(base64String) {
     function checkSubscription(reg) {
         reg.pushManager.getSubscription().then(function(sub) {
             if (!sub) {
-                document.getElementById('push-btn-wrap').style.display = 'block';
+                document.getElementById('push-btn-wrap').setAttribute('style', 'position:fixed; bottom:70px; right:16px; z-index:9999; display:block !important;');
             }
         });
     }
