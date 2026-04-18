@@ -1126,7 +1126,7 @@ function urlBase64ToUint8Array(base64String) {
 
 (function() {
     console.log('PUSH: script démarré');
-    if (!('serviceWorker' in navigator) || !('PushManager' in navigator)) {
+    if (!('serviceWorker' in navigator) || !window.PushManager) {
         console.log('PUSH: non supporté');
         return;
     }
