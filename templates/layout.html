@@ -1125,12 +1125,21 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 (function() {
-    if (!('serviceWorker' in navigator) || !('PushManager' in navigator)) return;
+    console.log('PUSH: script démarré');
+    if (!('serviceWorker' in navigator) || !('PushManager' in navigator)) {
+        console.log('PUSH: non supporté');
+        return;
+    }
     navigator.serviceWorker.register('/sw.js');
     navigator.serviceWorker.ready.then(function(reg) {
+        console.log('PUSH: SW ready');
         reg.pushManager.getSubscription().then(function(sub) {
+            console.log('PUSH: sub =', sub);
             if (!sub) {
-                document.getElementById('push-btn-wrap').setAttribute('style', 'position:fixed; bottom:70px; right:16px; z-index:9999; display:block !important;');
+                var btn = document.getElementById('push-btn-wrap');
+                console.log('PUSH: btn =', btn);
+                btn.setAttribute('style', 'position:fixed; bottom:70px; right:16px; z-index:9999; display:block !important;');
+                console.log('PUSH: bouton affiché');
             }
         });
     });
