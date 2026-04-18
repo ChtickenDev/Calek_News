@@ -1125,21 +1125,13 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 (function() {
-    console.log('PUSH: script démarré');
-    if (!('serviceWorker' in navigator) || !window.PushManager) {
-        console.log('PUSH: non supporté');
-        return;
-    }
+    if (!('serviceWorker' in navigator) || !window.PushManager) return;
     navigator.serviceWorker.register('/sw.js');
     navigator.serviceWorker.ready.then(function(reg) {
-        console.log('PUSH: SW ready');
         reg.pushManager.getSubscription().then(function(sub) {
-            console.log('PUSH: sub =', sub);
             if (!sub) {
                 var btn = document.getElementById('push-btn-wrap');
-                console.log('PUSH: btn =', btn);
                 btn.setAttribute('style', 'position:fixed; bottom:70px; right:16px; z-index:9999; display:block !important;');
-                console.log('PUSH: bouton affiché');
             }
         });
     });
