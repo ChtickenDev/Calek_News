@@ -112,7 +112,7 @@
           {% set _abstract_text = a.clean_abstract or (a.abstract|striptags) %}
           {{ _abstract_text[:400] }}{% if _abstract_text|length > 400 %}…{% endif %}
         {% else %}
-          {{ t('article.no_abstract') }}
+          <span id="abstract-{{ a.id }}">{{ t('article.no_abstract') }} <a href="#" onclick="fetchAbstract({{ a.id }}); return false;" style="font-size:11px; color:#4a90d9; margin-left:4px;">Récupérer</a></span>
         {% endif %}
       </div>
 
@@ -237,7 +237,7 @@
       <hr class="card-sep">
       <div class="card-abstract">
         {% if a.abstract %}{% set _abstract_text = a.clean_abstract or (a.abstract|striptags) %}{{ _abstract_text[:400] }}{% if _abstract_text|length > 400 %}…{% endif %}
-        {% else %}{{ t('article.no_abstract') }}{% endif %}
+        {% else %}<span id="abstract-{{ a.id }}">{{ t('article.no_abstract') }} <a href="#" onclick="fetchAbstract({{ a.id }}); return false;" style="font-size:11px; color:#4a90d9; margin-left:4px;">Récupérer</a></span>{% endif %}
       </div>
       <div class="card-actions" onclick="event.stopPropagation()">
         {% if a.doi %}<a class="card-btn" href="https://doi.org/{{ a.doi }}" target="_blank" onclick="event.stopPropagation()">Article</a>{% elif a.url and 'pubmed' not in a.url %}<a class="card-btn" href="{{ a.url }}" target="_blank" onclick="event.stopPropagation()">Article</a>{% endif %}
@@ -313,7 +313,7 @@
       <hr class="card-sep">
       <div class="card-abstract">
         {% if a.abstract %}{% set _abstract_text = a.clean_abstract or (a.abstract|striptags) %}{{ _abstract_text[:400] }}{% if _abstract_text|length > 400 %}…{% endif %}
-        {% else %}{{ t('article.no_abstract') }}{% endif %}
+        {% else %}<span id="abstract-{{ a.id }}">{{ t('article.no_abstract') }} <a href="#" onclick="fetchAbstract({{ a.id }}); return false;" style="font-size:11px; color:#4a90d9; margin-left:4px;">Récupérer</a></span>{% endif %}
       </div>
       <div class="card-actions" onclick="event.stopPropagation()">
         {% if a.doi %}<a class="card-btn" href="https://doi.org/{{ a.doi }}" target="_blank" onclick="event.stopPropagation()">Article</a>{% elif a.url and 'pubmed' not in a.url %}<a class="card-btn" href="{{ a.url }}" target="_blank" onclick="event.stopPropagation()">Article</a>{% endif %}

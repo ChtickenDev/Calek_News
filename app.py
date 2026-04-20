@@ -2650,6 +2650,35 @@ def push_unsubscribe():
     '''
 
 
+@app.route('/article/<int:article_id>/fetch_abstract', methods=['POST'])
+@login_required
+def fetch_abstract(article_id):
+    article = Article.query.get_or_404(article_id)
+    if article.abstract:
+        return jsonify({'ok': True, 'abstract': article.abstract})
+    pmid = article.pmid
+    if not pmid and article.doi:
+        try:
+            resp = requests.get(
+                'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi',
+                params=ncbi_params(db='pubmed', term=f'{article.doi}[doi]', retmode='json'),
+                timeout=10
+            )
+            ids = resp.json().get('esearchresult', {}).get('idlist', [])
+            if ids:
+                pmid = ids[0]
+        except Exception:
+            pass
+    if pmid:
+        parsed = efetch_pubmed_batch([pmid])
+        art = parsed.get(pmid, {})
+        if art.get('abstract'):
+            article.abstract = art['abstract']
+            db.session.commit()
+            return jsonify({'ok': True, 'abstract': article.abstract})
+    return jsonify({'ok': False})
+
+
 @app.route('/push/test')
 @login_required
 def push_test():

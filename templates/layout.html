@@ -1110,6 +1110,19 @@ async function translateAbstract(btn, text, targetEl) {
 
 {% block scripts %}{% endblock %}
 
+<script>
+function fetchAbstract(id) {
+    fetch('/article/' + id + '/fetch_abstract', {method: 'POST', headers: {'Content-Type': 'application/json'}})
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (d.ok) {
+            var el = document.getElementById('abstract-' + id);
+            if (el) el.textContent = d.abstract;
+        }
+    });
+}
+</script>
+
 {% if current_user.is_authenticated and current_user.email in ['thomasadamsmayhew@gmail.com', 'yan59112@gmail.com'] %}
 <div id="push-btn-wrap" style="position:fixed; bottom:70px; right:16px; z-index:9999; display:none;">
   <button onclick="activerNotifications()" style="background:#4a90d9; color:white; border:none; border-radius:20px; padding:10px 16px; font-size:13px; box-shadow:0 2px 8px rgba(0,0,0,0.2);">
