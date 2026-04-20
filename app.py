@@ -199,6 +199,7 @@ class Article(db.Model):
     authors = db.Column(db.String(500))
     journal = db.Column(db.String(300))
     doi = db.Column(db.String(200), index=True)
+    pmid = db.Column(db.String(30), index=True)
     url = db.Column(db.String(500))
     abstract = db.Column(db.Text)
 
@@ -889,6 +890,16 @@ def ensure_follow_visibility_schema():
                 conn.commit()
             except Exception:
                 conn.rollback()
+
+
+def ensure_article_pmid_schema():
+    """Ajoute la colonne pmid à la table article si absente."""
+    with db.engine.connect() as conn:
+        try:
+            conn.execute(text('ALTER TABLE article ADD COLUMN IF NOT EXISTS pmid VARCHAR(30)'))
+            conn.commit()
+        except Exception:
+            conn.rollback()
 
 
 def ensure_push_subscription_schema():
@@ -3199,22 +3210,68 @@ def zotero_import():
     articles_matched = 0
     articles_ignored = 0
 
+    RDF_NS = Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#")
+    DCTERMS_NS = Namespace("http://purl.org/dc/terms/")
+
+    articles_matched = 0
+    articles_ignored = 0
+    matched_by_pmid = 0
+    matched_by_doi = 0
+    matched_by_title = 0
+
     for article_node in g.subjects(RDF.type, BIB.Article):
         title_raw = str(g.value(article_node, DC.title) or '').strip()
-        doi = None
-        for identifier in g.objects(article_node, DC.identifier):
-            id_str = str(identifier)
-            if id_str.startswith('DOI:'):
-                doi = id_str[4:].strip()
-                break
 
+        # — Extraction PMID et DOI depuis tous les formats Zotero —
+        pmid = None
+        doi = None
+
+        # 1. rdf:about sur le nœud article (ex: rdf:about="https://doi.org/10.xxx")
+        about = str(article_node)
+        if 'doi.org/' in about:
+            doi = normalize_doi(about)
+        elif 'pubmed' in about or 'ncbi.nlm.nih.gov' in about:
+            # ex: https://pubmed.ncbi.nlm.nih.gov/12345678/
+            m = re.search(r'(\d{7,9})/?$', about)
+            if m:
+                pmid = m.group(1)
+
+        # 2. dc:identifier (formats: "DOI:10.xxx", "PMID:12345", "https://doi.org/10.xxx")
+        for identifier in g.objects(article_node, DC.identifier):
+            id_str = str(identifier).strip()
+            if not doi and id_str.upper().startswith('DOI:'):
+                doi = normalize_doi(id_str[4:].strip())
+            elif not doi and 'doi.org/' in id_str:
+                doi = normalize_doi(id_str)
+            elif not pmid and id_str.upper().startswith('PMID:'):
+                pmid = id_str[5:].strip()
+
+        # 3. dcterms:URI / rdf:value (ex: <dc:identifier><dcterms:URI><rdf:value>https://doi.org/...</rdf:value>)
+        if not doi:
+            for uri_node in g.objects(article_node, DCTERMS_NS.URI):
+                val = str(g.value(uri_node, RDF_NS.value) or uri_node).strip()
+                if 'doi.org/' in val:
+                    doi = normalize_doi(val)
+                    break
+
+        # — Correspondance Article en base : PMID → DOI → Titre —
         article = None
-        if doi:
-            article = Article.query.filter_by(doi=normalize_doi(doi)).first()
+        if pmid:
+            article = Article.query.filter_by(pmid=pmid).first()
+            if article:
+                matched_by_pmid += 1
+
+        if not article and doi:
+            article = Article.query.filter_by(doi=doi).first()
+            if article:
+                matched_by_doi += 1
+
         if not article and title_raw:
             article = Article.query.filter(
-                db.func.lower(Article.title) == title_raw.lower()
+                db.func.lower(Article.title) == title_raw.lower().strip()
             ).first()
+            if article:
+                matched_by_title += 1
 
         if not article or article.id not in fav_by_article_id:
             articles_ignored += 1
@@ -3239,7 +3296,10 @@ def zotero_import():
         "folders_matched": folders_matched,
         "articles_matched": articles_matched,
         "articles_ignored": articles_ignored,
-        "message": "Import terminé"
+        "matched_by_pmid": matched_by_pmid,
+        "matched_by_doi": matched_by_doi,
+        "matched_by_title": matched_by_title,
+        "message": f"Import terminé — {articles_matched} articles retrouvés ({matched_by_pmid} par PMID, {matched_by_doi} par DOI, {matched_by_title} par titre)"
     })
 
 
@@ -4125,6 +4185,7 @@ def upgrade_db():
     ensure_google_schema()
     ensure_trusted_device_schema()
     ensure_follow_visibility_schema()
+    ensure_article_pmid_schema()
     ensure_push_subscription_schema()
     flash("Base mise à niveau ✅", "success")
     return redirect(url_for("index"))
@@ -4760,6 +4821,7 @@ if __name__ == "__main__":
         ensure_google_schema()
         ensure_trusted_device_schema()
         ensure_follow_visibility_schema()
+        ensure_article_pmid_schema()
         ensure_push_subscription_schema()
         db.session.execute(text("UPDATE article SET featured=0 WHERE featured IS NULL"))
         db.session.commit()
