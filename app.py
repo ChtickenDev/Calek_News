@@ -3126,8 +3126,19 @@ def zotero_import():
     try:
         from rdflib import Graph, Namespace, RDF
         from rdflib.namespace import DC, DCTERMS
+        rdf_bytes = file.read()
+        rdf_text = rdf_bytes.decode('utf-8', errors='replace')
+        # Remplacer les entités HTML non supportées par XML
+        _html_entities = {
+            '&reg;': '®', '&copy;': '©', '&trade;': '™',
+            '&nbsp;': ' ', '&ndash;': '–', '&mdash;': '—',
+            '&ldquo;': '\u201c', '&rdquo;': '\u201d',
+            '&lsquo;': '\u2018', '&rsquo;': '\u2019',
+        }
+        for _entity, _replacement in _html_entities.items():
+            rdf_text = rdf_text.replace(_entity, _replacement)
         g = Graph()
-        g.parse(data=file.read(), format='xml')
+        g.parse(data=rdf_text, format='xml')
     except Exception as e:
         return jsonify({"success": False, "message": f"Erreur de parsing RDF : {e}"}), 400
 
