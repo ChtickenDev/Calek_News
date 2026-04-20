@@ -3228,7 +3228,12 @@ def zotero_import():
     matched_by_title = 0
     fetched_from_pubmed = 0
 
-    for article_node in g.subjects(RDF.type, BIB.Article):
+    article_nodes = set()
+    for rdf_type in [BIB.Article, Z.Blog, BIB.Document]:
+        for node in g.subjects(RDF.type, rdf_type):
+            article_nodes.add(node)
+
+    for article_node in article_nodes:
         title_raw = ihtml.unescape(str(g.value(article_node, DC.title) or '').strip())
 
         # — Extraction PMID et DOI depuis tous les formats Zotero —
