@@ -3128,8 +3128,9 @@ def zotero_import():
         from rdflib.namespace import DC, DCTERMS
         rdf_bytes = file.read()
         rdf_text = rdf_bytes.decode('utf-8', errors='replace')
-        # Remplacer les entités HTML non standard
+        # Remplacer les entités HTML non standard (y compris doublement encodées)
         _html_entities = {
+            '&amp;reg;': '®', '&amp;copy;': '©', '&amp;trade;': '™', '&amp;nbsp;': ' ',
             '&reg;': '®', '&copy;': '©', '&trade;': '™',
             '&nbsp;': ' ', '&ndash;': '–', '&mdash;': '—',
             '&ldquo;': '\u201c', '&rdquo;': '\u201d',
