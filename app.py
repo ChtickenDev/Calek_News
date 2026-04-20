@@ -2650,6 +2650,48 @@ def push_unsubscribe():
     '''
 
 
+@app.route('/admin/fetch_missing_abstracts')
+@login_required
+def fetch_missing_abstracts():
+    if current_user.email not in TEST_PUSH_EMAILS:
+        return jsonify({'error': 'Non autorisé'}), 403
+
+    articles_sans_abstract = Article.query.filter(
+        db.or_(Article.abstract == None, Article.abstract == ''),
+        db.or_(Article.pmid != None, Article.doi != None)
+    ).all()
+
+    updated = 0
+    for article in articles_sans_abstract:
+        pmid = article.pmid
+        if not pmid and article.doi:
+            try:
+                resp = requests.get(
+                    'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi',
+                    params=ncbi_params(db='pubmed', term=f'{article.doi}[doi]', retmode='json'),
+                    timeout=10
+                )
+                ids = resp.json().get('esearchresult', {}).get('idlist', [])
+                if ids:
+                    pmid = ids[0]
+            except Exception:
+                continue
+        if pmid:
+            try:
+                parsed = efetch_pubmed_batch([pmid])
+                art = parsed.get(pmid, {})
+                if art.get('abstract'):
+                    article.abstract = art['abstract']
+                    if not article.pmid:
+                        article.pmid = pmid
+                    updated += 1
+            except Exception:
+                continue
+
+    db.session.commit()
+    return jsonify({'ok': True, 'updated': updated, 'total': len(articles_sans_abstract)})
+
+
 @app.route('/article/<int:article_id>/fetch_abstract', methods=['POST'])
 @login_required
 def fetch_abstract(article_id):
