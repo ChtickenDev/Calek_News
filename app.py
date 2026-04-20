@@ -3274,7 +3274,9 @@ def zotero_import():
         # — Fallback : récupération PubMed si article non trouvé en base —
         if not article and (doi or title_raw):
             import unicodedata as _unicodedata
+            from rdflib.namespace import FOAF
             pmid_found = None
+            clean_title = ''
             try:
                 # 1. Recherche par DOI exact
                 if doi:
@@ -3300,12 +3302,34 @@ def zotero_import():
                         if ids:
                             pmid_found = ids[0]
 
-                # 3. Recherche par titre (normalisé ASCII pour ® et autres)
+                # 3. Recherche par titre exact (normalisé ASCII pour ® et autres)
                 if not pmid_found and title_raw:
                     clean_title = _unicodedata.normalize('NFKD', title_raw).encode('ascii', 'ignore').decode('ascii').rstrip('.?!').strip()
                     resp = requests.get(
                         'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi',
                         params=ncbi_params(db='pubmed', term=f'{clean_title}[title]', retmode='json'),
+                        timeout=10
+                    )
+                    ids = resp.json().get('esearchresult', {}).get('idlist', [])
+                    if ids:
+                        pmid_found = ids[0]
+
+                # 4. Mots-clés titre court + premier auteur
+                if not pmid_found and title_raw:
+                    first_author = ''
+                    for _seq in g.objects(article_node, BIB.authors):
+                        for _person in g.objects(_seq, RDF.li):
+                            _surname = str(g.value(_person, FOAF.surname) or '')
+                            if _surname:
+                                first_author = _surname
+                                break
+                        if first_author:
+                            break
+                    title_words = ' '.join((clean_title or title_raw).split()[:6])
+                    query = f'{title_words} {first_author}[author]' if first_author else title_words
+                    resp = requests.get(
+                        'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi',
+                        params=ncbi_params(db='pubmed', term=query, retmode='json'),
                         timeout=10
                     )
                     ids = resp.json().get('esearchresult', {}).get('idlist', [])
