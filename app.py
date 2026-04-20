@@ -3273,9 +3273,10 @@ def zotero_import():
 
         # — Fallback : récupération PubMed si article non trouvé en base —
         if not article and (doi or title_raw):
+            import unicodedata as _unicodedata
             pmid_found = None
             try:
-                # 1. Recherche par DOI
+                # 1. Recherche par DOI exact
                 if doi:
                     resp = requests.get(
                         'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi',
@@ -3285,9 +3286,23 @@ def zotero_import():
                     ids = resp.json().get('esearchresult', {}).get('idlist', [])
                     if ids:
                         pmid_found = ids[0]
-                # 2. Sinon recherche par titre (nettoyé)
+
+                # 2. DOI tronqué (retire .pub2, .pub3, etc. — ex: Cochrane)
+                if not pmid_found and doi:
+                    doi_short = re.sub(r'\.pub\d+$', '', doi)
+                    if doi_short != doi:
+                        resp = requests.get(
+                            'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi',
+                            params=ncbi_params(db='pubmed', term=f'{doi_short}[doi]', retmode='json'),
+                            timeout=10
+                        )
+                        ids = resp.json().get('esearchresult', {}).get('idlist', [])
+                        if ids:
+                            pmid_found = ids[0]
+
+                # 3. Recherche par titre (normalisé ASCII pour ® et autres)
                 if not pmid_found and title_raw:
-                    clean_title = re.sub(r'[®©™]', '', title_raw).rstrip('.?!').strip()
+                    clean_title = _unicodedata.normalize('NFKD', title_raw).encode('ascii', 'ignore').decode('ascii').rstrip('.?!').strip()
                     resp = requests.get(
                         'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi',
                         params=ncbi_params(db='pubmed', term=f'{clean_title}[title]', retmode='json'),
