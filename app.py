@@ -3318,7 +3318,38 @@ def zotero_import():
                         if ids:
                             pmid_found = ids[0]
 
-                # 3. Recherche par titre exact (normalisé ASCII pour ® et autres)
+                # 3. Fallback CrossRef : DOI → PMID via liens externes ou titre CrossRef
+                if not pmid_found and doi:
+                    try:
+                        cr_resp = requests.get(
+                            f'https://api.crossref.org/works/{requests.utils.quote(doi)}',
+                            headers={'User-Agent': 'Physara/1.0 (contact@physara.fr)'},
+                            timeout=10
+                        )
+                        if cr_resp.status_code == 200:
+                            cr_data = cr_resp.json().get('message', {})
+                            for link in cr_data.get('link', []):
+                                if 'pubmed' in link.get('URL', '').lower():
+                                    m = re.search(r'(\d{7,9})', link['URL'])
+                                    if m:
+                                        pmid_found = m.group(1)
+                                        break
+                            if not pmid_found:
+                                cr_title = (cr_data.get('title') or [None])[0]
+                                if cr_title:
+                                    cr_clean = _unicodedata.normalize('NFKD', cr_title).encode('ascii', 'ignore').decode('ascii').rstrip('.?!').strip()
+                                    resp = requests.get(
+                                        'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi',
+                                        params=ncbi_params(db='pubmed', term=f'{cr_clean}[title]', retmode='json'),
+                                        timeout=10
+                                    )
+                                    ids = resp.json().get('esearchresult', {}).get('idlist', [])
+                                    if ids:
+                                        pmid_found = ids[0]
+                    except Exception:
+                        pass
+
+                # 4. Recherche par titre exact (normalisé ASCII pour ® et autres)
                 if not pmid_found and title_raw:
                     clean_title = _unicodedata.normalize('NFKD', title_raw).encode('ascii', 'ignore').decode('ascii').rstrip('.?!').strip()
                     resp = requests.get(
