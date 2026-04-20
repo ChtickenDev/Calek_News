@@ -3207,9 +3207,6 @@ def zotero_import():
     user_favs = Favorite.query.filter_by(user_id=current_user.id).all()
     fav_by_article_id = {f.article_id: f for f in user_favs}
 
-    articles_matched = 0
-    articles_ignored = 0
-
     RDF_NS = Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#")
     DCTERMS_NS = Namespace("http://purl.org/dc/terms/")
 
@@ -3218,6 +3215,7 @@ def zotero_import():
     matched_by_pmid = 0
     matched_by_doi = 0
     matched_by_title = 0
+    fetched_from_pubmed = 0
 
     for article_node in g.subjects(RDF.type, BIB.Article):
         title_raw = str(g.value(article_node, DC.title) or '').strip()
@@ -3273,6 +3271,86 @@ def zotero_import():
             if article:
                 matched_by_title += 1
 
+        # — Fallback : récupération PubMed si article non trouvé en base —
+        if not article and (doi or title_raw):
+            pubmed_data = None
+            try:
+                if doi:
+                    resp = requests.get(
+                        'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi',
+                        params=ncbi_params(db='pubmed', term=f'{doi}[doi]', retmode='json'),
+                        timeout=10
+                    )
+                    ids = resp.json().get('esearchresult', {}).get('idlist', [])
+                    if ids:
+                        pmid_found = ids[0]
+                        resp2 = requests.get(
+                            'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi',
+                            params=ncbi_params(db='pubmed', id=pmid_found, retmode='json'),
+                            timeout=10
+                        )
+                        result = resp2.json().get('result', {}).get(pmid_found, {})
+                        if result:
+                            pubmed_data = {
+                                'title': result.get('title', title_raw),
+                                'authors': ', '.join([a.get('name', '') for a in result.get('authors', [])]),
+                                'journal': result.get('fulljournalname', ''),
+                                'doi': doi,
+                                'pmid': pmid_found,
+                                'url': f'https://pubmed.ncbi.nlm.nih.gov/{pmid_found}/',
+                                'source': 'pubmed',
+                                'is_published': True,
+                            }
+                if not pubmed_data and title_raw:
+                    resp = requests.get(
+                        'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi',
+                        params=ncbi_params(db='pubmed', term=f'{title_raw}[title]', retmode='json'),
+                        timeout=10
+                    )
+                    ids = resp.json().get('esearchresult', {}).get('idlist', [])
+                    if ids:
+                        pmid_found = ids[0]
+                        resp2 = requests.get(
+                            'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi',
+                            params=ncbi_params(db='pubmed', id=pmid_found, retmode='json'),
+                            timeout=10
+                        )
+                        result = resp2.json().get('result', {}).get(pmid_found, {})
+                        if result:
+                            pubmed_data = {
+                                'title': result.get('title', title_raw),
+                                'authors': ', '.join([a.get('name', '') for a in result.get('authors', [])]),
+                                'journal': result.get('fulljournalname', ''),
+                                'doi': doi,
+                                'pmid': pmid_found,
+                                'url': f'https://pubmed.ncbi.nlm.nih.gov/{pmid_found}/',
+                                'source': 'pubmed',
+                                'is_published': True,
+                            }
+            except Exception:
+                pass
+
+            if pubmed_data:
+                # Déduplique avant création
+                existing = None
+                if pubmed_data.get('pmid'):
+                    existing = Article.query.filter_by(pmid=pubmed_data['pmid']).first()
+                if not existing and pubmed_data.get('doi'):
+                    existing = Article.query.filter_by(doi=pubmed_data['doi']).first()
+                if existing:
+                    article = existing
+                else:
+                    article = Article(**{k: v for k, v in pubmed_data.items() if hasattr(Article, k)})
+                    db.session.add(article)
+                    db.session.flush()
+                    fetched_from_pubmed += 1
+                # Ajouter en favori si absent
+                if article.id not in fav_by_article_id:
+                    new_fav = Favorite(user_id=current_user.id, article_id=article.id, is_public=True)
+                    db.session.add(new_fav)
+                    db.session.flush()
+                    fav_by_article_id[article.id] = new_fav
+
         if not article or article.id not in fav_by_article_id:
             articles_ignored += 1
             continue
@@ -3299,7 +3377,13 @@ def zotero_import():
         "matched_by_pmid": matched_by_pmid,
         "matched_by_doi": matched_by_doi,
         "matched_by_title": matched_by_title,
-        "message": f"Import terminé — {articles_matched} articles retrouvés ({matched_by_pmid} par PMID, {matched_by_doi} par DOI, {matched_by_title} par titre)"
+        "fetched_from_pubmed": fetched_from_pubmed,
+        "message": (
+            f"Import terminé — {articles_matched} articles organisés "
+            f"({matched_by_pmid} par PMID, {matched_by_doi} par DOI, {matched_by_title} par titre"
+            + (f", {fetched_from_pubmed} importés depuis PubMed" if fetched_from_pubmed else "")
+            + f"). {articles_ignored} articles non trouvés (pages web, livres, etc.)."
+        )
     })
 
 
