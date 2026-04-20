@@ -3241,8 +3241,8 @@ def zotero_import():
             article_nodes.add(node)
 
     # Capturer aussi les nœuds rdf:Description avec z:itemType journalArticle etc.
-    _ITEM_TYPES = {'journalArticle', 'conferencePaper', 'preprint', 'report'}
-    for node in g.subjects(RDF.type, None):
+    _ITEM_TYPES = {'journalArticle', 'conferencePaper', 'preprint', 'report', 'blogPost'}
+    for node in g.subjects(DC.title, None):
         item_type = str(g.value(node, Z.itemType) or '')
         if item_type in _ITEM_TYPES:
             article_nodes.add(node)
