@@ -3128,13 +3128,15 @@ def zotero_import():
         from rdflib.namespace import DC, DCTERMS
         rdf_bytes = file.read()
         rdf_text = rdf_bytes.decode('utf-8', errors='replace')
-        # Remplacer les entités HTML non standard (y compris doublement encodées)
+        # Remplacer les entités HTML non standard par des références XML numériques valides
         _html_entities = {
-            '&amp;reg;': '®', '&amp;copy;': '©', '&amp;trade;': '™', '&amp;nbsp;': ' ',
-            '&reg;': '®', '&copy;': '©', '&trade;': '™',
-            '&nbsp;': ' ', '&ndash;': '–', '&mdash;': '—',
-            '&ldquo;': '\u201c', '&rdquo;': '\u201d',
-            '&lsquo;': '\u2018', '&rsquo;': '\u2019',
+            '&amp;reg;': '&#174;', '&amp;copy;': '&#169;',
+            '&amp;trade;': '&#8482;', '&amp;nbsp;': '&#160;',
+            '&reg;': '&#174;', '&copy;': '&#169;',
+            '&trade;': '&#8482;', '&nbsp;': '&#160;',
+            '&ndash;': '&#8211;', '&mdash;': '&#8212;',
+            '&ldquo;': '&#8220;', '&rdquo;': '&#8221;',
+            '&lsquo;': '&#8216;', '&rsquo;': '&#8217;',
         }
         for _entity, _replacement in _html_entities.items():
             rdf_text = rdf_text.replace(_entity, _replacement)
