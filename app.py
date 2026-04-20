@@ -3144,6 +3144,9 @@ def zotero_import():
         rdf_text = re.sub(r'<z:path[^/]*/>', '', rdf_text)
         rdf_text = re.sub(r'<z:path[^>]*>.*?</z:path>', '', rdf_text, flags=re.DOTALL)
         rdf_text = re.sub(r'rdf:resource="files/[^"]*"', 'rdf:resource="about:blank"', rdf_text)
+        # Supprimer les blocs z:Attachment entiers (chemins locaux avec caractères spéciaux)
+        rdf_text = re.sub(r'<z:Attachment[^>]*rdf:about[^>]*>.*?</z:Attachment>', '', rdf_text, flags=re.DOTALL)
+        rdf_text = re.sub(r'<link:link[^/]*/>', '', rdf_text)
         g = Graph()
         g.parse(data=rdf_text, format='xml')
     except Exception as e:
