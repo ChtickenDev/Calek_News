@@ -3287,7 +3287,7 @@ def zotero_import():
                         pmid_found = ids[0]
                 # 2. Sinon recherche par titre (nettoyé)
                 if not pmid_found and title_raw:
-                    clean_title = re.sub(r'[®©™]', '', title_raw).rstrip('.?!').strip()[:100]
+                    clean_title = re.sub(r'[®©™]', '', title_raw).rstrip('.?!').strip()
                     resp = requests.get(
                         'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi',
                         params=ncbi_params(db='pubmed', term=f'{clean_title}[title]', retmode='json'),
