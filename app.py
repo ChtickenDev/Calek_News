@@ -3229,7 +3229,7 @@ def zotero_import():
     fetched_from_pubmed = 0
 
     article_nodes = set()
-    for rdf_type in [BIB.Article, Z.Blog, BIB.Document]:
+    for rdf_type in [BIB.Article, Z.Blog]:
         for node in g.subjects(RDF.type, rdf_type):
             article_nodes.add(node)
 
