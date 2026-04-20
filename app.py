@@ -2656,6 +2656,7 @@ def fetch_missing_abstracts():
     if current_user.email not in TEST_PUSH_EMAILS:
         return jsonify({'error': 'Non autorisé'}), 403
 
+    # — Passe 1 : articles sans abstract (avec PMID ou DOI) —
     articles_sans_abstract = Article.query.filter(
         db.or_(Article.abstract == None, Article.abstract == ''),
         db.or_(Article.pmid != None, Article.doi != None)
@@ -2680,16 +2681,48 @@ def fetch_missing_abstracts():
             try:
                 parsed = efetch_pubmed_batch([pmid])
                 art = parsed.get(pmid, {})
-                if art.get('abstract'):
+                if art.get('abstract') and not article.abstract:
                     article.abstract = art['abstract']
-                    if not article.pmid:
-                        article.pmid = pmid
                     updated += 1
+                if art.get('doi') and not article.doi:
+                    article.doi = normalize_doi(art['doi'])
+                if not article.pmid and pmid:
+                    article.pmid = pmid
+                # Corriger l'URL : préférer DOI si disponible
+                if article.doi and (not article.url or 'pubmed' in (article.url or '')):
+                    article.url = f'https://doi.org/{article.doi}'
+                time.sleep(0.1)
             except Exception:
                 continue
 
     db.session.commit()
-    return jsonify({'ok': True, 'updated': updated, 'total': len(articles_sans_abstract)})
+
+    # — Passe 2 : articles avec PMID mais sans DOI —
+    articles_sans_doi = Article.query.filter(
+        db.or_(Article.doi == None, Article.doi == ''),
+        Article.pmid != None, Article.pmid != ''
+    ).all()
+
+    doi_updated = 0
+    for article in articles_sans_doi:
+        try:
+            parsed = efetch_pubmed_batch([article.pmid])
+            art = parsed.get(article.pmid, {})
+            if art.get('doi'):
+                article.doi = normalize_doi(art['doi'])
+                article.url = f'https://doi.org/{article.doi}'
+                doi_updated += 1
+            time.sleep(0.1)
+        except Exception:
+            continue
+
+    db.session.commit()
+    return jsonify({
+        'ok': True,
+        'updated': updated,
+        'doi_updated': doi_updated,
+        'total': len(articles_sans_abstract)
+    })
 
 
 @app.route('/article/<int:article_id>/fetch_abstract', methods=['POST'])
