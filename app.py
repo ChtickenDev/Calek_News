@@ -3264,10 +3264,12 @@ def zotero_import():
             if m:
                 pmid = m.group(1)
 
-        # 2. dc:identifier (formats: "DOI:10.xxx", "PMID:12345", "https://doi.org/10.xxx")
+        # 2. dc:identifier (formats: "DOI:10.xxx", "DOI 10.xxx", "PMID:12345", "https://doi.org/10.xxx")
         for identifier in g.objects(article_node, DC.identifier):
             id_str = str(identifier).strip()
-            if not doi and id_str.upper().startswith('DOI:'):
+            if not doi and id_str.upper().startswith('DOI '):
+                doi = normalize_doi(id_str[4:].strip())
+            elif not doi and id_str.upper().startswith('DOI:'):
                 doi = normalize_doi(id_str[4:].strip())
             elif not doi and 'doi.org/' in id_str:
                 doi = normalize_doi(id_str)
