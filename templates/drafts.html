@@ -281,7 +281,7 @@
 
       <!-- Actions -->
       <div class="card-actions" onclick="event.stopPropagation()">
-        {% if a.url or a.doi %}<a class="card-btn" href="{{ a.url if a.url else 'https://doi.org/' + a.doi }}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Article</a>{% endif %}
+        {% if a.doi %}<a class="card-btn" href="https://doi.org/{{ a.doi }}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Article</a>{% elif a.url and 'pubmed' not in a.url %}<a class="card-btn" href="{{ a.url }}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Article</a>{% endif %}
         {% if current_user.is_authenticated %}
           {% set is_proposed = a.id in proposed_set %}
           {% if is_proposed %}

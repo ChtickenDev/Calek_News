@@ -347,7 +347,7 @@
 
           <!-- Actions -->
           <div class="card-actions" onclick="event.stopPropagation()">
-            {% if a.url or a.doi %}<a class="card-btn" href="{{ a.url if a.url else 'https://doi.org/' + a.doi }}" target="_blank" onclick="event.stopPropagation()">Article</a>{% endif %}
+            {% if a.doi %}<a class="card-btn" href="https://doi.org/{{ a.doi }}" target="_blank" onclick="event.stopPropagation()">Article</a>{% elif a.url and 'pubmed' not in a.url %}<a class="card-btn" href="{{ a.url }}" target="_blank" onclick="event.stopPropagation()">Article</a>{% endif %}
             {% if profile_user.id != current_user.id %}
             <button class="card-btn favor-btn{% if user_favorited %} card-btn-fav{% endif %}"
                     data-article-id="{{ a.id }}"
