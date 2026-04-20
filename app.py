@@ -3441,12 +3441,13 @@ def zotero_import():
                     db.session.add(article)
                     db.session.flush()
                     fetched_from_pubmed += 1
-                # Ajouter en favori si absent
-                if article.id not in fav_by_article_id:
-                    new_fav = Favorite(user_id=current_user.id, article_id=article.id, is_public=True)
-                    db.session.add(new_fav)
-                    db.session.flush()
-                    fav_by_article_id[article.id] = new_fav
+
+        # Ajouter en favori si absent (s'applique à tous les articles, qu'ils viennent de la base ou de PubMed)
+        if article is not None and article.id not in fav_by_article_id:
+            new_fav = Favorite(user_id=current_user.id, article_id=article.id, is_public=True)
+            db.session.add(new_fav)
+            db.session.flush()
+            fav_by_article_id[article.id] = new_fav
 
         if not article or article.id not in fav_by_article_id:
             articles_ignored += 1
