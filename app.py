@@ -488,6 +488,20 @@ def unique_article_by_doi(doi):
     return Article.query.filter(Article.doi == doi).first() if doi else None
 
 
+def _resolve_article_url(d):
+    """Retourne l'URL directe à utiliser : doi.org > URL non-PubMed > pubmed. Ne modifie pas d."""
+    current_url = d.get('url') or ''
+    doi = normalize_doi(d.get('doi'))
+    pmid = d.get('pmid')
+    if doi:
+        return f'https://doi.org/{doi}'
+    if current_url and 'pubmed' not in current_url:
+        return current_url
+    if pmid:
+        return f'https://pubmed.ncbi.nlm.nih.gov/{pmid}/'
+    return current_url or None
+
+
 def add_article(d):
     if d.get("doi") and unique_article_by_doi(d["doi"]):
         return None
@@ -496,7 +510,7 @@ def add_article(d):
         authors=d.get("authors"),
         journal=d.get("journal"),
         doi=normalize_doi(d.get("doi")),
-        url=d.get("url"),
+        url=_resolve_article_url(d),
         abstract=d.get("abstract"),
         published_date=d.get("published_date"),
         source=d.get("source", "manual"),
@@ -545,8 +559,9 @@ def add_or_attach_article(d, user):
         if not a.source and d.get('source'):
             a.source = d.get('source')
 
-        if not a.url and d.get('url'):
-            a.url = d.get('url')
+        resolved_url = _resolve_article_url({**d, 'doi': a.doi or d.get('doi'), 'pmid': d.get('pmid')})
+        if resolved_url and (not a.url or 'pubmed' in (a.url or '')):
+            a.url = resolved_url
 
         if (not a.abstract) and d.get('abstract'):
             a.abstract = d.get('abstract')
@@ -570,7 +585,7 @@ def add_or_attach_article(d, user):
         authors=d.get('authors'),
         journal=_journal,
         doi=doi,
-        url=d.get('url'),
+        url=_resolve_article_url(d),
         abstract=_abstract,
         published_date=incoming_date,
         source=d.get('source') or 'pubmed',
@@ -3541,6 +3556,7 @@ def zotero_import():
                         article.abstract = pubmed_data['abstract']
                     db.session.flush()
                 else:
+                    pubmed_data['url'] = _resolve_article_url(pubmed_data)
                     article = Article(**{k: v for k, v in pubmed_data.items() if hasattr(Article, k)})
                     db.session.add(article)
                     db.session.flush()
