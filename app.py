@@ -3273,8 +3273,9 @@ def zotero_import():
 
         # — Fallback : récupération PubMed si article non trouvé en base —
         if not article and (doi or title_raw):
-            pubmed_data = None
+            pmid_found = None
             try:
+                # 1. Recherche par DOI
                 if doi:
                     resp = requests.get(
                         'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi',
@@ -3284,24 +3285,8 @@ def zotero_import():
                     ids = resp.json().get('esearchresult', {}).get('idlist', [])
                     if ids:
                         pmid_found = ids[0]
-                        resp2 = requests.get(
-                            'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi',
-                            params=ncbi_params(db='pubmed', id=pmid_found, retmode='json'),
-                            timeout=10
-                        )
-                        result = resp2.json().get('result', {}).get(pmid_found, {})
-                        if result:
-                            pubmed_data = {
-                                'title': result.get('title', title_raw),
-                                'authors': ', '.join([a.get('name', '') for a in result.get('authors', [])]),
-                                'journal': result.get('fulljournalname', ''),
-                                'doi': doi,
-                                'pmid': pmid_found,
-                                'url': f'https://pubmed.ncbi.nlm.nih.gov/{pmid_found}/',
-                                'source': 'pubmed',
-                                'is_published': True,
-                            }
-                if not pubmed_data and title_raw:
+                # 2. Sinon recherche par titre
+                if not pmid_found and title_raw:
                     resp = requests.get(
                         'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi',
                         params=ncbi_params(db='pubmed', term=f'{title_raw}[title]', retmode='json'),
@@ -3310,25 +3295,22 @@ def zotero_import():
                     ids = resp.json().get('esearchresult', {}).get('idlist', [])
                     if ids:
                         pmid_found = ids[0]
-                        resp2 = requests.get(
-                            'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi',
-                            params=ncbi_params(db='pubmed', id=pmid_found, retmode='json'),
-                            timeout=10
-                        )
-                        result = resp2.json().get('result', {}).get(pmid_found, {})
-                        if result:
-                            pubmed_data = {
-                                'title': result.get('title', title_raw),
-                                'authors': ', '.join([a.get('name', '') for a in result.get('authors', [])]),
-                                'journal': result.get('fulljournalname', ''),
-                                'doi': doi,
-                                'pmid': pmid_found,
-                                'url': f'https://pubmed.ncbi.nlm.nih.gov/{pmid_found}/',
-                                'source': 'pubmed',
-                                'is_published': True,
-                            }
             except Exception:
-                pass
+                pmid_found = None
+
+            pubmed_data = None
+            if pmid_found:
+                parsed = efetch_pubmed_batch([pmid_found])
+                parsed_art = parsed.get(pmid_found)
+                if parsed_art:
+                    pubmed_data = {
+                        **parsed_art,
+                        'pmid': pmid_found,
+                        'url': f'https://pubmed.ncbi.nlm.nih.gov/{pmid_found}/',
+                        'source': 'pubmed',
+                        'is_published': True,
+                        'doi': normalize_doi(parsed_art.get('doi') or doi),
+                    }
 
             if pubmed_data:
                 # Déduplique avant création
