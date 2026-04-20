@@ -3128,7 +3128,7 @@ def zotero_import():
         from rdflib.namespace import DC, DCTERMS
         rdf_bytes = file.read()
         rdf_text = rdf_bytes.decode('utf-8', errors='replace')
-        # Remplacer les entités HTML non supportées par XML
+        # Remplacer toutes les entités HTML non standard partout dans le fichier
         _html_entities = {
             '&reg;': '®', '&copy;': '©', '&trade;': '™',
             '&nbsp;': ' ', '&ndash;': '–', '&mdash;': '—',
@@ -3137,6 +3137,12 @@ def zotero_import():
         }
         for _entity, _replacement in _html_entities.items():
             rdf_text = rdf_text.replace(_entity, _replacement)
+        # Nettoyer les chemins de fichiers avec caractères spéciaux dans rdf:resource
+        rdf_text = re.sub(
+            r'rdf:resource="files/[^"]*"',
+            lambda m: m.group(0).encode('ascii', 'xmlcharrefreplace').decode('ascii'),
+            rdf_text
+        )
         g = Graph()
         g.parse(data=rdf_text, format='xml')
     except Exception as e:
