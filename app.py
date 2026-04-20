@@ -3313,6 +3313,9 @@ def zotero_import():
                     }
 
             if pubmed_data:
+                # Toujours forcer l'URL PubMed
+                pubmed_data['url'] = f"https://pubmed.ncbi.nlm.nih.gov/{pubmed_data['pmid']}/"
+
                 # Déduplique avant création
                 existing = None
                 if pubmed_data.get('pmid'):
@@ -3321,6 +3324,12 @@ def zotero_import():
                     existing = Article.query.filter_by(doi=pubmed_data['doi']).first()
                 if existing:
                     article = existing
+                    # Compléter les champs manquants sur l'article existant
+                    if not article.url and pubmed_data.get('url'):
+                        article.url = pubmed_data['url']
+                    if not article.abstract and pubmed_data.get('abstract'):
+                        article.abstract = pubmed_data['abstract']
+                    db.session.flush()
                 else:
                     article = Article(**{k: v for k, v in pubmed_data.items() if hasattr(Article, k)})
                     db.session.add(article)
