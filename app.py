@@ -3237,6 +3237,13 @@ def zotero_import():
         for node in g.subjects(RDF.type, rdf_type):
             article_nodes.add(node)
 
+    # Capturer aussi les nœuds rdf:Description avec z:itemType journalArticle etc.
+    _ITEM_TYPES = {'journalArticle', 'conferencePaper', 'preprint', 'report'}
+    for node in g.subjects(RDF.type, None):
+        item_type = str(g.value(node, Z.itemType) or '')
+        if item_type in _ITEM_TYPES:
+            article_nodes.add(node)
+
     for article_node in article_nodes:
         title_raw = ihtml.unescape(str(g.value(article_node, DC.title) or '').strip())
 
