@@ -299,9 +299,18 @@
           {% if is_proposed %}
             <span class="badge bg-info">Propose</span>
           {% else %}
-            <form class="d-inline favorite-form" method="post" action="{{ url_for('favorite', article_id=a.id) }}" onclick="event.stopPropagation()">
+            <form class="d-inline favorite-form" method="post" action="{{ url_for('favorite', article_id=a.id) }}"
+                  data-article-id="{{ a.id }}" onclick="event.stopPropagation()">
               <button type="submit" class="card-btn ph-btn-save">{{ t('btn.save') }}</button>
             </form>
+            <div class="card-note-prompt" id="note-prompt-{{ a.id }}" style="display:none;" onclick="event.stopPropagation()">
+              <div class="card-note-prompt-label">Pourquoi tu partages ca ? Comment tu l'utilises en pratique ?</div>
+              <textarea id="note-textarea-{{ a.id }}" rows="3" placeholder="Ta note sera visible par tes abonnes..."></textarea>
+              <div class="card-note-prompt-actions">
+                <button class="card-note-skip-btn" onclick="skipDraftNote({{ a.id }})">Passer</button>
+                <button class="card-note-save-btn" onclick="saveDraftNote({{ a.id }})">Partager</button>
+              </div>
+            </div>
             {% if current_user.role == 'admin' or a.posted_by_id == current_user.id %}
             <form method="post" action="{{ url_for('drafts_remove_from_me', article_id=a.id) }}" onclick="event.stopPropagation()" onsubmit="return confirm('Supprimer ce brouillon ?');">
               <button class="card-btn ph-btn-delete">Supprimer</button>
@@ -832,5 +841,45 @@ document.querySelectorAll('.article-card[data-article-id]').forEach(card => {
     }
   });
 });
+
+/* ── Favori depuis brouillon : interception + note ── */
+document.querySelectorAll('.favorite-form').forEach(form => {
+  form.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const articleId = this.dataset.articleId;
+    const submitBtn = this.querySelector('button[type="submit"]');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Sauvegarde...'; }
+    try {
+      await fetch(this.action, {method: 'POST', headers: {'Accept': 'application/json, text/html'}});
+      if (submitBtn) { submitBtn.textContent = 'Sauvegarde !'; submitBtn.className = 'card-btn ph-btn-save card-btn-fav'; }
+      const prompt = document.getElementById(`note-prompt-${articleId}`);
+      if (prompt) {
+        prompt.style.display = '';
+        const ta = document.getElementById(`note-textarea-${articleId}`);
+        if (ta) { ta.value = ''; ta.focus(); }
+      }
+    } catch(_) {
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '{{ t("btn.save") }}'; }
+    }
+  });
+});
+
+async function saveDraftNote(articleId) {
+  const ta = document.getElementById(`note-textarea-${articleId}`);
+  const note = ta ? ta.value.trim() : '';
+  if (note) {
+    await fetch(`/favorite/${articleId}/public_note`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({note})
+    });
+  }
+  skipDraftNote(articleId);
+}
+
+function skipDraftNote(articleId) {
+  const prompt = document.getElementById(`note-prompt-${articleId}`);
+  if (prompt) prompt.style.display = 'none';
+}
 </script>
 {% endblock %}

@@ -82,6 +82,90 @@
     /* Side cards (formulaires, filtres) */
     .side-card { border: 1px solid var(--bs-border-color); background: var(--bs-body-bg); border-radius: .75rem; }
 
+    /* ── Note hero (citation style) ── */
+    .card-note-hero {
+      position: relative;
+      margin: 4px 0 14px;
+      padding: 8px 12px 8px 26px;
+      background: rgba(20,184,166,.07);
+      border-left: 3px solid #14b8a6;
+      border-radius: 0 8px 8px 0;
+      font-size: 13px;
+      color: var(--bs-body-color);
+      line-height: 1.55;
+      font-style: italic;
+      cursor: default;
+    }
+    .card-note-hero::before {
+      content: '\201C';
+      font-family: Georgia, serif;
+      font-size: 30px;
+      line-height: 1;
+      color: #14b8a6;
+      opacity: .45;
+      position: absolute;
+      top: 2px;
+      left: 7px;
+    }
+    [data-bs-theme="dark"] .card-note-hero { background: rgba(20,184,166,.12); }
+
+    /* Empty state (own cards, no note yet) */
+    .card-note-empty {
+      margin: 4px 0 14px;
+      padding: 7px 12px;
+      border: 1px dashed var(--bs-border-color);
+      border-radius: 8px;
+      font-size: 12px;
+      color: var(--bs-secondary-color);
+      cursor: pointer;
+      text-align: center;
+      transition: border-color .15s, color .15s, background .15s;
+    }
+    .card-note-empty:hover { background: var(--bs-secondary-bg); border-color: #14b8a6; color: #14b8a6; }
+
+    /* Inline note capture panel */
+    .card-note-prompt {
+      margin-top: 10px;
+      padding: 12px;
+      background: var(--bs-secondary-bg);
+      border-radius: 10px;
+      border: 1px solid var(--bs-border-color);
+    }
+    .card-note-prompt-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--bs-body-color);
+      margin-bottom: 8px;
+      line-height: 1.4;
+    }
+    .card-note-prompt textarea {
+      width: 100%;
+      border: 1px solid var(--bs-border-color);
+      border-radius: 8px;
+      background: var(--bs-body-bg);
+      color: var(--bs-body-color);
+      font-size: 13px;
+      padding: 8px 10px;
+      resize: none;
+      font-family: inherit;
+      line-height: 1.5;
+      display: block;
+      box-sizing: border-box;
+    }
+    .card-note-prompt textarea:focus { outline: none; border-color: #14b8a6; box-shadow: 0 0 0 2px rgba(20,184,166,.15); }
+    .card-note-prompt-actions { display: flex; gap: 6px; justify-content: flex-end; margin-top: 8px; }
+    .card-note-skip-btn {
+      font-size: 12px; padding: 5px 12px; border-radius: 6px;
+      border: 0.5px solid var(--bs-border-color); background: transparent;
+      color: var(--bs-secondary-color); cursor: pointer; font-family: inherit; line-height: 1.4;
+    }
+    .card-note-save-btn {
+      font-size: 12px; padding: 5px 14px; border-radius: 6px;
+      border: none; background: #14b8a6; color: #fff;
+      cursor: pointer; font-family: inherit; font-weight: 500; line-height: 1.4;
+    }
+    .card-note-save-btn:hover { background: #0f9184; }
+
     .badge-soft {
       background: rgba(0,0,0,.06);
       color: var(--bs-body-color);

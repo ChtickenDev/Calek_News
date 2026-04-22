@@ -85,12 +85,6 @@
       <div class="card-title" onclick="event.stopPropagation(); openArticleModal({{ a.id }})">{{ a.title }}</div>
 
       <div class="card-meta">
-        {% if a.authors %}
-        <div class="card-meta-row">
-          <span class="card-meta-key">Auteurs</span>
-          <span class="card-meta-val">{{ a.authors }}</span>
-        </div>
-        {% endif %}
         {% if a.journal %}
         <div class="card-meta-row">
           <span class="card-meta-key">Revue</span>
@@ -102,17 +96,6 @@
           <span class="card-meta-key">Date</span>
           <span class="card-meta-val card-meta-date">{{ a.published_date.strftime('%d %b %Y') }}</span>
         </div>
-        {% endif %}
-      </div>
-
-      <hr class="card-sep">
-
-      <div class="card-abstract">
-        {% if a.abstract %}
-          {% set _abstract_text = a.clean_abstract or (a.abstract|striptags) %}
-          {{ _abstract_text[:400] }}{% if _abstract_text|length > 400 %}…{% endif %}
-        {% else %}
-          <span id="abstract-{{ a.id }}">{{ t('article.no_abstract') }} <a href="#" onclick="fetchAbstract({{ a.id }}); return false;" style="font-size:11px; color:#4a90d9; margin-left:4px;">Récupérer</a></span>
         {% endif %}
       </div>
 
@@ -139,6 +122,15 @@
           </svg>
           Utile&#160;·&#160;<span class="like-count">{{ like_count }}</span>
         </span>
+      </div>
+
+      <div class="card-note-prompt" id="note-prompt-{{ a.id }}" style="display:none;" onclick="event.stopPropagation()">
+        <div class="card-note-prompt-label">Pourquoi tu partages ca ? Comment tu l'utilises en pratique ?</div>
+        <textarea id="note-textarea-{{ a.id }}" rows="3" placeholder="Ta note sera visible par tes abonnes..."></textarea>
+        <div class="card-note-prompt-actions">
+          <button class="card-note-skip-btn" onclick="skipNote({{ a.id }})">Passer</button>
+          <button class="card-note-save-btn" onclick="saveNote({{ a.id }})">Partager</button>
+        </div>
       </div>
 
     </div>
@@ -225,20 +217,15 @@
       </div>
 
       {% if first and first.fav.public_note %}
-        <div class="public-note-box mb-2" style="font-size:0.78rem;" onclick="event.stopPropagation()">{{ first.fav.public_note }}</div>
+        <div class="card-note-hero" onclick="event.stopPropagation()">{{ first.fav.public_note }}</div>
       {% endif %}
 
       <div class="card-title" onclick="event.stopPropagation(); openArticleModal({{ a.id }})">{{ a.title }}</div>
       <div class="card-meta">
-        {% if a.authors %}<div class="card-meta-row"><span class="card-meta-key">Auteurs</span><span class="card-meta-val">{{ a.authors }}</span></div>{% endif %}
         {% if a.journal %}<div class="card-meta-row"><span class="card-meta-key">Revue</span><span class="card-meta-val">{{ a.journal }}</span></div>{% endif %}
         {% if a.published_date %}<div class="card-meta-row"><span class="card-meta-key">Date</span><span class="card-meta-val card-meta-date">{{ a.published_date.strftime('%d %b %Y') }}</span></div>{% endif %}
       </div>
-      <hr class="card-sep">
-      <div class="card-abstract">
-        {% if a.abstract %}{% set _abstract_text = a.clean_abstract or (a.abstract|striptags) %}{{ _abstract_text[:400] }}{% if _abstract_text|length > 400 %}…{% endif %}
-        {% else %}<span id="abstract-{{ a.id }}">{{ t('article.no_abstract') }} <a href="#" onclick="fetchAbstract({{ a.id }}); return false;" style="font-size:11px; color:#4a90d9; margin-left:4px;">Récupérer</a></span>{% endif %}
-      </div>
+
       <div class="card-actions" onclick="event.stopPropagation()">
         {% if a.doi %}<a class="card-btn" href="https://doi.org/{{ a.doi }}" target="_blank" onclick="event.stopPropagation()">Article</a>{% elif a.url and 'pubmed' not in a.url %}<a class="card-btn" href="{{ a.url }}" target="_blank" onclick="event.stopPropagation()">Article</a>{% endif %}
         {% set is_fav = a.id in fav_ids %}
@@ -251,6 +238,15 @@
           </svg>
           Utile&#160;·&#160;<span class="like-count">{{ like_count }}</span>
         </span>
+      </div>
+
+      <div class="card-note-prompt" id="note-prompt-{{ a.id }}" style="display:none;" onclick="event.stopPropagation()">
+        <div class="card-note-prompt-label">Pourquoi tu partages ca ? Comment tu l'utilises en pratique ?</div>
+        <textarea id="note-textarea-{{ a.id }}" rows="3" placeholder="Ta note sera visible par tes abonnes..."></textarea>
+        <div class="card-note-prompt-actions">
+          <button class="card-note-skip-btn" onclick="skipNote({{ a.id }})">Passer</button>
+          <button class="card-note-save-btn" onclick="saveNote({{ a.id }})">Partager</button>
+        </div>
       </div>
 
     </div>
@@ -306,15 +302,10 @@
 
       <div class="card-title" onclick="event.stopPropagation(); openArticleModal({{ a.id }})">{{ a.title }}</div>
       <div class="card-meta">
-        {% if a.authors %}<div class="card-meta-row"><span class="card-meta-key">Auteurs</span><span class="card-meta-val">{{ a.authors }}</span></div>{% endif %}
         {% if a.journal %}<div class="card-meta-row"><span class="card-meta-key">Revue</span><span class="card-meta-val">{{ a.journal }}</span></div>{% endif %}
         {% if a.published_date %}<div class="card-meta-row"><span class="card-meta-key">Date</span><span class="card-meta-val card-meta-date">{{ a.published_date.strftime('%d %b %Y') }}</span></div>{% endif %}
       </div>
-      <hr class="card-sep">
-      <div class="card-abstract">
-        {% if a.abstract %}{% set _abstract_text = a.clean_abstract or (a.abstract|striptags) %}{{ _abstract_text[:400] }}{% if _abstract_text|length > 400 %}…{% endif %}
-        {% else %}<span id="abstract-{{ a.id }}">{{ t('article.no_abstract') }} <a href="#" onclick="fetchAbstract({{ a.id }}); return false;" style="font-size:11px; color:#4a90d9; margin-left:4px;">Récupérer</a></span>{% endif %}
-      </div>
+
       <div class="card-actions" onclick="event.stopPropagation()">
         {% if a.doi %}<a class="card-btn" href="https://doi.org/{{ a.doi }}" target="_blank" onclick="event.stopPropagation()">Article</a>{% elif a.url and 'pubmed' not in a.url %}<a class="card-btn" href="{{ a.url }}" target="_blank" onclick="event.stopPropagation()">Article</a>{% endif %}
         {% set is_fav = a.id in fav_ids %}
@@ -327,6 +318,15 @@
           </svg>
           Utile&#160;·&#160;<span class="like-count">{{ like_count }}</span>
         </span>
+      </div>
+
+      <div class="card-note-prompt" id="note-prompt-{{ a.id }}" style="display:none;" onclick="event.stopPropagation()">
+        <div class="card-note-prompt-label">Pourquoi tu partages ca ? Comment tu l'utilises en pratique ?</div>
+        <textarea id="note-textarea-{{ a.id }}" rows="3" placeholder="Ta note sera visible par tes abonnes..."></textarea>
+        <div class="card-note-prompt-actions">
+          <button class="card-note-skip-btn" onclick="skipNote({{ a.id }})">Passer</button>
+          <button class="card-note-save-btn" onclick="saveNote({{ a.id }})">Partager</button>
+        </div>
       </div>
 
     </div>
@@ -489,13 +489,6 @@
   flex-shrink: 0; min-width: 28px;
 }
 
-.public-note-box {
-  background: var(--bs-secondary-bg);
-  border-left: 3px solid #6366f1;
-  border-radius: 0 6px 6px 0;
-  padding: 6px 10px;
-  color: var(--bs-body-color);
-}
 /* badge-ifs — styles injectés en inline via _ifsColor() / macro ifs_badge */
 .like-btn { transition: all 0.15s ease; }
 .sharer-row { padding: 7px 4px; border-bottom: 1px solid var(--bs-border-color); }
@@ -564,16 +557,43 @@ async function followUser(userId, btn) {
 async function toggleFav(articleId, btn) {
   const faved = btn.dataset.faved === 'true';
   const url = faved ? `/unfavorite/${articleId}` : `/favorite/${articleId}`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {'Accept': 'application/json'}
-  });
+  const res = await fetch(url, {method: 'POST', headers: {'Accept': 'application/json'}});
   if (res.ok) {
     const nowFaved = !faved;
     btn.dataset.faved = nowFaved ? 'true' : 'false';
     btn.className = `card-btn fav-btn${nowFaved ? ' card-btn-fav' : ''}`;
     btn.textContent = 'Favori';
+    if (nowFaved) {
+      const prompt = document.getElementById(`note-prompt-${articleId}`);
+      if (prompt) {
+        prompt.style.display = '';
+        const ta = document.getElementById(`note-textarea-${articleId}`);
+        if (ta) { ta.value = ''; ta.focus(); }
+      }
+    } else {
+      skipNote(articleId);
+    }
   }
+}
+
+async function saveNote(articleId) {
+  const ta = document.getElementById(`note-textarea-${articleId}`);
+  const note = ta ? ta.value.trim() : '';
+  if (note) {
+    await fetch(`/favorite/${articleId}/public_note`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({note})
+    });
+    const hero = document.querySelector(`[data-note-for="${articleId}"]`);
+    if (hero) { hero.textContent = note; hero.style.display = ''; }
+  }
+  skipNote(articleId);
+}
+
+function skipNote(articleId) {
+  const prompt = document.getElementById(`note-prompt-${articleId}`);
+  if (prompt) prompt.style.display = 'none';
 }
 
 async function toggleLike(articleId, btn) {
