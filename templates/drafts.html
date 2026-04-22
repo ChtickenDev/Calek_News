@@ -5,115 +5,134 @@
 
 {% block content %}
 
-<h3 class="mb-3 d-none d-md-block">{{ t('nav.search') }}</h3>
+<!-- ══ Page header ══ -->
+<div class="ph-page-header d-none d-md-flex align-items-center justify-content-between mb-4">
+  <div class="d-flex align-items-center gap-3">
+    <div class="ph-header-icon" aria-hidden="true">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+      </svg>
+    </div>
+    <h3 class="mb-0 ph-page-title">{{ t('nav.search') }}</h3>
+  </div>
+  {% if latest_drafts %}
+  <span class="ph-result-pill">{{ latest_drafts|length }} brouillon{{ 's' if latest_drafts|length > 1 else '' }}</span>
+  {% endif %}
+</div>
 
-<div class="card side-card p-3 mb-4">
+<!-- ══ Search card ══ -->
+<div class="ph-search-card mb-5">
 
-  <!-- Recherche PubMed -->
   <form method="post" action="{{ url_for('drafts_pull_pubmed') }}" id="pubmed-form">
     <input type="hidden" name="page" value="1">
 
-    <!-- Barre principale -->
-    <div class="d-flex gap-2 mb-3">
-      <input type="search" name="q_pubmed" class="form-control form-control-lg"
-             placeholder="Rechercher sur PubMed…"
-             value="{{ q_pubmed or '' }}"
-             style="font-size:1rem;">
-      <button class="btn px-4" type="submit" style="white-space:nowrap; font-size:1rem; background-color:#4a90d9; border-color:#4a90d9; color:#fff; border-radius:8px;">
-        {{ t('nav.search') }}
+    <!-- Primary search bar -->
+    <div class="ph-search-row">
+      <div class="ph-input-wrap">
+        <svg class="ph-input-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+        </svg>
+        <input type="search" name="q_pubmed" class="ph-search-input"
+               placeholder="Rechercher sur PubMed&#x2026;"
+               value="{{ q_pubmed or '' }}"
+               autocomplete="off"
+               aria-label="Rechercher sur PubMed">
+      </div>
+      <button class="ph-search-btn" type="submit">
+        <span class="d-none d-sm-inline">{{ t('nav.search') }}</span>
+        <svg class="d-sm-none" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+        </svg>
       </button>
     </div>
 
-    <!-- Filtres sur une ligne -->
-    <div id="search-filters" class="d-flex flex-wrap gap-2 align-items-end">
+    <!-- Desktop filter strip -->
+    <div id="search-filters" class="ph-filter-strip d-none d-md-flex">
 
-      <div>
-        <label class="form-label small mb-1">Tri PubMed</label>
-        <select name="pubmed_sort" class="form-select form-select-sm">
+      <div class="ph-fgroup">
+        <label class="ph-flabel" for="f-pubmed-sort">Tri PubMed</label>
+        <select id="f-pubmed-sort" name="pubmed_sort" class="ph-fselect">
           <option value="pub+date" {{ 'selected' if (request.args.get('pubmed_sort') or 'pub+date') == 'pub+date' else '' }}>Chronologique</option>
           <option value="relevance" {{ 'selected' if request.args.get('pubmed_sort') == 'relevance' else '' }}>Populaire</option>
         </select>
       </div>
 
-      <div>
-        <label class="form-label small mb-1">Type d'étude</label>
-        <select name="study_type" class="form-select form-select-sm">
+      <div class="ph-fsep" aria-hidden="true"></div>
+
+      <div class="ph-fgroup">
+        <label class="ph-flabel" for="f-study-type">Type d&#x27;etude</label>
+        <select id="f-study-type" name="study_type" class="ph-fselect">
           <option value="">{{ t('filter.all') }}</option>
           <option value="rct"        {{ 'selected' if request.args.get('study_type') == 'rct' else '' }}>RCT</option>
-          <option value="meta"       {{ 'selected' if request.args.get('study_type') == 'meta' else '' }}>Méta-analyse</option>
-          <option value="systematic" {{ 'selected' if request.args.get('study_type') == 'systematic' else '' }}>Revue systématique</option>
+          <option value="meta"       {{ 'selected' if request.args.get('study_type') == 'meta' else '' }}>Meta-analyse</option>
+          <option value="systematic" {{ 'selected' if request.args.get('study_type') == 'systematic' else '' }}>Rev. systematique</option>
           <option value="review"     {{ 'selected' if request.args.get('study_type') == 'review' else '' }}>Revue</option>
           <option value="clinical"   {{ 'selected' if request.args.get('study_type') == 'clinical' else '' }}>Essai clinique</option>
         </select>
       </div>
 
-      <div>
-        <label class="form-label small mb-1">Accès</label>
-        <select name="access" class="form-select form-select-sm">
+      <div class="ph-fgroup">
+        <label class="ph-flabel" for="f-access">Acces</label>
+        <select id="f-access" name="access" class="ph-fselect">
           <option value="">{{ t('filter.all') }}</option>
           <option value="fulltext" {{ 'selected' if request.args.get('access') == 'fulltext' else '' }}>Full text</option>
           <option value="free"     {{ 'selected' if request.args.get('access') == 'free' else '' }}>Free full text</option>
         </select>
       </div>
 
-      <div>
-        <label class="form-label small mb-1">Langue</label>
-        <select name="lang" class="form-select form-select-sm">
+      <div class="ph-fgroup">
+        <label class="ph-flabel" for="f-lang">Langue</label>
+        <select id="f-lang" name="lang" class="ph-fselect">
           <option value="">{{ t('filter.all_f') }}</option>
           <option value="en" {{ 'selected' if request.args.get('lang') == 'en' else '' }}>Anglais</option>
-          <option value="fr" {{ 'selected' if request.args.get('lang') == 'fr' else '' }}>Français</option>
+          <option value="fr" {{ 'selected' if request.args.get('lang') == 'fr' else '' }}>Francais</option>
         </select>
       </div>
 
-      <div>
-        <label class="form-label small mb-1">Période</label>
-        <select name="date_range" class="form-select form-select-sm" id="date-range-select"
+      <div class="ph-fgroup">
+        <label class="ph-flabel" for="date-range-select">Periode</label>
+        <select name="date_range" class="ph-fselect" id="date-range-select"
                 onchange="document.getElementById('custom-dates').style.display = this.value === 'custom' ? 'flex' : 'none'">
           <option value="">{{ t('filter.all_f') }}</option>
           <option value="1y"     {{ 'selected' if request.args.get('date_range') == '1y' else '' }}>1 an</option>
           <option value="5y"     {{ 'selected' if request.args.get('date_range') == '5y' else '' }}>5 ans</option>
           <option value="10y"    {{ 'selected' if request.args.get('date_range') == '10y' else '' }}>10 ans</option>
-          <option value="custom" {{ 'selected' if request.args.get('date_range') == 'custom' else '' }}>Personnalisée</option>
+          <option value="custom" {{ 'selected' if request.args.get('date_range') == 'custom' else '' }}>Personnalisee</option>
         </select>
       </div>
 
       <div id="custom-dates" class="d-flex gap-1 align-items-center"
            style="display:{{ 'flex' if request.args.get('date_range') == 'custom' else 'none' }} !important">
-        <input type="date" name="date_from" class="form-control form-control-sm"
-               value="{{ request.args.get('date_from') or '' }}" style="width:130px;">
-        <span class="small text-muted">→</span>
-        <input type="date" name="date_to" class="form-control form-control-sm"
-               value="{{ request.args.get('date_to') or '' }}" style="width:130px;">
+        <input type="date" name="date_from" class="ph-date-input"
+               value="{{ request.args.get('date_from') or '' }}" aria-label="Date de debut">
+        <span class="ph-date-arrow" aria-hidden="true">&#x2192;</span>
+        <input type="date" name="date_to" class="ph-date-input"
+               value="{{ request.args.get('date_to') or '' }}" aria-label="Date de fin">
       </div>
 
-      <!-- Tri local intégré -->
-      <div class="ms-auto">
-        <label class="form-label small mb-1">Tri résultats</label>
+      <div class="ms-auto ph-fgroup">
+        <label class="ph-flabel" for="f-sort">Tri resultats</label>
         <div class="d-flex gap-2">
-          <select name="sort" class="form-select form-select-sm" form="sort-form">
+          <select id="f-sort" name="sort" class="ph-fselect" form="sort-form">
             {% set current_sort = sort or request.args.get('sort','date_desc') %}
-            <option value="date_desc" {{ 'selected' if current_sort=='date_desc' else '' }}>Date ↓</option>
-            <option value="date_asc"  {{ 'selected' if current_sort=='date_asc'  else '' }}>Date ↑</option>
-            <option value="ifs_desc"  {{ 'selected' if current_sort=='ifs_desc'  else '' }}>IFS ↓</option>
-            <option value="ifs_asc"   {{ 'selected' if current_sort=='ifs_asc'   else '' }}>IFS ↑</option>
+            <option value="date_desc" {{ 'selected' if current_sort=='date_desc' else '' }}>Date &#x2193;</option>
+            <option value="date_asc"  {{ 'selected' if current_sort=='date_asc'  else '' }}>Date &#x2191;</option>
+            <option value="ifs_desc"  {{ 'selected' if current_sort=='ifs_desc'  else '' }}>IFS &#x2193;</option>
+            <option value="ifs_asc"   {{ 'selected' if current_sort=='ifs_asc'   else '' }}>IFS &#x2191;</option>
           </select>
-          <button type="submit" form="sort-form" class="btn btn-outline-secondary btn-sm">OK</button>
+          <button type="submit" form="sort-form" class="ph-sort-ok">OK</button>
         </div>
       </div>
 
     </div>
 
-    <!-- Mobile filter UI (desktop: d-md-none) -->
-    <div id="m-filter-ui" class="d-md-none" style="margin-top:8px;">
+    <!-- Mobile filter UI -->
+    <div id="m-filter-ui" class="d-md-none ph-mobile-ui">
 
-      <!-- Barre : pills actifs + bouton + -->
-      <div id="m-filter-bar" style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
+      <div id="m-filter-bar" class="ph-mobile-bar">
         <button id="m-add-btn" type="button" onclick="mobileTogglePanel()"
-                style="display:inline-flex; align-items:center; gap:5px;
-                       border:1.5px dashed var(--bs-border-color); background:transparent;
-                       border-radius:20px; padding:5px 12px; font-size:12px;
-                       color:var(--bs-secondary-color); cursor:pointer;">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                class="ph-mobile-add" aria-expanded="false" aria-controls="m-panel" aria-label="Ouvrir les filtres">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
           </svg>
           Filtres
@@ -121,64 +140,54 @@
         <div id="m-pills" style="display:contents;"></div>
       </div>
 
-      <!-- Lien Réinitialiser -->
       <div id="m-reset-row" style="display:none; margin-top:5px;">
-        <a href="#" onclick="mobileResetFilters(); return false;"
-           style="font-size:11px; color:var(--bs-secondary-color); text-decoration:none;">Réinitialiser</a>
+        <a href="#" onclick="mobileResetFilters(); return false;" class="ph-mobile-reset">Reinitialiser</a>
       </div>
 
-      <!-- Panel filtres -->
-      <div id="m-panel" style="display:none; margin-top:8px;
-           background:var(--bs-tertiary-bg); border:0.5px solid var(--bs-border-color);
-           border-radius:10px; padding:10px;">
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+      <div id="m-panel" style="display:none;" class="ph-mobile-panel" role="region" aria-label="Filtres de recherche">
+        <div class="ph-mobile-grid">
 
-          <div style="display:flex; flex-direction:column; gap:3px;">
-            <span style="font-size:10px; color:var(--bs-secondary-color);">Tri PubMed</span>
-            <select id="m-pubmed-sort" onchange="mobileOnChange('pubmed_sort',this)"
-                    style="font-size:11px; border:0.5px solid var(--bs-border-color); border-radius:6px; padding:4px 8px; background:var(--bs-body-bg); color:var(--bs-body-color);">
+          <div class="ph-mf-item">
+            <span class="ph-mf-label">Tri PubMed</span>
+            <select id="m-pubmed-sort" onchange="mobileOnChange('pubmed_sort',this)" class="ph-mf-select">
               <option value="pub+date">Chronologique</option>
               <option value="relevance">Populaire</option>
             </select>
           </div>
 
-          <div style="display:flex; flex-direction:column; gap:3px;">
-            <span style="font-size:10px; color:var(--bs-secondary-color);">Type d'étude</span>
-            <select id="m-study-type" onchange="mobileOnChange('study_type',this)"
-                    style="font-size:11px; border:0.5px solid var(--bs-border-color); border-radius:6px; padding:4px 8px; background:var(--bs-body-bg); color:var(--bs-body-color);">
+          <div class="ph-mf-item">
+            <span class="ph-mf-label">Type d&#x27;etude</span>
+            <select id="m-study-type" onchange="mobileOnChange('study_type',this)" class="ph-mf-select">
               <option value="">Tous</option>
               <option value="rct">RCT</option>
-              <option value="meta">Méta-analyse</option>
-              <option value="systematic">Rev. systématique</option>
+              <option value="meta">Meta-analyse</option>
+              <option value="systematic">Rev. systematique</option>
               <option value="review">Revue</option>
               <option value="clinical">Essai clinique</option>
             </select>
           </div>
 
-          <div style="display:flex; flex-direction:column; gap:3px;">
-            <span style="font-size:10px; color:var(--bs-secondary-color);">Accès</span>
-            <select id="m-access" onchange="mobileOnChange('access',this)"
-                    style="font-size:11px; border:0.5px solid var(--bs-border-color); border-radius:6px; padding:4px 8px; background:var(--bs-body-bg); color:var(--bs-body-color);">
+          <div class="ph-mf-item">
+            <span class="ph-mf-label">Acces</span>
+            <select id="m-access" onchange="mobileOnChange('access',this)" class="ph-mf-select">
               <option value="">Tous</option>
               <option value="fulltext">Full text</option>
               <option value="free">Free full text</option>
             </select>
           </div>
 
-          <div style="display:flex; flex-direction:column; gap:3px;">
-            <span style="font-size:10px; color:var(--bs-secondary-color);">Langue</span>
-            <select id="m-lang" onchange="mobileOnChange('lang',this)"
-                    style="font-size:11px; border:0.5px solid var(--bs-border-color); border-radius:6px; padding:4px 8px; background:var(--bs-body-bg); color:var(--bs-body-color);">
+          <div class="ph-mf-item">
+            <span class="ph-mf-label">Langue</span>
+            <select id="m-lang" onchange="mobileOnChange('lang',this)" class="ph-mf-select">
               <option value="">Toutes</option>
               <option value="en">Anglais</option>
-              <option value="fr">Français</option>
+              <option value="fr">Francais</option>
             </select>
           </div>
 
-          <div style="display:flex; flex-direction:column; gap:3px;">
-            <span style="font-size:10px; color:var(--bs-secondary-color);">Période</span>
-            <select id="m-date-range" onchange="mobileOnChange('date_range',this)"
-                    style="font-size:11px; border:0.5px solid var(--bs-border-color); border-radius:6px; padding:4px 8px; background:var(--bs-body-bg); color:var(--bs-body-color);">
+          <div class="ph-mf-item">
+            <span class="ph-mf-label">Periode</span>
+            <select id="m-date-range" onchange="mobileOnChange('date_range',this)" class="ph-mf-select">
               <option value="">Toutes</option>
               <option value="1y">1 an</option>
               <option value="5y">5 ans</option>
@@ -186,23 +195,23 @@
             </select>
           </div>
 
-          <div style="display:flex; flex-direction:column; gap:3px;">
-            <span style="font-size:10px; color:var(--bs-secondary-color);">Tri résultats</span>
-            <select id="m-sort" onchange="mobileOnChange('sort',this)"
-                    style="font-size:11px; border:0.5px solid var(--bs-border-color); border-radius:6px; padding:4px 8px; background:var(--bs-body-bg); color:var(--bs-body-color);">
-              <option value="date_desc">Date ↓</option>
-              <option value="date_asc">Date ↑</option>
-              <option value="ifs_desc">IFS ↓</option>
-              <option value="ifs_asc">IFS ↑</option>
+          <div class="ph-mf-item">
+            <span class="ph-mf-label">Tri resultats</span>
+            <select id="m-sort" onchange="mobileOnChange('sort',this)" class="ph-mf-select">
+              <option value="date_desc">Date &#x2193;</option>
+              <option value="date_asc">Date &#x2191;</option>
+              <option value="ifs_desc">IFS &#x2193;</option>
+              <option value="ifs_asc">IFS &#x2191;</option>
             </select>
           </div>
 
         </div>
-        <div style="display:flex; justify-content:flex-end; margin-top:10px;">
-          <button type="button" onclick="mobileTogglePanel()"
-                  style="font-size:12px; background:transparent; border:0.5px solid var(--bs-border-color);
-                         border-radius:6px; padding:5px 12px; color:var(--bs-secondary-color); cursor:pointer;">
-            Fermer ∧
+        <div class="d-flex justify-content-end" style="margin-top:12px;">
+          <button type="button" onclick="mobileTogglePanel()" class="ph-mobile-close">
+            Fermer
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+              <polyline points="18 15 12 9 6 15"/>
+            </svg>
           </button>
         </div>
       </div>
@@ -212,20 +221,23 @@
 
   </form>
 
-  <!-- Formulaire tri local (hidden) -->
+  <!-- Hidden sort form -->
   <form id="sort-form" method="get" action="{{ url_for('my_drafts') }}" style="display:none;"></form>
 
 </div>
 
-<h5 class="mb-3">{{ t('search.results_title') }}</h5>
+<!-- ══ Results section ══ -->
+<div class="d-flex align-items-baseline justify-content-between mb-3">
+  <h5 class="ph-section-title mb-0">{{ t('search.results_title') }}</h5>
+</div>
 
 <div class="row gy-3">
   {% for a in latest_drafts %}
-  <div class="col-md-6 col-lg-4">
+  <div class="col-md-6 col-lg-4 ph-card-col" style="--card-idx:{{ loop.index0 }}">
     {% set sc = (reliability_score(a)[0]) %}
-    <div class="article-card" data-article-id="{{ a.id }}" role="button" tabindex="0">
+    <div class="article-card ph-article-card" data-article-id="{{ a.id }}" role="button" tabindex="0" aria-label="Ouvrir : {{ a.title|e }}">
 
-      <!-- Cite button (abs top-right) -->
+      <!-- Cite button -->
       <button class="card-cite-btn"
               data-title="{{ a.title|e }}"
               data-authors="{{ (a.authors or '')|e }}"
@@ -236,16 +248,16 @@
               data-domain="{{ (a.domain or '')|e }}"
               onclick="event.stopPropagation(); openCiteModal(this.dataset.title, this.dataset.authors, this.dataset.journal, this.dataset.date, this.dataset.doi, '', +this.dataset.sc, this.dataset.domain)">{{ t('btn.cite') }}</button>
 
-      <!-- IFS + domaine -->
+      <!-- IFS + domain -->
       <div class="card-ifs-header {{ ifs_header_class(sc) }}">
         {{ ifs_badge(sc) }}
         {% if a.domain %}<span class="card-domain">{{ a.domain }}</span>{% endif %}
       </div>
 
-      <!-- Titre -->
+      <!-- Title -->
       <div class="card-title" onclick="event.stopPropagation(); openArticleModal({{ a.id }})">{{ a.title }}</div>
 
-      <!-- Méta -->
+      <!-- Meta -->
       <div class="card-meta">
         {% if a.authors %}
         <div class="card-meta-row">
@@ -269,13 +281,13 @@
 
       <hr class="card-sep">
 
-      <!-- Résumé -->
+      <!-- Abstract -->
       <div class="card-abstract">
         {% if a.abstract %}
           {% set _abstract_text = a.clean_abstract or (a.abstract|striptags) %}
-          {{ _abstract_text[:400] }}{% if _abstract_text|length > 400 %}…{% endif %}
+          {{ _abstract_text[:400] }}{% if _abstract_text|length > 400 %}&#x2026;{% endif %}
         {% else %}
-          <span id="abstract-{{ a.id }}">{{ t('article.no_abstract') }} <a href="#" onclick="fetchAbstract({{ a.id }}); return false;" style="font-size:11px; color:#4a90d9; margin-left:4px;">Récupérer</a></span>
+          <span id="abstract-{{ a.id }}">{{ t('article.no_abstract') }} <a href="#" onclick="fetchAbstract({{ a.id }}); return false;" class="ph-fetch-link">Recuperer</a></span>
         {% endif %}
       </div>
 
@@ -285,14 +297,14 @@
         {% if current_user.is_authenticated %}
           {% set is_proposed = a.id in proposed_set %}
           {% if is_proposed %}
-            <span class="badge bg-info">Proposé</span>
+            <span class="badge bg-info">Propose</span>
           {% else %}
             <form class="d-inline favorite-form" method="post" action="{{ url_for('favorite', article_id=a.id) }}" onclick="event.stopPropagation()">
-              <button type="submit" class="card-btn">{{ t('btn.save') }}</button>
+              <button type="submit" class="card-btn ph-btn-save">{{ t('btn.save') }}</button>
             </form>
             {% if current_user.role == 'admin' or a.posted_by_id == current_user.id %}
             <form method="post" action="{{ url_for('drafts_remove_from_me', article_id=a.id) }}" onclick="event.stopPropagation()" onsubmit="return confirm('Supprimer ce brouillon ?');">
-              <button class="card-btn" style="color:#e74c3c;border-color:#e74c3c;">Supprimer</button>
+              <button class="card-btn ph-btn-delete">Supprimer</button>
             </form>
             {% endif %}
           {% endif %}
@@ -302,38 +314,57 @@
     </div>
   </div>
   {% else %}
-    <div class="col-12"><p class="text-muted">{{ t('search.empty_draft') }}</p></div>
+  <div class="col-12">
+    <div class="ph-empty">
+      <div class="ph-empty-icon" aria-hidden="true">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="9" y1="13" x2="15" y2="13"/>
+          <line x1="9" y1="17" x2="12" y2="17"/>
+        </svg>
+      </div>
+      <p class="ph-empty-title">{{ t('search.empty_draft') }}</p>
+      <p class="ph-empty-sub">Lancez une recherche PubMed ci-dessus pour ajouter des articles a vos brouillons.</p>
+    </div>
+  </div>
   {% endfor %}
 </div>
 
+<!-- ══ Pagination ══ -->
 {% if q_pubmed and total_pages and total_pages > 1 %}
-<div class="d-flex align-items-center justify-content-between mt-3 flex-wrap gap-2">
-  <a class="btn btn-outline-secondary btn-sm {{ 'disabled' if page <= 1 else '' }}"
-     href="{{ url_for('drafts_load_pubmed', q_pubmed=q_pubmed, page=page-1, sort=sort) }}">
+<nav class="ph-pagination" aria-label="Navigation des pages">
+  <a class="ph-page-btn {{ 'ph-page-btn--off' if page <= 1 else '' }}"
+     href="{{ url_for('drafts_load_pubmed', q_pubmed=q_pubmed, page=page-1, sort=sort) }}"
+     {% if page <= 1 %}aria-disabled="true" tabindex="-1"{% endif %}>
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
     {{ t('btn.previous') }}
   </a>
-  <div class="small text-muted">Page {{ page }} / {{ total_pages }}</div>
-  <a class="btn btn-outline-secondary btn-sm {{ 'disabled' if page >= total_pages else '' }}"
-     href="{{ url_for('drafts_load_pubmed', q_pubmed=q_pubmed, page=page+1, sort=sort) }}">
+  <span class="ph-page-indicator" aria-current="page">{{ page }}&thinsp;/&thinsp;{{ total_pages }}</span>
+  <a class="ph-page-btn {{ 'ph-page-btn--off' if page >= total_pages else '' }}"
+     href="{{ url_for('drafts_load_pubmed', q_pubmed=q_pubmed, page=page+1, sort=sort) }}"
+     {% if page >= total_pages %}aria-disabled="true" tabindex="-1"{% endif %}>
     {{ t('btn.next') }}
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
   </a>
-</div>
+</nav>
 {% endif %}
 
-<div class="modal fade" id="articleModal" tabindex="-1" aria-hidden="true">
+<!-- ══ Article modal ══ -->
+<div class="modal fade" id="articleModal" tabindex="-1" aria-hidden="true" aria-labelledby="am-title">
   <div class="modal-dialog modal-xl modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 id="am-title" class="modal-title"></h5>
+    <div class="modal-content ph-modal">
+      <div class="modal-header ph-modal-header">
+        <h5 id="am-title" class="modal-title ph-modal-title"></h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
       </div>
-      <div class="modal-body">
-        <div class="d-flex flex-wrap gap-2 mb-2">
-          <span id="am-journal" class="badge badge-soft badge-journal"></span>
-          <span id="am-source" class="badge badge-soft"></span>
-          <span id="am-domain" class="badge badge-soft"></span>
-          <span id="am-pathology" class="badge badge-soft"></span>
-          <span id="am-studytype" class="badge badge-soft"></span>
+      <div class="modal-body ph-modal-body">
+        <div class="d-flex flex-wrap gap-2 mb-3">
+          <span id="am-journal"   class="badge badge-soft badge-journal" style="display:none;"></span>
+          <span id="am-source"    class="badge badge-soft" style="display:none;"></span>
+          <span id="am-domain"    class="badge badge-soft" style="display:none;"></span>
+          <span id="am-pathology" class="badge badge-soft" style="display:none;"></span>
+          <span id="am-studytype" class="badge badge-soft" style="display:none;"></span>
         </div>
         <p id="am-authors" class="small text-muted mb-2"></p>
         <div class="small text-muted mb-3">
@@ -341,21 +372,23 @@
           <span id="am-sitedate" class="ms-2"></span>
           <span id="am-credit" class="ms-2" style="display:none;"></span>
         </div>
-        <div class="mb-3">
-          <div class="d-flex align-items-center justify-content-between">
-            <strong>Indice de fiabilité : <span id="am-rel-level">—</span></strong>
+        <div class="ph-reliability mb-4">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <strong class="ph-rel-label">Indice de fiabilite : <span id="am-rel-level">&#x2014;</span></strong>
             <span id="am-rel-score" class="small text-muted"></span>
           </div>
-          <div class="progress mt-2" style="height:10px;">
-            <div id="am-rel-bar" class="progress-bar" role="progressbar" style="width:0%;" aria-valuemin="0" aria-valuemax="100"></div>
+          <div class="progress ph-rel-bar-track" style="height:7px;">
+            <div id="am-rel-bar" class="progress-bar" role="progressbar"
+                 style="width:0%; transition:width .55s ease-out;"
+                 aria-valuemin="0" aria-valuemax="100"></div>
           </div>
-          <ul id="am-rel-reasons" class="small mt-2 mb-0"></ul>
+          <ul id="am-rel-reasons" class="small mt-2 mb-0 ph-rel-reasons"></ul>
         </div>
-        <h6 class="mb-2">Résumé</h6>
-        <div id="am-abstract" class="mb-0"></div>
+        <h6 class="ph-abstract-heading">Resume</h6>
+        <div id="am-abstract" class="ph-abstract-body"></div>
       </div>
-      <div class="modal-footer">
-        <a id="am-url" href="#" target="_blank" class="btn btn-primary" style="display:none;">Ouvrir</a>
+      <div class="modal-footer ph-modal-footer">
+        <a id="am-url" href="#" target="_blank" class="btn btn-primary"  style="display:none;">Ouvrir</a>
         <a id="am-doi" href="#" target="_blank" class="btn btn-outline-primary" style="display:none;">DOI</a>
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fermer</button>
       </div>
@@ -367,28 +400,211 @@
 
 {% block scripts %}
 <style>
-@media (max-width: 767px) {
-  /* Bouton Rechercher : pill compact */
-  #pubmed-form .d-flex.gap-2.mb-3 .btn[type="submit"] {
-    border-radius: 20px !important;
-    padding: 8px 16px !important;
-    font-size: 13px !important;
-    white-space: nowrap !important;
-  }
-  /* Masquer les filtres desktop sur mobile */
-  #search-filters {
-    display: none !important;
+/* ── Google Font ── */
+@import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap');
+
+/* ── Design tokens ── */
+:root {
+  --ph-teal:        #0D9488;
+  --ph-teal-dark:   #0F766E;
+  --ph-teal-bg:     rgba(13,148,136,.07);
+  --ph-teal-ring:   rgba(13,148,136,.18);
+  --ph-red:         #e74c3c;
+  --ph-tr:          180ms ease-out;
+  --ph-card-shadow: 0 1px 3px rgba(0,0,0,.07), 0 4px 14px rgba(0,0,0,.05);
+  --ph-card-hover:  0 4px 12px rgba(0,0,0,.11), 0 8px 24px rgba(0,0,0,.06);
+}
+[data-bs-theme="dark"] {
+  --ph-teal-bg:     rgba(13,148,136,.11);
+  --ph-teal-ring:   rgba(13,148,136,.25);
+  --ph-card-shadow: 0 1px 3px rgba(0,0,0,.35), 0 4px 14px rgba(0,0,0,.22);
+  --ph-card-hover:  0 4px 12px rgba(0,0,0,.45), 0 8px 24px rgba(0,0,0,.28);
+}
+
+/* ── Page header ── */
+.ph-page-header  { gap: .75rem; }
+.ph-page-title   { font-family:'Figtree',var(--bs-font-sans-serif); font-size:1.35rem; font-weight:700; letter-spacing:-.01em; }
+.ph-header-icon  { width:36px; height:36px; border-radius:10px; background:var(--ph-teal-bg); display:flex; align-items:center; justify-content:center; color:var(--ph-teal); flex-shrink:0; }
+.ph-result-pill  { font-size:11px; font-weight:600; color:var(--ph-teal); background:var(--ph-teal-bg); border:1px solid var(--ph-teal-ring); padding:3px 11px; border-radius:20px; letter-spacing:.01em; }
+
+/* ── Search card shell ── */
+.ph-search-card {
+  background: var(--bs-body-bg);
+  border: 1px solid var(--bs-border-color);
+  border-top: 3px solid var(--ph-teal);
+  border-radius: 14px;
+  padding: 1.25rem;
+  box-shadow: var(--ph-card-shadow);
+}
+
+/* ── Search bar ── */
+.ph-search-row    { display:flex; gap:10px; margin-bottom:1rem; }
+.ph-input-wrap    { flex:1; position:relative; }
+.ph-input-icon    { position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--bs-secondary-color); pointer-events:none; }
+.ph-search-input  {
+  width:100%; padding:11px 14px 11px 38px;
+  border:1.5px solid var(--bs-border-color); border-radius:9px;
+  background:var(--bs-body-bg); color:var(--bs-body-color);
+  font-size:1rem; font-family:inherit; line-height:1.4;
+  transition:border-color var(--ph-tr), box-shadow var(--ph-tr);
+  outline:none;
+}
+.ph-search-input:focus { border-color:var(--ph-teal); box-shadow:0 0 0 3px var(--ph-teal-ring); }
+.ph-search-input::placeholder { color:var(--bs-secondary-color); }
+.ph-search-btn {
+  padding:11px 22px; background:var(--ph-teal); border:none; border-radius:9px;
+  color:#fff; font-size:.92rem; font-weight:600; font-family:'Figtree',var(--bs-font-sans-serif);
+  cursor:pointer; white-space:nowrap; letter-spacing:.01em;
+  display:inline-flex; align-items:center; gap:6px;
+  transition:background var(--ph-tr); flex-shrink:0;
+}
+.ph-search-btn:hover  { background:var(--ph-teal-dark); }
+.ph-search-btn:active { transform:scale(.98); }
+
+/* ── Desktop filter strip ── */
+.ph-filter-strip { flex-wrap:wrap; gap:6px 14px; align-items:flex-end; padding-top:.85rem; border-top:1px solid var(--bs-border-color); }
+.ph-fgroup       { display:flex; flex-direction:column; gap:4px; }
+.ph-flabel       { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--bs-secondary-color); white-space:nowrap; }
+.ph-fselect, .ph-date-input {
+  border:1.5px solid var(--bs-border-color); border-radius:7px;
+  background:var(--bs-body-bg); color:var(--bs-body-color);
+  font-size:12px; font-family:inherit;
+  padding:5px 8px; cursor:pointer; outline:none;
+  transition:border-color var(--ph-tr);
+}
+.ph-fselect:focus, .ph-date-input:focus { border-color:var(--ph-teal); }
+.ph-date-input   { width:130px; }
+.ph-date-arrow   { color:var(--bs-secondary-color); font-size:12px; }
+.ph-fsep         { width:1px; height:26px; background:var(--bs-border-color); align-self:flex-end; margin-bottom:3px; }
+.ph-sort-ok {
+  border:1.5px solid var(--bs-border-color); border-radius:7px;
+  background:transparent; color:var(--bs-body-color);
+  font-size:12px; font-family:inherit; padding:5px 11px;
+  cursor:pointer; transition:background var(--ph-tr), border-color var(--ph-tr);
+}
+.ph-sort-ok:hover { background:var(--bs-secondary-bg); border-color:var(--ph-teal); }
+
+/* ── Mobile filter UI ── */
+.ph-mobile-ui    { margin-top:10px; }
+.ph-mobile-bar   { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+.ph-mobile-add {
+  display:inline-flex; align-items:center; gap:5px;
+  border:1.5px dashed var(--bs-border-color); background:transparent;
+  border-radius:20px; padding:5px 13px; font-size:12px;
+  color:var(--bs-secondary-color); cursor:pointer; font-family:inherit;
+  transition:border-color var(--ph-tr), color var(--ph-tr);
+}
+.ph-mobile-add:hover { border-color:var(--ph-teal); color:var(--ph-teal); }
+.ph-mobile-reset { font-size:11px; color:var(--bs-secondary-color); text-decoration:none; }
+.ph-mobile-reset:hover { color:var(--ph-teal); text-decoration:underline; }
+.ph-mobile-panel {
+  margin-top:10px; background:var(--bs-tertiary-bg);
+  border:1px solid var(--bs-border-color); border-radius:12px; padding:14px;
+}
+.ph-mobile-grid  { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.ph-mf-item      { display:flex; flex-direction:column; gap:4px; }
+.ph-mf-label     { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--bs-secondary-color); }
+.ph-mf-select {
+  font-size:12px; border:1.5px solid var(--bs-border-color); border-radius:7px;
+  padding:5px 8px; background:var(--bs-body-bg); color:var(--bs-body-color);
+  font-family:inherit; outline:none; transition:border-color var(--ph-tr);
+}
+.ph-mf-select:focus { border-color:var(--ph-teal); }
+.ph-mobile-close {
+  display:inline-flex; align-items:center; gap:5px;
+  font-size:12px; background:transparent;
+  border:1.5px solid var(--bs-border-color); border-radius:7px;
+  padding:5px 13px; color:var(--bs-secondary-color);
+  cursor:pointer; font-family:inherit; transition:border-color var(--ph-tr);
+}
+.ph-mobile-close:hover { border-color:var(--ph-teal); }
+
+/* ── Section title ── */
+.ph-section-title { font-family:'Figtree',var(--bs-font-sans-serif); font-size:.95rem; font-weight:700; letter-spacing:-.005em; color:var(--bs-body-color); }
+
+/* ── Card entry animation ── */
+@keyframes phSlideUp {
+  from { opacity:0; transform:translateY(10px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ph-card-col {
+    animation: phSlideUp .3s ease-out both;
+    animation-delay: calc(var(--card-idx,0) * 45ms);
   }
 }
+
+/* ── Enhanced article card ── */
+.ph-article-card {
+  box-shadow: var(--ph-card-shadow);
+  border-radius: 13px !important;
+  transition: box-shadow var(--ph-tr), transform var(--ph-tr), border-color var(--ph-tr);
+}
+.ph-article-card:hover         { box-shadow:var(--ph-card-hover); transform:translateY(-2px); border-color:var(--ph-teal-ring) !important; }
+.ph-article-card:focus-visible { outline:2px solid var(--ph-teal); outline-offset:2px; box-shadow:none; }
+
+/* ── Action buttons ── */
+.ph-btn-save { color:var(--ph-teal) !important; border-color:var(--ph-teal) !important; font-weight:500; transition:background var(--ph-tr), color var(--ph-tr); }
+.ph-btn-save:hover { background:var(--ph-teal) !important; color:#fff !important; }
+.ph-btn-delete { color:var(--ph-red) !important; border-color:var(--ph-red) !important; transition:background var(--ph-tr), color var(--ph-tr); }
+.ph-btn-delete:hover { background:var(--ph-red) !important; color:#fff !important; }
+
+/* ── Fetch abstract link ── */
+.ph-fetch-link { font-size:11px; color:var(--ph-teal); margin-left:4px; text-decoration:none; }
+.ph-fetch-link:hover { text-decoration:underline; }
+
+/* ── Empty state ── */
+.ph-empty { display:flex; flex-direction:column; align-items:center; padding:4rem 2rem; text-align:center; }
+.ph-empty-icon { width:64px; height:64px; border-radius:50%; background:var(--ph-teal-bg); display:flex; align-items:center; justify-content:center; color:var(--ph-teal); margin-bottom:1.2rem; }
+.ph-empty-title { font-size:1rem; font-weight:600; color:var(--bs-body-color); margin-bottom:.35rem; }
+.ph-empty-sub { font-size:13px; color:var(--bs-secondary-color); max-width:320px; line-height:1.6; margin-bottom:0; }
+
+/* ── Pagination ── */
+.ph-pagination { display:flex; align-items:center; justify-content:center; gap:12px; margin-top:2rem; padding-top:1rem; }
+.ph-page-btn {
+  display:inline-flex; align-items:center; gap:5px;
+  padding:7px 16px; border:1.5px solid var(--bs-border-color); border-radius:8px;
+  font-size:13px; font-weight:500; color:var(--bs-body-color);
+  text-decoration:none; background:var(--bs-body-bg);
+  transition:border-color var(--ph-tr), background var(--ph-tr), color var(--ph-tr);
+}
+.ph-page-btn:hover:not(.ph-page-btn--off) { border-color:var(--ph-teal); color:var(--ph-teal); background:var(--ph-teal-bg); }
+.ph-page-btn--off  { opacity:.38; pointer-events:none; }
+.ph-page-indicator { font-size:13px; font-weight:500; color:var(--bs-secondary-color); min-width:54px; text-align:center; }
+
+/* ── Article modal ── */
+.ph-modal         { border-radius:16px; overflow:hidden; }
+.ph-modal-header  { padding:1.2rem 1.5rem; border-bottom:1px solid var(--bs-border-color); }
+.ph-modal-title   { font-size:1rem; font-weight:600; line-height:1.45; font-family:'Figtree',var(--bs-font-sans-serif); }
+.ph-modal-body    { padding:1.5rem; }
+.ph-modal-footer  { padding:1rem 1.5rem; border-top:1px solid var(--bs-border-color); }
+.ph-reliability   { background:var(--bs-tertiary-bg); border-radius:10px; padding:1rem; }
+.ph-rel-label     { font-size:13.5px; }
+.ph-rel-bar-track { border-radius:4px; overflow:hidden; }
+.ph-rel-reasons   { padding-left:1.2rem; }
+.ph-rel-reasons li{ margin-bottom:2px; color:var(--bs-secondary-color); }
+.ph-abstract-heading { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--bs-secondary-color); margin-bottom:.6rem; }
+.ph-abstract-body { font-size:14px; line-height:1.75; }
+
+/* ── Mobile overrides ── */
+@media (max-width:767px) {
+  #search-filters   { display:none !important; }
+  .ph-search-input  { font-size:16px; }
+  .ph-search-btn    { padding:11px 16px; }
+}
 </style>
+
 <script>
-/* ── Système de filtres mobile (3 états) ── */
+/* ── Mobile filter system ── */
+const PH_TEAL   = '#0D9488';
+const PH_TEAL_BG = 'rgba(13,148,136,.09)';
+
 const M_FILTERS = [
   { id:'m-pubmed-sort', name:'pubmed_sort', def:'pub+date',  label:'Tri PubMed', useSort:false },
   { id:'m-study-type',  name:'study_type',  def:'',          label:'Type',       useSort:false },
-  { id:'m-access',      name:'access',      def:'',          label:'Accès',      useSort:false },
+  { id:'m-access',      name:'access',      def:'',          label:'Acces',      useSort:false },
   { id:'m-lang',        name:'lang',        def:'',          label:'Langue',     useSort:false },
-  { id:'m-date-range',  name:'date_range',  def:'',          label:'Période',    useSort:false },
+  { id:'m-date-range',  name:'date_range',  def:'',          label:'Periode',    useSort:false },
   { id:'m-sort',        name:'sort',        def:'date_desc', label:'Tri',        useSort:true  },
 ];
 
@@ -412,9 +628,9 @@ function mobileOnChange(name, mirrorEl) {
 
 function mobileStyleMirror(el, value, def) {
   if (value !== def) {
-    el.style.borderColor = '#4a90d9';
-    el.style.background  = '#f0f7ff';
-    el.style.color       = '#4a90d9';
+    el.style.borderColor = PH_TEAL;
+    el.style.background  = PH_TEAL_BG;
+    el.style.color       = PH_TEAL;
   } else {
     el.style.borderColor = '';
     el.style.background  = '';
@@ -435,9 +651,9 @@ function mobileRenderPills() {
     hasActive = true;
     const opt  = mirror.querySelector(`option[value="${mirror.value}"]`);
     const text = opt ? opt.textContent : mirror.value;
-    html += `<span style="display:inline-flex;align-items:center;gap:5px;border:0.5px solid #4a90d9;color:#4a90d9;background:#f0f7ff;border-radius:20px;padding:4px 11px;font-size:12px;">
+    html += `<span style="display:inline-flex;align-items:center;gap:5px;border:1.5px solid ${PH_TEAL};color:${PH_TEAL};background:${PH_TEAL_BG};border-radius:20px;padding:4px 11px;font-size:12px;">
       ${f.label}&nbsp;: ${text}
-      <span onclick="mobileRemovePill('${f.id}')" style="cursor:pointer;display:inline-flex;align-items:center;line-height:1;">
+      <span onclick="mobileRemovePill('${f.id}')" style="cursor:pointer;display:inline-flex;align-items:center;line-height:1;" aria-label="Retirer le filtre">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </span>
     </span>`;
@@ -460,8 +676,11 @@ function mobileRemovePill(mirrorId) {
 
 function mobileTogglePanel() {
   const panel = document.getElementById('m-panel');
+  const btn   = document.getElementById('m-add-btn');
   if (!panel) return;
-  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  const open = panel.style.display === 'none';
+  panel.style.display = open ? 'block' : 'none';
+  if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
 }
 
 function mobileResetFilters() {
@@ -480,55 +699,61 @@ if (window.innerWidth <= 767) {
     ? document.addEventListener('DOMContentLoaded', mobileInit)
     : mobileInit();
 }
-/* ── /Filtres mobile ── */
+/* /Mobile filters */
 
-/* Favoris AJAX */
+/* ── Favoris AJAX ── */
 document.querySelectorAll('.favorite-form')?.forEach(form => {
   form.addEventListener('submit', async (e) => {
     e.preventDefault(); e.stopPropagation();
-    const btn = form.querySelector('button'); const fd = new FormData(form);
+    const btn = form.querySelector('button');
+    const fd  = new FormData(form);
     btn.disabled = true;
-    try{
-      const res = await fetch(form.action, {method:'POST', body:fd, headers:{'Accept':'application/json'}});
-      const data = await res.json().catch(()=>({}));
-      btn.textContent = (res.ok && data.status==='ok') ? 'Enregistré' : 'Erreur';
-    }catch(_){ btn.textContent='Erreur réseau'; }
-    setTimeout(()=>{ btn.textContent='Favori'; btn.disabled=false; }, 1200);
-  }, {capture:true});
+    try {
+      const res  = await fetch(form.action, { method:'POST', body:fd, headers:{'Accept':'application/json'} });
+      const data = await res.json().catch(() => ({}));
+      btn.textContent = (res.ok && data.status === 'ok') ? 'Enregistre' : 'Erreur';
+    } catch(_) { btn.textContent = 'Erreur reseau'; }
+    setTimeout(() => { btn.textContent = '{{ t("btn.save") }}'; btn.disabled = false; }, 1400);
+  }, { capture:true });
 });
 
-function cap(s){ return s ? s.charAt(0).toUpperCase()+s.slice(1).toLowerCase() : s; }
-function formatAbstract(raw){
-  if(!raw) return "<p class='text-muted fst-italic'>Résumé non disponible.</p>";
-  try{
-    const html = raw.replace(/<\s*\/?\s*jats:/gi, m=>m.replace(/jats:/gi,''));
-    const div = document.createElement('div'); div.innerHTML = html;
+/* ── Format abstract ── */
+function cap(s){ return s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : s; }
+function formatAbstract(raw) {
+  if (!raw) return "<p class='text-muted fst-italic'>Resume non disponible.</p>";
+  try {
+    const html = raw.replace(/<\s*\/?\s*jats:/gi, m => m.replace(/jats:/gi,''));
+    const div  = document.createElement('div'); div.innerHTML = html;
     const secs = div.querySelectorAll('sec, section');
-    if(secs.length){
-      const out=[];
-      secs.forEach(sec=>{
-        const t = sec.querySelector('title')?.textContent?.trim();
+    if (secs.length) {
+      const out = [];
+      secs.forEach(sec => {
+        const t  = sec.querySelector('title')?.textContent?.trim();
         const ps = sec.querySelectorAll('p');
-        const txt = Array.from(ps).map(p=>p.textContent.trim()).join(' ');
-        if(t||txt) out.push(`<p><strong>${t ? (t.replace(/[:.]\s*$/,'') + '.</strong> ') : ''}${txt}</p>`);
+        const txt = Array.from(ps).map(p => p.textContent.trim()).join(' ');
+        if (t || txt) out.push(`<p><strong>${t ? (t.replace(/[:.]\s*$/,'') + '.</strong> ') : ''}${txt}</p>`);
       });
-      if(out.length) return out.join('');
+      if (out.length) return out.join('');
     }
     const ps = div.querySelectorAll('p');
-    if(ps.length) return Array.from(ps).map(p=>`<p>${p.textContent.trim()}</p>`).join('');
-  }catch(_){}
-  const strip = s => { try { const d=document.createElement('div'); d.innerHTML=s; return (d.textContent||d.innerText||'').replace(/\s+/g,' ').trim(); } catch { return String(s).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim(); } };
-  const text = strip(raw); if (!text) return "<p class='text-muted fst-italic'>Résumé non disponible.</p>";
+    if (ps.length) return Array.from(ps).map(p => `<p>${p.textContent.trim()}</p>`).join('');
+  } catch(_) {}
+  const strip = s => {
+    try { const d = document.createElement('div'); d.innerHTML = s; return (d.textContent || d.innerText || '').replace(/\s+/g,' ').trim(); }
+    catch { return String(s).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim(); }
+  };
+  const text = strip(raw);
+  if (!text) return "<p class='text-muted fst-italic'>Resume non disponible.</p>";
   const HEAD = ['abstract','background','purpose','objective','aim','aims','methods','materials and methods','patients and methods','method','results','findings','discussion','conclusion','conclusions','interpretation','clinical implications'];
-  const re = new RegExp(`(^|[.!?]\\s+)(${HEAD.join('|')})\\b`, 'gi');
-  const marker='§§§MARK§§§';
-  const marked = text.replace(re,(m,lead,head)=>`${lead}${marker}${head}`);
-  const chunks = marked.split(marker).map(s=>s.trim()).filter(Boolean);
-  if(chunks.length>1){
-    const out=[];
-    for(const ch of chunks){
+  const re   = new RegExp(`(^|[.!?]\\s+)(${HEAD.join('|')})\\b`, 'gi');
+  const marker = '§§MARK§§';
+  const marked = text.replace(re, (m, lead, head) => `${lead}${marker}${head}`);
+  const chunks = marked.split(marker).map(s => s.trim()).filter(Boolean);
+  if (chunks.length > 1) {
+    const out = [];
+    for (const ch of chunks) {
       const m = ch.match(new RegExp(`^(${HEAD.join('|')})\\b`,'i'));
-      if(m){ const title=cap(m[1]); const body=ch.slice(m[0].length).trim(); out.push(`<p><strong>${title}.</strong> ${body}</p>`); }
+      if (m) { const title = cap(m[1]); const body = ch.slice(m[0].length).trim(); out.push(`<p><strong>${title}.</strong> ${body}</p>`); }
       else out.push(`<p>${ch}</p>`);
     }
     return out.join('');
@@ -536,58 +761,76 @@ function formatAbstract(raw){
   return `<p>${text}</p>`;
 }
 
+/* ── Article modal ── */
 let articleModalInstance = null;
-async function openArticleModal(id){
-  try{
+async function openArticleModal(id) {
+  try {
     document.querySelectorAll('.modal-backdrop').forEach(bd => bd.remove());
-    const res = await fetch(`/api/article/${id}`); const data = await res.json();
-    document.getElementById('am-title').textContent = data.title || "Sans titre";
-    document.getElementById('am-authors').textContent = data.authors || "";
-    const setBadge=(id,val)=>{const el=document.getElementById(id); if(val){el.textContent=val; el.style.display='';} else el.style.display='none';};
-    setBadge('am-journal', data.journal);
-    setBadge('am-source', data.source ? `Source: ${data.source}` : "");
-    setBadge('am-domain', data.domain);
+    const res  = await fetch(`/api/article/${id}`);
+    const data = await res.json();
+    document.getElementById('am-title').textContent = data.title || 'Sans titre';
+    document.getElementById('am-authors').textContent = data.authors || '';
+    const setBadge = (id, val) => {
+      const el = document.getElementById(id);
+      if (val) { el.textContent = val; el.style.display = ''; }
+      else       el.style.display = 'none';
+    };
+    setBadge('am-journal',   data.journal);
+    setBadge('am-source',    data.source ? `Source: ${data.source}` : '');
+    setBadge('am-domain',    data.domain);
     setBadge('am-pathology', data.pathology);
     setBadge('am-studytype', data.study_type);
-    const fmt = iso => { if(!iso) return null; try{ const d=new Date(iso); return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'});}catch{return null;} };
-    document.getElementById('am-pubdate').textContent  = fmt(data.published_date) ? `${t_js('article.published')||'{{ t("article.published") }}'} ${fmt(data.published_date)}` : "";
-    document.getElementById('am-sitedate').textContent = fmt(data.published_at)   ? `Ajouté le ${fmt(data.published_at)}` : "";
-    document.getElementById('am-abstract').innerHTML = formatAbstract(data.abstract);
+    const fmt = iso => {
+      if (!iso) return null;
+      try { const d = new Date(iso); return d.toLocaleDateString('fr-FR', { day:'2-digit', month:'short', year:'numeric' }); }
+      catch { return null; }
+    };
+    document.getElementById('am-pubdate').textContent  = fmt(data.published_date) ? `${t_js('article.published') || '{{ t("article.published") }}'} ${fmt(data.published_date)}` : '';
+    document.getElementById('am-sitedate').textContent = fmt(data.published_at)   ? `Ajoute le ${fmt(data.published_at)}` : '';
+    document.getElementById('am-abstract').innerHTML   = formatAbstract(data.abstract);
     _injectModalTranslateBtn(data.abstract);
-    const urlBtn=document.getElementById('am-url'); if(data.url){urlBtn.href=data.url; urlBtn.style.display='';} else urlBtn.style.display='none';
-    const doiBtn=document.getElementById('am-doi'); if(data.doi){doiBtn.href=`https://doi.org/${data.doi}`; doiBtn.style.display='';} else doiBtn.style.display='none';
-    const bar=document.getElementById('am-rel-bar');
-    const level=document.getElementById('am-rel-level');
-    const score=document.getElementById('am-rel-score');
-    const reasons=document.getElementById('am-rel-reasons');
-    const sc=(data.reliability&&data.reliability.score)||0;
-    const lv=(data.reliability&&data.reliability.level)||"—";
-    const rs=(data.reliability&&data.reliability.reasons)||[];
+    const urlBtn = document.getElementById('am-url');
+    if (data.url) { urlBtn.href = data.url; urlBtn.style.display = ''; } else urlBtn.style.display = 'none';
+    const doiBtn = document.getElementById('am-doi');
+    if (data.doi) { doiBtn.href = `https://doi.org/${data.doi}`; doiBtn.style.display = ''; } else doiBtn.style.display = 'none';
+    const bar     = document.getElementById('am-rel-bar');
+    const level   = document.getElementById('am-rel-level');
+    const score   = document.getElementById('am-rel-score');
+    const reasons = document.getElementById('am-rel-reasons');
+    const sc = (data.reliability && data.reliability.score)   || 0;
+    const lv = (data.reliability && data.reliability.level)   || '—';
+    const rs = (data.reliability && data.reliability.reasons) || [];
     bar.style.width = `${sc}%`;
     bar.classList.remove('bg-danger','bg-warning','bg-success','bg-primary');
-    if(sc>=80) bar.classList.add('bg-success');
-    else if(sc>=60) bar.classList.add('bg-primary');
-    else if(sc>=40) bar.classList.add('bg-warning');
-    else bar.classList.add('bg-danger');
-    level.textContent=lv; score.textContent=`${sc}/100`;
-    reasons.innerHTML = rs.map(r=>`<li>${r}</li>`).join('') || '<li>Aucune raison listée</li>';
+    if      (sc >= 80) bar.classList.add('bg-success');
+    else if (sc >= 60) bar.classList.add('bg-primary');
+    else if (sc >= 40) bar.classList.add('bg-warning');
+    else               bar.classList.add('bg-danger');
+    level.textContent   = lv;
+    score.textContent   = `${sc}/100`;
+    reasons.innerHTML   = rs.map(r => `<li>${r}</li>`).join('') || '<li>Aucune raison listee</li>';
     const modalEl = document.getElementById('articleModal');
     if (!articleModalInstance) articleModalInstance = new bootstrap.Modal(modalEl);
     articleModalInstance.show();
-  }catch(e){ console.error(e); }
+  } catch(e) { console.error(e); }
 }
 
-document.querySelectorAll('.article-card[data-article-id]').forEach(card=>{
-  card.querySelectorAll('a,input,textarea,select,form').forEach(el=>{
-    el.addEventListener('click', e=>e.stopPropagation(), {capture:true});
+/* ── Card click / keyboard ── */
+document.querySelectorAll('.article-card[data-article-id]').forEach(card => {
+  card.querySelectorAll('a,input,textarea,select,form').forEach(el => {
+    el.addEventListener('click', e => e.stopPropagation(), { capture:true });
   });
-  card.addEventListener('click', ()=>{
-    const id=card.getAttribute('data-article-id'); if(id) openArticleModal(id);
+  card.addEventListener('click', () => {
+    const id = card.getAttribute('data-article-id');
+    if (id) openArticleModal(id);
   });
-  card.addEventListener('keydown', e=>{
-    if(e.key==='Enter'||e.key===' '){ e.preventDefault(); const id=card.getAttribute('data-article-id'); if(id) openArticleModal(id); }
+  card.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      const id = card.getAttribute('data-article-id');
+      if (id) openArticleModal(id);
+    }
   });
 });
-
 </script>
 {% endblock %}

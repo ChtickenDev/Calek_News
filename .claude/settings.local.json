@@ -14,7 +14,11 @@
       "Bash(ls -la /c/Users/baske/Desktop/Physara/*.py)",
       "Bash(grep -r \"zotero\" /c/Users/baske/Desktop/Physara/*.py)",
       "Bash(python3:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(gh api *)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(npx uipro-cli *)"
     ]
   }
 }
