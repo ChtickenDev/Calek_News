@@ -5095,6 +5095,20 @@ def drafts_load_pubmed():
     return redirect(url_for('my_drafts', q_pubmed=q_pubmed, page=page, sort=sort))
 
 # -----------------------------------------------------------------------------
+# Focus (Bonsaï Focus PWA)
+# -----------------------------------------------------------------------------
+from flask import send_from_directory as _send_from_directory
+
+@app.route('/focus')
+@app.route('/focus/')
+def focus_app():
+    return _send_from_directory('static/focus', 'index.html')
+
+@app.route('/focus/<path:filename>')
+def focus_static(filename):
+    return _send_from_directory('static/focus', filename)
+
+# -----------------------------------------------------------------------------
 # Boot
 # -----------------------------------------------------------------------------
 def init_db():

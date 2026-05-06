@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Bonsaï Focus</title>
+
+  <!-- PWA / iOS -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Bonsaï">
+  <meta name="theme-color" content="#3d6b4a">
+  <link rel="apple-touch-icon" href="/focus/icon-512.svg">
+  <link rel="manifest" href="/focus/manifest.json">
+
+  <style>
+    /* ── Reset & tokens ─────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #f7f3ed;
+      --bg2:       #ede8e0;
+      --surface:   #ffffff;
+      --border:    #d8d0c4;
+      --text:      #2c2416;
+      --text2:     #7a6a58;
+      --green:     #3d6b4a;
+      --green-l:   #5a9e6a;
+      --green-d:   #2d5038;
+      --brown:     #6b4226;
+      --gold:      #c8a050;
+      --danger:    #c94f2c;
+      --radius:    14px;
+      --shadow:    0 4px 24px rgba(44,36,22,.10);
+      --shadow-l:  0 2px 8px rgba(44,36,22,.06);
+      --font:      'Georgia', serif;
+      --font-ui:   -apple-system, 'Helvetica Neue', sans-serif;
+      --safe-top:    env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    html, body {
+      height: 100%; overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-ui);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Screens ────────────────────────────────────────────────── */
+    .screen {
+      position: fixed; inset: 0;
+      display: flex; flex-direction: column;
+      opacity: 0; pointer-events: none;
+      transition: opacity .28s ease;
+      padding-top: var(--safe-top);
+      padding-bottom: var(--safe-bottom);
+      overflow: hidden;
+    }
+    .screen.active { opacity: 1; pointer-events: all; }
+
+    /* ── Typography ─────────────────────────────────────────────── */
+    h1 { font-family: var(--font); font-weight: normal; font-size: 1.7rem; color: var(--text); }
+    h2 { font-family: var(--font); font-weight: normal; font-size: 1.3rem; }
+
+    /* ── Buttons ────────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      border: none; border-radius: 999px; cursor: pointer;
+      font-family: var(--font-ui); font-size: .9rem; font-weight: 500;
+      padding: 10px 22px; transition: all .18s ease;
+    }
+    .btn-primary   { background: var(--green); color: #fff; }
+    .btn-primary:hover { background: var(--green-d); }
+    .btn-ghost     { background: transparent; color: var(--text2); border: 1.5px solid var(--border); }
+    .btn-ghost:hover { border-color: var(--green); color: var(--green); }
+    .btn-danger    { background: var(--danger); color: #fff; }
+    .btn-sm        { padding: 6px 14px; font-size: .8rem; }
+    .btn-icon      { width: 36px; height: 36px; padding: 0; border-radius: 50%; background: var(--bg2);
+                     border: none; cursor: pointer; font-size: 1rem; transition: all .15s ease; }
+    .btn-icon:hover { background: var(--border); transform: scale(1.08); }
+    .btn-icon.active { background: var(--green); color: #fff; }
+
+    /* ── ─────────────── FOREST SCREEN ─────────────────────────── */
+    #screen-forest {
+      background: var(--bg);
+    }
+    .forest-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 20px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .forest-header h1 { font-size: 1.4rem; }
+    .forest-actions { display: flex; gap: 8px; }
+
+    #forest-grid {
+      flex: 1; overflow-y: auto; padding: 16px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 14px;
+      align-content: start;
+    }
+    .tree-card {
+      background: var(--surface); border-radius: var(--radius);
+      box-shadow: var(--shadow-l); overflow: hidden;
+      cursor: pointer; transition: transform .18s ease, box-shadow .18s ease;
+      position: relative;
+    }
+    .tree-card:hover { transform: translateY(-3px); box-shadow: var(--shadow); }
+
+    .tree-thumb {
+      width: 100%; aspect-ratio: 1;
+      display: block; background: var(--bg);
+    }
+    .tree-card-info {
+      padding: 8px 10px;
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .tree-style { font-size: .8rem; font-weight: 600; color: var(--green); font-family: var(--font); font-style: italic; }
+    .tree-date  { font-size: .72rem; color: var(--text2); }
+    .tree-grown { font-size: .72rem; color: var(--text2); }
+
+    .tree-card-actions {
+      position: absolute; top: 6px; right: 6px;
+      display: flex; gap: 4px;
+      opacity: 0; transition: opacity .15s;
+    }
+    .tree-card:hover .tree-card-actions { opacity: 1; }
+    .btn-workshop, .btn-delete {
+      width: 28px; height: 28px; border-radius: 50%;
+      border: none; cursor: pointer; font-size: .85rem;
+      background: rgba(255,255,255,.9);
+      backdrop-filter: blur(4px);
+      transition: background .15s;
+    }
+    .btn-workshop:hover { background: var(--green-l); }
+    .btn-delete:hover   { background: var(--danger); }
+
+    #forest-empty {
+      flex: 1; display: none; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 16px; padding: 40px; text-align: center;
+      color: var(--text2);
+    }
+    .empty-icon { font-size: 4rem; opacity: .35; }
+    .empty-msg  { font-family: var(--font); font-size: 1.1rem; color: var(--text2); }
+
+    /* ── ─────────────── DURATION MODAL ─────────────────────────── */
+    #modal-duration {
+      position: fixed; inset: 0; z-index: 100;
+      background: rgba(44,36,22,.45);
+      backdrop-filter: blur(6px);
+      display: flex; align-items: flex-end; justify-content: center;
+      opacity: 0; pointer-events: none; transition: opacity .22s ease;
+    }
+    #modal-duration.show { opacity: 1; pointer-events: all; }
+    .modal-sheet {
+      background: var(--surface); width: 100%; max-width: 480px;
+      border-radius: var(--radius) var(--radius) 0 0;
+      padding: 28px 24px calc(28px + var(--safe-bottom));
+    }
+    .modal-handle {
+      width: 40px; height: 4px; background: var(--border);
+      border-radius: 2px; margin: 0 auto 20px;
+    }
+    .modal-sheet h2 { text-align: center; margin-bottom: 20px; font-size: 1.1rem; }
+    .duration-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px;
+    }
+    .duration-btn {
+      background: var(--bg2); border: 2px solid transparent;
+      border-radius: 10px; padding: 18px 8px;
+      cursor: pointer; text-align: center;
+      font-family: var(--font); transition: all .15s ease;
+    }
+    .duration-btn:hover { border-color: var(--green); background: var(--bg); }
+    .duration-btn .dur-num { display: block; font-size: 1.5rem; color: var(--text); }
+    .duration-btn .dur-label { display: block; font-size: .75rem; color: var(--text2); margin-top: 2px; }
+    .duration-btn[data-min="25"] .dur-num::after { content: ''; }
+
+    /* ── ─────────────── SESSION SCREEN ─────────────────────────── */
+    #screen-session {
+      background: #0f1a10;
+    }
+    #canvas-session {
+      flex: 1; width: 100%; display: block;
+    }
+    .session-overlay {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      display: flex; flex-direction: column; align-items: center;
+      padding-bottom: calc(24px + var(--safe-bottom));
+      pointer-events: none;
+    }
+    #session-timer {
+      font-family: var(--font);
+      font-size: 3.5rem;
+      color: rgba(232,224,212,.85);
+      letter-spacing: .04em;
+      text-shadow: 0 2px 16px rgba(0,0,0,.5);
+    }
+    #session-duration-label {
+      font-size: .8rem;
+      color: rgba(232,224,212,.4);
+      margin-top: 2px;
+    }
+    #session-wave {
+      width: 100%; height: 2px;
+      background: linear-gradient(90deg, transparent, rgba(90,158,106,.6), transparent);
+      margin: 12px 0 16px;
+      transition: transform .5s ease;
+      transform-origin: center;
+    }
+    #btn-abandon {
+      pointer-events: all;
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.12);
+      color: rgba(232,224,212,.4);
+      border-radius: 999px;
+      padding: 8px 20px;
+      font-size: .78rem;
+      cursor: pointer;
+      transition: all .2s;
+    }
+    #btn-abandon:hover {
+      background: rgba(201,79,44,.2);
+      border-color: rgba(201,79,44,.4);
+      color: rgba(232,224,212,.8);
+    }
+
+    /* ── ─────────────── END SCREEN ─────────────────────────────── */
+    #screen-end {
+      background: var(--bg);
+    }
+    .end-header {
+      padding: 20px 20px 0;
+      text-align: center;
+    }
+    .end-header h1 { margin-bottom: 4px; }
+    .end-sub { color: var(--text2); font-size: .9rem; }
+    #canvas-end {
+      flex: 1; width: 100%; display: block;
+    }
+    .end-stats {
+      display: flex; gap: 24px; justify-content: center;
+      padding: 12px 0;
+    }
+    .end-stat { text-align: center; }
+    .end-stat strong { display: block; font-size: 1.4rem; font-family: var(--font); color: var(--green); }
+    .end-stat span   { font-size: .72rem; color: var(--text2); }
+    .end-actions {
+      display: flex; gap: 10px; justify-content: center;
+      padding: 12px 20px calc(16px + var(--safe-bottom));
+    }
+
+    /* ── ─────────────── WORKSHOP SCREEN ────────────────────────── */
+    #screen-workshop {
+      background: var(--bg);
+    }
+    .workshop-header {
+      display: flex; align-items: center; gap: 12px;
+      padding: 16px 16px 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .workshop-title { flex: 1; }
+    .workshop-title h2 { font-size: 1.1rem; }
+    .workshop-title span { font-size: .78rem; color: var(--text2); font-style: italic; }
+    #canvas-workshop {
+      flex: 1; width: 100%; display: block;
+      cursor: default;
+    }
+    .workshop-toolbar {
+      display: flex; gap: 10px; align-items: center;
+      padding: 10px 16px calc(12px + var(--safe-bottom));
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      overflow-x: auto;
+      flex-wrap: wrap;
+    }
+    .toolbar-group {
+      display: flex; gap: 6px; align-items: center;
+    }
+    .toolbar-label { font-size: .72rem; color: var(--text2); white-space: nowrap; }
+    .pot-btn {
+      width: 36px; height: 36px; border-radius: 8px;
+      border: 2px solid transparent; cursor: pointer;
+      transition: all .15s; font-size: 1.1rem;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .pot-btn.active { border-color: var(--green); }
+    .pot-btn[data-pot="classic"]  { background: #8b5e3c; }
+    .pot-btn[data-pot="ceramic"]  { background: #c8b89a; }
+    .pot-btn[data-pot="dark"]     { background: #3a3028; }
+    .pot-btn[data-pot="blue"]     { background: #4a6fa5; }
+
+    /* ── ─────────────── STATS SCREEN ───────────────────────────── */
+    #screen-stats {
+      background: var(--bg);
+    }
+    .stats-header {
+      display: flex; align-items: center; gap: 12px;
+      padding: 16px 16px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .stats-content { flex: 1; overflow-y: auto; padding: 20px; }
+    .stats-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 12px; margin-bottom: 28px;
+    }
+    .stat-card {
+      background: var(--surface); border-radius: var(--radius);
+      padding: 16px; text-align: center;
+      box-shadow: var(--shadow-l);
+    }
+    .stat-card strong { display: block; font-size: 1.8rem; font-family: var(--font); color: var(--green); }
+    .stat-card span   { font-size: .72rem; color: var(--text2); }
+
+    .cal-title { font-size: .82rem; color: var(--text2); margin-bottom: 10px; font-weight: 600; }
+    #stats-calendar {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 3px;
+    }
+    .cal-day {
+      aspect-ratio: 1; border-radius: 2px;
+    }
+    .cal-day.level-0 { background: var(--bg2); }
+    .cal-day.level-1 { background: #b5d9c0; }
+    .cal-day.level-2 { background: #7bc47f; }
+    .cal-day.level-3 { background: #4a7c59; }
+    .cal-day.level-4 { background: var(--green-d); }
+
+    /* ── Scrollbar ───────────────────────────────────────────────── */
+    * { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* ── Session overlay positioning ────────────────────────────── */
+    #screen-session { position: relative; }
+    .session-overlay {
+      position: absolute;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════ FOREST ══════════════════════════════ -->
+<div id="screen-forest" class="screen">
+  <div class="forest-header">
+    <h1>Ma Foret</h1>
+    <div class="forest-actions">
+      <button class="btn btn-ghost btn-sm" id="btn-stats">Stats</button>
+      <button class="btn btn-primary" id="btn-new-session">+ Nouvelle session</button>
+    </div>
+  </div>
+  <div id="forest-grid"></div>
+  <div id="forest-empty">
+    <div class="empty-icon">🌱</div>
+    <p class="empty-msg">Votre foret est vide.<br>Demarrez une session pour planter votre premier bonsai.</p>
+    <button class="btn btn-primary" id="btn-new-session-empty">Commencer</button>
+  </div>
+</div>
+
+<!-- ════════════════════════ DURATION MODAL ══════════════════════════ -->
+<div id="modal-duration">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <h2>Duree de la session</h2>
+    <div class="duration-grid">
+      <button class="duration-btn" data-min="25">
+        <span class="dur-num">25</span><span class="dur-label">minutes</span>
+      </button>
+      <button class="duration-btn" data-min="45">
+        <span class="dur-num">45</span><span class="dur-label">minutes</span>
+      </button>
+      <button class="duration-btn" data-min="60">
+        <span class="dur-num">60</span><span class="dur-label">minutes</span>
+      </button>
+      <button class="duration-btn" data-min="90">
+        <span class="dur-num">90</span><span class="dur-label">minutes</span>
+      </button>
+      <button class="duration-btn" data-min="120">
+        <span class="dur-num">120</span><span class="dur-label">minutes</span>
+      </button>
+    </div>
+    <button class="btn btn-ghost" style="width:100%" id="modal-close">Annuler</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ SESSION ══════════════════════════════ -->
+<div id="screen-session" class="screen">
+  <canvas id="canvas-session"></canvas>
+  <div class="session-overlay">
+    <div id="session-timer">00:00</div>
+    <div id="session-duration-label">25 min</div>
+    <div id="session-wave"></div>
+    <button id="btn-abandon">Abandonner</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ END ══════════════════════════════════ -->
+<div id="screen-end" class="screen">
+  <div class="end-header">
+    <h1>Session terminee</h1>
+    <p class="end-sub">Votre bonsai a pousse</p>
+  </div>
+  <canvas id="canvas-end"></canvas>
+  <div class="end-stats">
+    <div class="end-stat">
+      <strong id="end-streak">0</strong>
+      <span>jours de suite</span>
+    </div>
+    <div class="end-stat">
+      <strong id="end-total">0</strong>
+      <span>sessions au total</span>
+    </div>
+  </div>
+  <div class="end-actions">
+    <button class="btn btn-ghost" id="btn-goto-forest">Retour a la foret</button>
+    <button class="btn btn-primary" id="btn-goto-workshop-end">Soigner l'arbre</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ WORKSHOP ══════════════════════════════ -->
+<div id="screen-workshop" class="screen">
+  <div class="workshop-header">
+    <button class="btn-icon" id="btn-workshop-back">←</button>
+    <div class="workshop-title">
+      <h2>Atelier</h2>
+      <span id="workshop-style-label">Moyogi</span>
+    </div>
+    <button class="btn-icon" id="prune-mode-btn" title="Mode taille">✂</button>
+  </div>
+  <canvas id="canvas-workshop"></canvas>
+  <div class="workshop-toolbar">
+    <div class="toolbar-group">
+      <span class="toolbar-label">Pot</span>
+      <button class="pot-btn active" data-pot="classic" title="Classique"></button>
+      <button class="pot-btn" data-pot="ceramic" title="Ceramique"></button>
+      <button class="pot-btn" data-pot="dark" title="Sombre"></button>
+      <button class="pot-btn" data-pot="blue" title="Bleu"></button>
+    </div>
+    <div class="toolbar-group" style="margin-left:auto">
+      <span class="toolbar-label" style="color:var(--green)">Cliquez une branche en mode ✂ pour tailler</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ STATS ════════════════════════════════ -->
+<div id="screen-stats" class="screen">
+  <div class="stats-header">
+    <button class="btn-icon" id="btn-stats-back">←</button>
+    <h2>Statistiques</h2>
+  </div>
+  <div class="stats-content">
+    <div class="stats-grid">
+      <div class="stat-card">
+        <strong id="stats-sessions">0</strong>
+        <span>sessions</span>
+      </div>
+      <div class="stat-card">
+        <strong id="stats-minutes">0</strong>
+        <span>minutes</span>
+      </div>
+      <div class="stat-card">
+        <strong id="stats-streak">0</strong>
+        <span>jours de suite</span>
+      </div>
+    </div>
+    <p class="cal-title">Activite (12 semaines)</p>
+    <div id="stats-calendar"></div>
+  </div>
+</div>
+
+<script type="module" src="/focus/app.js"></script>
+<script>
+  // Wire empty-state CTA (not in module scope)
+  document.addEventListener('DOMContentLoaded', () => {
+    const emptyBtn = document.getElementById('btn-new-session-empty');
+    if (emptyBtn) emptyBtn.addEventListener('click', () => {
+      document.getElementById('modal-duration').classList.add('show');
+    });
+  });
+</script>
+</body>
+</html>
