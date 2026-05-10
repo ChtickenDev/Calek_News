@@ -5095,6 +5095,279 @@ def drafts_load_pubmed():
     return redirect(url_for('my_drafts', q_pubmed=q_pubmed, page=page, sort=sort))
 
 # -----------------------------------------------------------------------------
+# Darts — schema, models, routes
+# -----------------------------------------------------------------------------
+
+def ensure_dartgame_schema():
+    with db.engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS dart_local_player (
+                id SERIAL PRIMARY KEY,
+                owner_user_id INTEGER NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+                name VARCHAR(120) NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS dart_game (
+                id SERIAL PRIMARY KEY,
+                date TIMESTAMP DEFAULT NOW(),
+                mode VARCHAR(20) NOT NULL,
+                duration INTEGER,
+                players_json TEXT,
+                winner_name VARCHAR(120)
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS dart_player_stat (
+                id SERIAL PRIMARY KEY,
+                game_id INTEGER REFERENCES dart_game(id) ON DELETE CASCADE,
+                user_id INTEGER REFERENCES "user"(id) ON DELETE SET NULL,
+                local_player_id INTEGER REFERENCES dart_local_player(id) ON DELETE SET NULL,
+                player_name VARCHAR(120),
+                mode VARCHAR(20),
+                games_played INTEGER DEFAULT 0,
+                games_won INTEGER DEFAULT 0,
+                avg_score_per_turn FLOAT DEFAULT 0,
+                best_turn INTEGER DEFAULT 0,
+                count_180 INTEGER DEFAULT 0,
+                count_140 INTEGER DEFAULT 0,
+                count_100 INTEGER DEFAULT 0,
+                count_60 INTEGER DEFAULT 0,
+                max_checkout INTEGER DEFAULT 0,
+                min_darts_to_finish INTEGER DEFAULT 0,
+                pct_single FLOAT DEFAULT 0,
+                pct_double FLOAT DEFAULT 0,
+                pct_triple FLOAT DEFAULT 0,
+                pct_miss FLOAT DEFAULT 0,
+                hit_map_json TEXT
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS dart_resume (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES "user"(id) ON DELETE CASCADE UNIQUE,
+                state_json TEXT,
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        conn.commit()
+
+
+@app.route('/darts')
+@app.route('/darts/')
+def darts_app():
+    return render_template('darts.html')
+
+
+@app.route('/darts/local_players', methods=['GET'])
+def darts_local_players_get():
+    if not current_user.is_authenticated:
+        return jsonify({'players': []})
+    rows = db.session.execute(
+        text('SELECT id, name FROM dart_local_player WHERE owner_user_id=:uid ORDER BY created_at DESC'),
+        {'uid': current_user.id}
+    ).mappings().all()
+    return jsonify({'players': [{'id': r['id'], 'name': r['name']} for r in rows]})
+
+
+@app.route('/darts/local_players', methods=['POST'])
+def darts_local_players_post():
+    if not current_user.is_authenticated:
+        return jsonify({'error': 'not logged in'}), 401
+    data = request.get_json(silent=True) or {}
+    name = (data.get('name') or '').strip()[:120]
+    if not name:
+        return jsonify({'error': 'empty name'}), 400
+    existing = db.session.execute(
+        text('SELECT id FROM dart_local_player WHERE owner_user_id=:uid AND name=:n'),
+        {'uid': current_user.id, 'n': name}
+    ).fetchone()
+    if existing:
+        return jsonify({'id': existing[0], 'name': name})
+    result = db.session.execute(
+        text('INSERT INTO dart_local_player (owner_user_id, name) VALUES (:uid, :n) RETURNING id'),
+        {'uid': current_user.id, 'n': name}
+    )
+    db.session.commit()
+    new_id = result.fetchone()[0]
+    return jsonify({'id': new_id, 'name': name})
+
+
+@app.route('/darts/save_resume', methods=['POST'])
+def darts_save_resume():
+    if not current_user.is_authenticated:
+        return jsonify({'ok': True})
+    data = request.get_json(silent=True) or {}
+    state = data.get('state')
+    state_json = json.dumps(state) if state is not None else None
+    existing = db.session.execute(
+        text('SELECT id FROM dart_resume WHERE user_id=:uid'),
+        {'uid': current_user.id}
+    ).fetchone()
+    if existing:
+        if state_json is None:
+            db.session.execute(
+                text('DELETE FROM dart_resume WHERE user_id=:uid'),
+                {'uid': current_user.id}
+            )
+        else:
+            db.session.execute(
+                text('UPDATE dart_resume SET state_json=:s, updated_at=NOW() WHERE user_id=:uid'),
+                {'s': state_json, 'uid': current_user.id}
+            )
+    elif state_json is not None:
+        db.session.execute(
+            text('INSERT INTO dart_resume (user_id, state_json) VALUES (:uid, :s)'),
+            {'uid': current_user.id, 's': state_json}
+        )
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+@app.route('/darts/resume', methods=['GET'])
+def darts_resume():
+    if not current_user.is_authenticated:
+        return jsonify({'state': None})
+    row = db.session.execute(
+        text('SELECT state_json FROM dart_resume WHERE user_id=:uid'),
+        {'uid': current_user.id}
+    ).fetchone()
+    if not row or not row[0]:
+        return jsonify({'state': None})
+    try:
+        state = json.loads(row[0])
+    except Exception:
+        state = None
+    return jsonify({'state': state})
+
+
+@app.route('/darts/save_game', methods=['POST'])
+def darts_save_game():
+    data = request.get_json(silent=True) or {}
+    mode = data.get('mode', '501')[:20]
+    duration = int(data.get('duration') or 0)
+    players = data.get('players') or []
+    winner = next((p for p in players if p.get('games_won', 0) > 0), None)
+    winner_name = winner.get('name', '') if winner else ''
+
+    result = db.session.execute(
+        text('INSERT INTO dart_game (mode, duration, players_json, winner_name) VALUES (:m,:d,:p,:w) RETURNING id'),
+        {'m': mode, 'd': duration, 'p': json.dumps(players), 'w': winner_name}
+    )
+    game_id = result.fetchone()[0]
+
+    for p in players:
+        user_id = p.get('userId')
+        local_player_id = p.get('localPlayerId')
+        db.session.execute(text("""
+            INSERT INTO dart_player_stat
+              (game_id, user_id, local_player_id, player_name, mode,
+               games_played, games_won, avg_score_per_turn, best_turn,
+               count_180, count_140, count_100, count_60,
+               max_checkout, min_darts_to_finish,
+               pct_single, pct_double, pct_triple, pct_miss, hit_map_json)
+            VALUES
+              (:gid,:uid,:lpid,:name,:mode,
+               :gp,:gw,:avg,:best,
+               :c180,:c140,:c100,:c60,
+               :mco,:mdf,
+               :ps,:pd,:pt,:pm,:hm)
+        """), {
+            'gid': game_id,
+            'uid': user_id,
+            'lpid': local_player_id,
+            'name': (p.get('name') or '')[:120],
+            'mode': mode,
+            'gp': int(p.get('games_played') or 1),
+            'gw': int(p.get('games_won') or 0),
+            'avg': float(p.get('avg_score_per_turn') or 0),
+            'best': int(p.get('best_turn') or 0),
+            'c180': int(p.get('count_180') or 0),
+            'c140': int(p.get('count_140') or 0),
+            'c100': int(p.get('count_100') or 0),
+            'c60': int(p.get('count_60') or 0),
+            'mco': int(p.get('max_checkout') or 0),
+            'mdf': int(p.get('min_darts_to_finish') or 0),
+            'ps': float(p.get('pct_single') or 0),
+            'pd': float(p.get('pct_double') or 0),
+            'pt': float(p.get('pct_triple') or 0),
+            'pm': float(p.get('pct_miss') or 0),
+            'hm': json.dumps(p.get('hit_map') or {}),
+        })
+
+    db.session.commit()
+    return jsonify({'ok': True, 'game_id': game_id})
+
+
+@app.route('/darts/stats', methods=['GET'])
+def darts_stats():
+    if not current_user.is_authenticated:
+        return jsonify({'players': [], 'stats': []})
+
+    # connected user
+    players = [{'id': f'u{current_user.id}', 'name': current_user.name or current_user.email}]
+
+    # local players
+    lp_rows = db.session.execute(
+        text('SELECT id, name FROM dart_local_player WHERE owner_user_id=:uid ORDER BY name'),
+        {'uid': current_user.id}
+    ).mappings().all()
+    for lp in lp_rows:
+        players.append({'id': f'lp{lp["id"]}', 'name': lp['name']})
+
+    # stats for user
+    stat_rows = db.session.execute(
+        text("""
+            SELECT dps.*, dg.mode as game_mode
+            FROM dart_player_stat dps
+            JOIN dart_game dg ON dg.id = dps.game_id
+            WHERE dps.user_id = :uid
+        """),
+        {'uid': current_user.id}
+    ).mappings().all()
+
+    stats = []
+    for r in stat_rows:
+        stats.append({
+            'player_id': f'u{current_user.id}',
+            'mode': r['mode'],
+            'games_played': r['games_played'],
+            'games_won': r['games_won'],
+            'avg_score_per_turn': r['avg_score_per_turn'],
+            'best_turn': r['best_turn'],
+            'count_180': r['count_180'],
+            'max_checkout': r['max_checkout'],
+            'hit_map': json.loads(r['hit_map_json'] or '{}'),
+        })
+
+    # stats for local players
+    for lp in lp_rows:
+        lp_stat_rows = db.session.execute(
+            text("""
+                SELECT dps.*
+                FROM dart_player_stat dps
+                WHERE dps.local_player_id = :lpid
+            """),
+            {'lpid': lp['id']}
+        ).mappings().all()
+        for r in lp_stat_rows:
+            stats.append({
+                'player_id': f'lp{lp["id"]}',
+                'mode': r['mode'],
+                'games_played': r['games_played'],
+                'games_won': r['games_won'],
+                'avg_score_per_turn': r['avg_score_per_turn'],
+                'best_turn': r['best_turn'],
+                'count_180': r['count_180'],
+                'max_checkout': r['max_checkout'],
+                'hit_map': json.loads(r['hit_map_json'] or '{}'),
+            })
+
+    return jsonify({'players': players, 'stats': stats})
+
+
+# -----------------------------------------------------------------------------
 # Focus (Bonsaï Focus PWA)
 # -----------------------------------------------------------------------------
 from flask import send_from_directory as _send_from_directory
@@ -5114,6 +5387,7 @@ def focus_static(filename):
 def init_db():
     db.create_all()
     ensure_article_columns()
+    ensure_dartgame_schema()
 
 @app.cli.command("make-admin")
 def make_admin():
@@ -5137,6 +5411,7 @@ if __name__ == "__main__":
         ensure_google_schema()
         ensure_trusted_device_schema()
         ensure_follow_visibility_schema()
+        ensure_dartgame_schema()
         ensure_article_pmid_schema()
         ensure_push_subscription_schema()
         db.session.execute(text("UPDATE article SET featured=0 WHERE featured IS NULL"))

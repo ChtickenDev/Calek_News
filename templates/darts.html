@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Darts — Physara</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/darts.css') }}" rel="stylesheet">
+</head>
+<body>
+
+<!-- Logged-in user data for JS -->
+{% if current_user.is_authenticated %}
+<script type="application/json" id="user-data">{"id":{{ current_user.id }},"name":{{ current_user.name | tojson }}}</script>
+{% endif %}
+
+<!-- Back arrow -->
+<a href="/" class="darts-back" title="Retour">&#8592;</a>
+
+<!-- Confetti canvas (winner screen) -->
+<canvas id="confetti-canvas"></canvas>
+
+<!-- ════════════════════════════════════════════════════════════
+     SETUP PAGE
+════════════════════════════════════════════════════════════ -->
+<div id="setup-page" class="darts-page active" style="flex-direction:column">
+  <div style="max-width:520px;margin:0 auto;padding:60px 16px 48px;display:flex;flex-direction:column;gap:22px;width:100%">
+
+    <div class="setup-logo">DART<span>S</span></div>
+
+    <!-- Resume banner (injected by JS) -->
+    <div id="resume-banner" class="resume-banner" style="display:none">
+      <div class="resume-banner-info">
+        <div class="resume-banner-title">Partie en cours</div>
+        <div></div>
+      </div>
+      <button class="btn-secondary-darts resume-btn">Reprendre</button>
+    </div>
+
+    <!-- Mode -->
+    <div class="setup-section">
+      <div class="setup-label">Mode de jeu</div>
+      <div class="pill-group" id="mode-pills"></div>
+      <div id="custom-score-wrap" style="display:none;gap:8px;align-items:center">
+        <input type="number" id="custom-score-val" class="darts-input" placeholder="Score personnalise" min="2" max="9999" style="max-width:200px">
+      </div>
+    </div>
+
+    <!-- Finish rule -->
+    <div class="setup-section" id="finish-wrap">
+      <div class="setup-label">Fin de partie</div>
+      <div class="pill-group" id="finish-pills"></div>
+    </div>
+
+    <!-- Options -->
+    <div class="setup-section" id="options-wrap">
+      <div class="setup-label">Options</div>
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">Double In</div>
+          <div class="toggle-sub">Commencer sur un double obligatoire</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="double-in-chk">
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Players -->
+    <div class="setup-section">
+      <div class="setup-label">Joueurs <span id="player-count-label" style="color:var(--text-muted)">(0/8)</span></div>
+      <div class="player-list" id="player-list"></div>
+
+      <!-- Add player -->
+      <div class="add-player-type" style="margin-top:8px">
+        {% if current_user.is_authenticated %}
+        <button class="btn-secondary-darts" onclick="showAddPlayerType('user')">+ Moi</button>
+        {% endif %}
+        <button class="btn-secondary-darts" onclick="showAddPlayerType('guest')">+ Invité</button>
+        <button class="btn-secondary-darts" onclick="showAddPlayerType('robot')">+ Robot</button>
+      </div>
+
+      <!-- Add Physara user form -->
+      <div class="add-player-form" id="add-form-user" style="margin-top:8px">
+        {% if current_user.is_authenticated %}
+        <button class="btn-primary-darts" style="font-size:15px;padding:10px" onclick="addPhysaraPlayer()">
+          Ajouter {{ current_user.name }}
+        </button>
+        {% endif %}
+      </div>
+
+      <!-- Add guest form -->
+      <div class="add-player-form" id="add-form-guest" style="margin-top:8px">
+        {% if current_user.is_authenticated %}
+        <select class="darts-select" id="local-player-select" style="width:100%">
+          <option value="">-- Invites precedents --</option>
+        </select>
+        {% endif %}
+        <input type="text" id="guest-name-input" class="darts-input" placeholder="Nom de l'invite">
+        <button class="btn-primary-darts" style="font-size:15px;padding:10px" onclick="addGuestPlayer()">Ajouter</button>
+      </div>
+
+      <!-- Add robot form -->
+      <div class="add-player-form" id="add-form-robot" style="margin-top:8px">
+        <button class="btn-primary-darts" style="font-size:15px;padding:10px" onclick="addRobotPlayer()">Ajouter un robot</button>
+      </div>
+    </div>
+
+    <!-- Stats link -->
+    <button class="btn-secondary-darts" onclick="showPage('stats-page');loadStats()">
+      Voir mes statistiques
+    </button>
+
+    <!-- Start -->
+    <button class="btn-primary-darts" onclick="startGame()">Lancer la partie</button>
+
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════
+     GAME PAGE
+════════════════════════════════════════════════════════════ -->
+<div id="game-page" class="darts-page" style="flex-direction:column">
+
+  <!-- Numeric scoreboard -->
+  <div id="numeric-scoreboard" class="scoreboard"></div>
+
+  <!-- Cricket scoreboard -->
+  <div id="cricket-scoreboard" class="cricket-board" style="display:none"></div>
+
+  <!-- ATC scoreboard -->
+  <div id="atc-scoreboard" class="atc-board" style="display:none"></div>
+
+  <!-- Turn header -->
+  <div class="turn-header">
+    <span class="turn-player-name" id="turn-player">—</span>
+    <span class="turn-total" id="turn-total"></span>
+  </div>
+
+  <!-- Dart slots -->
+  <div class="dart-slots">
+    <div class="dart-slot" id="dart-slot-0">
+      <span class="dart-slot-label">D1</span>
+      <span class="dart-val">—</span>
+      <span class="dart-pts" style="font-size:11px;color:var(--text-muted);position:absolute;bottom:4px;right:6px"></span>
+    </div>
+    <div class="dart-slot" id="dart-slot-1">
+      <span class="dart-slot-label">D2</span>
+      <span class="dart-val">—</span>
+      <span class="dart-pts" style="font-size:11px;color:var(--text-muted);position:absolute;bottom:4px;right:6px"></span>
+    </div>
+    <div class="dart-slot" id="dart-slot-2">
+      <span class="dart-slot-label">D3</span>
+      <span class="dart-val">—</span>
+      <span class="dart-pts" style="font-size:11px;color:var(--text-muted);position:absolute;bottom:4px;right:6px"></span>
+    </div>
+  </div>
+
+  <!-- Checkout hint -->
+  <div class="checkout-hint" id="checkout-hint"></div>
+
+  <!-- Input mode toggle -->
+  <div class="input-mode-toggle">
+    <button class="mode-tab active" data-mode="keypad">Clavier</button>
+    <button class="mode-tab" data-mode="board">Cible</button>
+  </div>
+
+  <!-- ── Keypad input ── -->
+  <div id="keypad-input" style="flex:1;display:flex;flex-direction:column;padding:0 8px 8px;gap:6px;overflow:hidden">
+
+    <!-- Multiplier -->
+    <div class="multiplier-row">
+      <button class="mult-btn active" data-mult="1">Single</button>
+      <button class="mult-btn" data-mult="2">Double</button>
+      <button class="mult-btn" data-mult="3">Triple</button>
+    </div>
+
+    <!-- Number grid -->
+    <div class="num-grid" style="flex:1">
+      <button class="num-btn miss-btn" onclick="registerDart(0,1)">Miss</button>
+      {% for n in range(1, 21) %}
+      <button class="num-btn" onclick="registerDart({{ n }}, selectedMult)">{{ n }}</button>
+      {% endfor %}
+      <button class="num-btn bull-btn" onclick="registerDart(25, Math.min(selectedMult,2))">25</button>
+      <button class="num-btn bullseye-btn" onclick="registerDart(50, 1)">Bull</button>
+    </div>
+
+  </div>
+
+  <!-- ── SVG Dartboard input ── -->
+  <div id="board-input" style="flex:1;display:none;align-items:center;justify-content:center;padding:4px">
+    <div class="board-wrap">
+      <svg id="dartboard-svg" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"></svg>
+    </div>
+  </div>
+
+  <!-- Action bar -->
+  <div class="action-bar">
+    <button class="undo-btn" onclick="undoDart()" title="Annuler">&#8617;</button>
+    <button class="validate-btn" id="validate-btn" onclick="validateTurn()" disabled>
+      Valider le tour
+    </button>
+  </div>
+
+</div>
+
+<!-- ════════════════════════════════════════════════════════════
+     WINNER PAGE
+════════════════════════════════════════════════════════════ -->
+<div id="winner-page" class="darts-page" style="flex-direction:column;align-items:center;justify-content:center;padding:32px 16px;text-align:center;gap:20px">
+  <div class="winner-trophy">🎯</div>
+  <div>
+    <div class="winner-title" id="winner-name">—</div>
+    <div class="winner-subtitle">remporte la partie !</div>
+  </div>
+  <div class="winner-stats-grid">
+    <div class="winner-stat">
+      <div class="winner-stat-val" id="winner-duration">—</div>
+      <div class="winner-stat-label">Duree</div>
+    </div>
+    <div class="winner-stat">
+      <div class="winner-stat-val" id="winner-darts">—</div>
+      <div class="winner-stat-label">Flechettes</div>
+    </div>
+    <div class="winner-stat">
+      <div class="winner-stat-val" id="winner-avg">—</div>
+      <div class="winner-stat-label">Moy. / tour</div>
+    </div>
+    <div class="winner-stat">
+      <div class="winner-stat-val" id="winner-best">—</div>
+      <div class="winner-stat-label">Meilleur tour</div>
+    </div>
+    <div class="winner-stat">
+      <div class="winner-stat-val" id="winner-180">—</div>
+      <div class="winner-stat-label">180s</div>
+    </div>
+  </div>
+  <div class="winner-actions" style="width:100%;max-width:360px">
+    <button class="btn-primary-darts" onclick="showPage('setup-page');initSetup()">Nouvelle partie</button>
+    <button class="btn-secondary-darts" onclick="showPage('stats-page');loadStats()">Voir les stats</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════
+     STATS PAGE
+════════════════════════════════════════════════════════════ -->
+<div id="stats-page" class="darts-page" style="flex-direction:column">
+  <div style="max-width:560px;margin:0 auto;padding:60px 16px 48px;display:flex;flex-direction:column;gap:20px;width:100%">
+
+    <button class="btn-secondary-darts" style="align-self:flex-start" onclick="showPage('setup-page')">
+      &#8592; Retour
+    </button>
+
+    <div class="stats-title">Statistiques</div>
+
+    {% if current_user.is_authenticated %}
+    <select class="darts-select stats-player-selector" id="stats-player-sel" style="width:100%">
+      <!-- populated by JS -->
+    </select>
+    {% else %}
+    <p style="color:var(--text-muted);font-size:14px">Connectez-vous pour voir vos statistiques.</p>
+    {% endif %}
+
+    <!-- Mode filter -->
+    <div class="stats-mode-tabs">
+      <button class="pill-btn active stats-mode-btn" data-mode="all">Tous</button>
+      <button class="pill-btn stats-mode-btn" data-mode="501">501</button>
+      <button class="pill-btn stats-mode-btn" data-mode="301">301</button>
+      <button class="pill-btn stats-mode-btn" data-mode="cricket">Cricket</button>
+      <button class="pill-btn stats-mode-btn" data-mode="atc">Clock</button>
+    </div>
+
+    <!-- Stat cards -->
+    <div class="stat-cards-grid">
+      <div class="stat-card">
+        <div class="stat-card-val" id="stat-games">—</div>
+        <div class="stat-card-label">Parties jouees</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-val" id="stat-winrate">—</div>
+        <div class="stat-card-label">Taux de victoire</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-val" id="stat-avg">—</div>
+        <div class="stat-card-label">Moy. / tour</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-val" id="stat-best">—</div>
+        <div class="stat-card-label">Meilleur tour</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-val" id="stat-180">—</div>
+        <div class="stat-card-label">180s</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-val" id="stat-checkout">—</div>
+        <div class="stat-card-label">Checkout max</div>
+      </div>
+    </div>
+
+    <!-- Hit chart -->
+    <div class="chart-wrap">
+      <div style="font-size:13px;color:var(--text-muted);margin-bottom:10px">Frequence par segment</div>
+      <canvas id="hit-chart" height="200"></canvas>
+    </div>
+
+  </div>
+</div>
+
+<!-- Robot overlay -->
+<div class="robot-overlay" id="robot-overlay">
+  <div class="robot-card">
+    <div class="robot-icon">🤖</div>
+    <div class="robot-name">Robot</div>
+    <div class="robot-thinking">Calcul en cours...</div>
+    <div class="robot-darts-display">
+      <span class="robot-dart-pip" id="rpip-1">—</span>
+      <span class="robot-dart-pip" id="rpip-2">—</span>
+      <span class="robot-dart-pip" id="rpip-3">—</span>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='js/darts.js') }}"></script>
+</body>
+</html>
