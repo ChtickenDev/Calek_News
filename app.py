@@ -5154,6 +5154,19 @@ def ensure_dartgame_schema():
         conn.commit()
 
 
+_dart_schema_ready = False
+
+@app.before_request
+def _auto_init_dart_schema():
+    global _dart_schema_ready
+    if not _dart_schema_ready:
+        _dart_schema_ready = True
+        try:
+            ensure_dartgame_schema()
+        except Exception as _exc:
+            app.logger.warning(f'[darts] schema init: {_exc}')
+
+
 @app.route('/darts')
 @app.route('/darts/')
 def darts_app():
@@ -5305,66 +5318,82 @@ def darts_stats():
     if not current_user.is_authenticated:
         return jsonify({'players': [], 'stats': []})
 
-    # connected user
-    players = [{'id': f'u{current_user.id}', 'name': current_user.name or current_user.email}]
+    try:
+        players = [{'id': f'u{current_user.id}', 'name': current_user.name or current_user.email}]
 
-    # local players
-    lp_rows = db.session.execute(
-        text('SELECT id, name FROM dart_local_player WHERE owner_user_id=:uid ORDER BY name'),
-        {'uid': current_user.id}
-    ).mappings().all()
-    for lp in lp_rows:
-        players.append({'id': f'lp{lp["id"]}', 'name': lp['name']})
-
-    # stats for user
-    stat_rows = db.session.execute(
-        text("""
-            SELECT dps.*, dg.mode as game_mode
-            FROM dart_player_stat dps
-            JOIN dart_game dg ON dg.id = dps.game_id
-            WHERE dps.user_id = :uid
-        """),
-        {'uid': current_user.id}
-    ).mappings().all()
-
-    stats = []
-    for r in stat_rows:
-        stats.append({
-            'player_id': f'u{current_user.id}',
-            'mode': r['mode'],
-            'games_played': r['games_played'],
-            'games_won': r['games_won'],
-            'avg_score_per_turn': r['avg_score_per_turn'],
-            'best_turn': r['best_turn'],
-            'count_180': r['count_180'],
-            'max_checkout': r['max_checkout'],
-            'hit_map': json.loads(r['hit_map_json'] or '{}'),
-        })
-
-    # stats for local players
-    for lp in lp_rows:
-        lp_stat_rows = db.session.execute(
-            text("""
-                SELECT dps.*
-                FROM dart_player_stat dps
-                WHERE dps.local_player_id = :lpid
-            """),
-            {'lpid': lp['id']}
+        lp_rows = db.session.execute(
+            text('SELECT id, name FROM dart_local_player WHERE owner_user_id=:uid ORDER BY name'),
+            {'uid': current_user.id}
         ).mappings().all()
-        for r in lp_stat_rows:
+        for lp in lp_rows:
+            players.append({'id': f'lp{lp["id"]}', 'name': lp['name']})
+
+        # aggregate per player + mode in one query
+        agg_rows = db.session.execute(text("""
+            SELECT
+                dps.user_id,
+                dps.local_player_id,
+                dps.mode,
+                SUM(dps.games_played)              AS games_played,
+                SUM(dps.games_won)                 AS games_won,
+                AVG(dps.avg_score_per_turn)        AS avg_score_per_turn,
+                MAX(dps.best_turn)                 AS best_turn,
+                SUM(dps.count_180)                 AS count_180,
+                MAX(dps.max_checkout)              AS max_checkout,
+                MIN(CASE WHEN dps.min_darts_to_finish > 0
+                         THEN dps.min_darts_to_finish END) AS min_darts_to_finish
+            FROM dart_player_stat dps
+            WHERE dps.user_id = :uid
+               OR dps.local_player_id IN (
+                   SELECT id FROM dart_local_player WHERE owner_user_id = :uid
+               )
+            GROUP BY dps.user_id, dps.local_player_id, dps.mode
+        """), {'uid': current_user.id}).mappings().all()
+
+        # hit maps: sum all for the player
+        hit_rows = db.session.execute(text("""
+            SELECT dps.user_id, dps.local_player_id, dps.hit_map_json
+            FROM dart_player_stat dps
+            WHERE dps.user_id = :uid
+               OR dps.local_player_id IN (
+                   SELECT id FROM dart_local_player WHERE owner_user_id = :uid
+               )
+        """), {'uid': current_user.id}).mappings().all()
+
+        # build combined hit maps per player key
+        hit_maps = {}
+        for r in hit_rows:
+            key = f'u{r["user_id"]}' if r['user_id'] else f'lp{r["local_player_id"]}'
+            m = {}
+            try:
+                m = json.loads(r['hit_map_json'] or '{}')
+            except Exception:
+                pass
+            combined = hit_maps.setdefault(key, {})
+            for k, v in m.items():
+                combined[k] = combined.get(k, 0) + (v or 0)
+
+        stats = []
+        for r in agg_rows:
+            player_id = f'u{r["user_id"]}' if r['user_id'] else f'lp{r["local_player_id"]}'
             stats.append({
-                'player_id': f'lp{lp["id"]}',
+                'player_id': player_id,
                 'mode': r['mode'],
-                'games_played': r['games_played'],
-                'games_won': r['games_won'],
-                'avg_score_per_turn': r['avg_score_per_turn'],
-                'best_turn': r['best_turn'],
-                'count_180': r['count_180'],
-                'max_checkout': r['max_checkout'],
-                'hit_map': json.loads(r['hit_map_json'] or '{}'),
+                'games_played': int(r['games_played'] or 0),
+                'games_won': int(r['games_won'] or 0),
+                'avg_score_per_turn': float(r['avg_score_per_turn'] or 0),
+                'best_turn': int(r['best_turn'] or 0),
+                'count_180': int(r['count_180'] or 0),
+                'max_checkout': int(r['max_checkout'] or 0),
+                'min_darts_to_finish': int(r['min_darts_to_finish'] or 0),
+                'hit_map': hit_maps.get(player_id, {}),
             })
 
-    return jsonify({'players': players, 'stats': stats})
+        return jsonify({'players': players, 'stats': stats})
+
+    except Exception as exc:
+        app.logger.error(f'[darts] stats error: {exc}')
+        return jsonify({'players': [], 'stats': [], 'error': str(exc)}), 500
 
 
 # -----------------------------------------------------------------------------

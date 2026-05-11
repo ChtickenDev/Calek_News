@@ -201,37 +201,52 @@
 <!-- ════════════════════════════════════════════════════════════
      WINNER PAGE
 ════════════════════════════════════════════════════════════ -->
-<div id="winner-page" class="darts-page" style="flex-direction:column;align-items:center;justify-content:center;padding:32px 16px;text-align:center;gap:20px">
-  <div class="winner-trophy">🎯</div>
-  <div>
-    <div class="winner-title" id="winner-name">—</div>
-    <div class="winner-subtitle">remporte la partie !</div>
-  </div>
-  <div class="winner-stats-grid">
-    <div class="winner-stat">
-      <div class="winner-stat-val" id="winner-duration">—</div>
-      <div class="winner-stat-label">Duree</div>
+<div id="winner-page" class="darts-page" style="flex-direction:column;overflow-y:auto">
+  <div style="max-width:420px;margin:0 auto;padding:32px 16px 40px;display:flex;flex-direction:column;align-items:center;gap:18px;width:100%;text-align:center">
+
+    <div class="winner-trophy">🎯</div>
+    <div>
+      <div class="winner-title" id="winner-name">—</div>
+      <div class="winner-subtitle">remporte la partie !</div>
     </div>
-    <div class="winner-stat">
-      <div class="winner-stat-val" id="winner-darts">—</div>
-      <div class="winner-stat-label">Flechettes</div>
+
+    <!-- Stats du vainqueur (cette partie) -->
+    <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);align-self:flex-start">
+      Cette partie — vainqueur
     </div>
-    <div class="winner-stat">
-      <div class="winner-stat-val" id="winner-avg">—</div>
-      <div class="winner-stat-label">Moy. / tour</div>
+    <div class="winner-stats-grid" style="width:100%">
+      <div class="winner-stat">
+        <div class="winner-stat-val" id="winner-duration">—</div>
+        <div class="winner-stat-label">Duree</div>
+      </div>
+      <div class="winner-stat">
+        <div class="winner-stat-val" id="winner-darts">—</div>
+        <div class="winner-stat-label">Flechettes</div>
+      </div>
+      <div class="winner-stat">
+        <div class="winner-stat-val" id="winner-avg">—</div>
+        <div class="winner-stat-label">Moy. / tour</div>
+      </div>
+      <div class="winner-stat">
+        <div class="winner-stat-val" id="winner-best">—</div>
+        <div class="winner-stat-label">Meilleur tour</div>
+      </div>
+      <div class="winner-stat">
+        <div class="winner-stat-val" id="winner-180">—</div>
+        <div class="winner-stat-label">180s</div>
+      </div>
     </div>
-    <div class="winner-stat">
-      <div class="winner-stat-val" id="winner-best">—</div>
-      <div class="winner-stat-label">Meilleur tour</div>
+
+    <!-- Classement tous joueurs -->
+    <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);align-self:flex-start">
+      Tous les joueurs
     </div>
-    <div class="winner-stat">
-      <div class="winner-stat-val" id="winner-180">—</div>
-      <div class="winner-stat-label">180s</div>
+    <div id="winner-all-players" style="display:flex;flex-direction:column;gap:6px;width:100%"></div>
+
+    <div class="winner-actions" style="width:100%;margin-top:4px">
+      <button class="btn-primary-darts" onclick="showPage('setup-page');initSetup()">Nouvelle partie</button>
+      <button class="btn-secondary-darts" onclick="showPage('stats-page');loadStats()">Stats all time</button>
     </div>
-  </div>
-  <div class="winner-actions" style="width:100%;max-width:360px">
-    <button class="btn-primary-darts" onclick="showPage('setup-page');initSetup()">Nouvelle partie</button>
-    <button class="btn-secondary-darts" onclick="showPage('stats-page');loadStats()">Voir les stats</button>
   </div>
 </div>
 
@@ -245,7 +260,8 @@
       &#8592; Retour
     </button>
 
-    <div class="stats-title">Statistiques</div>
+    <div class="stats-title">Stats all time</div>
+    <div id="stats-error" style="display:none;background:rgba(239,68,68,.12);border:1px solid var(--red);border-radius:8px;padding:12px 14px;font-size:13px;color:var(--red)"></div>
 
     {% if current_user.is_authenticated %}
     <select class="darts-select stats-player-selector" id="stats-player-sel" style="width:100%">

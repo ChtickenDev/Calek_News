@@ -1001,11 +1001,34 @@ function renderWinner(winner, duration) {
   document.getElementById('winner-duration').textContent = `${mins}:${String(secs).padStart(2,'0')}`;
   document.getElementById('winner-darts').textContent = winner.dartsThrown || '—';
   const avg = winner.turnScores && winner.turnScores.length
-    ? Math.round(winner.turnScores.reduce((a,b)=>a+b,0)/winner.turnScores.length)
+    ? Math.round(winner.turnScores.reduce((a,b)=>a+b,0) / winner.turnScores.length)
     : '—';
   document.getElementById('winner-avg').textContent = avg;
   document.getElementById('winner-best').textContent = winner.bestTurn || '—';
   document.getElementById('winner-180').textContent = winner.count180 || 0;
+
+  // Scoreboard de tous les joueurs (cette partie)
+  const board = document.getElementById('winner-all-players');
+  if (board) {
+    board.innerHTML = '';
+    G.players.forEach(p => {
+      const isWinner = p.idx === winner.idx;
+      const pAvg = p.turnScores && p.turnScores.length
+        ? Math.round(p.turnScores.reduce((a,b)=>a+b,0) / p.turnScores.length)
+        : '—';
+      const row = document.createElement('div');
+      row.style.cssText = `display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;
+        background:${isWinner ? 'rgba(245,158,11,.12)' : 'var(--felt-mid)'};
+        border:1px solid ${isWinner ? 'var(--amber)' : 'var(--border)'};`;
+      row.innerHTML = `
+        <span style="font-size:18px">${isWinner ? '🥇' : '🎯'}</span>
+        <span style="flex:1;font-weight:${isWinner ? '600' : '400'}">${p.name}</span>
+        <span style="font-size:12px;color:var(--text-muted)">${p.dartsThrown || 0} fléchettes</span>
+        <span style="font-family:'Oswald',sans-serif;font-size:16px;color:${isWinner ? 'var(--amber)' : 'var(--cream)'}">${pAvg}</span>
+      `;
+      board.appendChild(row);
+    });
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -1237,73 +1260,103 @@ let statsData = null;
 let statsMode = 'all';
 
 function loadStats() {
+  const errEl = document.getElementById('stats-error');
+  if (errEl) errEl.style.display = 'none';
+
   fetch('/darts/stats')
-    .then(r => r.json())
+    .then(r => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    })
     .then(d => {
+      if (d.error) throw new Error(d.error);
       statsData = d;
       renderStats();
-    }).catch(() => {});
+    })
+    .catch(err => {
+      console.error('[darts] stats:', err);
+      if (errEl) {
+        errEl.textContent = 'Impossible de charger les statistiques. Reessayez plus tard.';
+        errEl.style.display = 'block';
+      }
+    });
 }
 
 function renderStats() {
   if (!statsData) return;
-  const sel = document.getElementById('stats-player-sel');
 
-  // always repopulate (handles multiple calls)
+  const players = statsData.players || [];
+  const allStats = statsData.stats || [];
+
+  // populate / refresh selector
+  const sel = document.getElementById('stats-player-sel');
   if (sel) {
     const prevVal = sel.value;
     sel.innerHTML = '';
-    (statsData.players || []).forEach(p => {
+    players.forEach(p => {
       const o = document.createElement('option');
       o.value = p.id;
       o.textContent = p.name;
       sel.appendChild(o);
     });
-    // restore previously selected player if still present
     if (prevVal && [...sel.options].some(o => o.value === prevVal)) {
       sel.value = prevVal;
     }
   }
 
-  const playerId = sel ? sel.value : null;
-  const allStats = statsData.stats || [];
+  const playerId = sel ? sel.value : (players[0] ? players[0].id : null);
+
   const playerStats = playerId
-    ? allStats.filter(s => s.player_id == playerId && (statsMode === 'all' || s.mode === statsMode))
+    ? allStats.filter(s => String(s.player_id) === String(playerId) &&
+        (statsMode === 'all' || s.mode === statsMode))
     : [];
 
-  const agg = playerStats.reduce((acc, s) => ({
-    games:        acc.games        + (s.games_played || 0),
-    wins:         acc.wins         + (s.games_won || 0),
-    totalAvg:     acc.totalAvg     + (s.avg_score_per_turn || 0),
-    count:        acc.count        + 1,
-    best:         Math.max(acc.best, s.best_turn || 0),
-    count180:     acc.count180     + (s.count_180 || 0),
-    maxCheckout:  Math.max(acc.maxCheckout, s.max_checkout || 0),
-  }), { games:0, wins:0, totalAvg:0, count:0, best:0, count180:0, maxCheckout:0 });
+  // aggregate — server already groups per mode, sum here for "all" mode
+  const agg = playerStats.reduce((acc, s) => {
+    const n = acc.count + 1;
+    return {
+      games:       acc.games       + (s.games_played || 0),
+      wins:        acc.wins        + (s.games_won || 0),
+      // weighted avg
+      weightedAvg: acc.weightedAvg + (s.avg_score_per_turn || 0) * (s.games_played || 1),
+      weightSum:   acc.weightSum   + (s.games_played || 1),
+      best:        Math.max(acc.best, s.best_turn || 0),
+      count180:    acc.count180    + (s.count_180 || 0),
+      maxCheckout: Math.max(acc.maxCheckout, s.max_checkout || 0),
+      minDarts:    acc.minDarts === 0
+                     ? (s.min_darts_to_finish || 0)
+                     : (s.min_darts_to_finish > 0
+                         ? Math.min(acc.minDarts, s.min_darts_to_finish)
+                         : acc.minDarts),
+      count: n,
+    };
+  }, { games:0, wins:0, weightedAvg:0, weightSum:0, best:0, count180:0, maxCheckout:0, minDarts:0, count:0 });
+
+  const avgPerTurn = agg.weightSum > 0 ? Math.round(agg.weightedAvg / agg.weightSum) : null;
 
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
   set('stat-games',    agg.games > 0 ? agg.games : '0');
   set('stat-winrate',  agg.games > 0 ? Math.round(agg.wins / agg.games * 100) + '%' : '—');
-  set('stat-avg',      agg.count > 0 ? Math.round(agg.totalAvg / agg.count) : '—');
-  set('stat-best',     agg.best > 0  ? agg.best : '—');
-  set('stat-180',      agg.count180);
+  set('stat-avg',      avgPerTurn !== null ? avgPerTurn : '—');
+  set('stat-best',     agg.best > 0 ? agg.best : '—');
+  set('stat-180',      agg.count180 >= 0 ? agg.count180 : '—');
   set('stat-checkout', agg.maxCheckout > 0 ? agg.maxCheckout : '—');
 
-  renderHitChart(playerStats);
+  // merge hit maps from all matching rows
+  const hitMap = {};
+  playerStats.forEach(s => {
+    const m = s.hit_map || {};
+    Object.entries(m).forEach(([k, v]) => { hitMap[k] = (hitMap[k] || 0) + (v || 0); });
+  });
+  renderHitChart(hitMap);
 }
 
-function renderHitChart(stats) {
+function renderHitChart(hitMap) {
   const canvas = document.getElementById('hit-chart');
   if (!canvas) return;
   if (typeof Chart === 'undefined') return;
 
-  const hitMap = {};
-  (stats || []).forEach(s => {
-    const m = s.hit_map || {};
-    Object.entries(m).forEach(([k, v]) => {
-      hitMap[k] = (hitMap[k] || 0) + (v || 0);
-    });
-  });
+  hitMap = hitMap || {};
 
   const labels = Array.from({length:20}, (_, i) => String(i + 1)).concat(['25', 'Bull', 'Miss']);
   const singles = labels.map(l => l === 'Miss' ? (hitMap['smiss'] || 0) : (hitMap[`s${l}`] || 0));
