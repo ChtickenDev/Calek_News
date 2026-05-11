@@ -1248,40 +1248,46 @@ function loadStats() {
 function renderStats() {
   if (!statsData) return;
   const sel = document.getElementById('stats-player-sel');
-  if (!sel) return;
 
-  // populate selector
-  if (sel.options.length === 0) {
-    statsData.players.forEach(p => {
+  // always repopulate (handles multiple calls)
+  if (sel) {
+    const prevVal = sel.value;
+    sel.innerHTML = '';
+    (statsData.players || []).forEach(p => {
       const o = document.createElement('option');
       o.value = p.id;
       o.textContent = p.name;
       sel.appendChild(o);
     });
+    // restore previously selected player if still present
+    if (prevVal && [...sel.options].some(o => o.value === prevVal)) {
+      sel.value = prevVal;
+    }
   }
 
-  const playerId = sel.value;
-  const playerStats = statsData.stats.filter(s =>
-    s.player_id == playerId && (statsMode === 'all' || s.mode === statsMode)
-  );
+  const playerId = sel ? sel.value : null;
+  const allStats = statsData.stats || [];
+  const playerStats = playerId
+    ? allStats.filter(s => s.player_id == playerId && (statsMode === 'all' || s.mode === statsMode))
+    : [];
 
-  // aggregate
   const agg = playerStats.reduce((acc, s) => ({
-    games: acc.games + (s.games_played||0),
-    wins: acc.wins + (s.games_won||0),
-    totalAvg: acc.totalAvg + (s.avg_score_per_turn||0),
-    count: acc.count + 1,
-    best: Math.max(acc.best, s.best_turn||0),
-    count180: acc.count180 + (s.count_180||0),
-    maxCheckout: Math.max(acc.maxCheckout, s.max_checkout||0),
-  }), {games:0,wins:0,totalAvg:0,count:0,best:0,count180:0,maxCheckout:0});
+    games:        acc.games        + (s.games_played || 0),
+    wins:         acc.wins         + (s.games_won || 0),
+    totalAvg:     acc.totalAvg     + (s.avg_score_per_turn || 0),
+    count:        acc.count        + 1,
+    best:         Math.max(acc.best, s.best_turn || 0),
+    count180:     acc.count180     + (s.count_180 || 0),
+    maxCheckout:  Math.max(acc.maxCheckout, s.max_checkout || 0),
+  }), { games:0, wins:0, totalAvg:0, count:0, best:0, count180:0, maxCheckout:0 });
 
-  document.getElementById('stat-games').textContent = agg.games;
-  document.getElementById('stat-winrate').textContent = agg.games ? Math.round(agg.wins/agg.games*100)+'%' : '—';
-  document.getElementById('stat-avg').textContent = agg.count ? Math.round(agg.totalAvg/agg.count) : '—';
-  document.getElementById('stat-best').textContent = agg.best || '—';
-  document.getElementById('stat-180').textContent = agg.count180;
-  document.getElementById('stat-checkout').textContent = agg.maxCheckout || '—';
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  set('stat-games',    agg.games > 0 ? agg.games : '0');
+  set('stat-winrate',  agg.games > 0 ? Math.round(agg.wins / agg.games * 100) + '%' : '—');
+  set('stat-avg',      agg.count > 0 ? Math.round(agg.totalAvg / agg.count) : '—');
+  set('stat-best',     agg.best > 0  ? agg.best : '—');
+  set('stat-180',      agg.count180);
+  set('stat-checkout', agg.maxCheckout > 0 ? agg.maxCheckout : '—');
 
   renderHitChart(playerStats);
 }
@@ -1289,19 +1295,34 @@ function renderStats() {
 function renderHitChart(stats) {
   const canvas = document.getElementById('hit-chart');
   if (!canvas) return;
+  if (typeof Chart === 'undefined') return;
 
   const hitMap = {};
-  stats.forEach(s => {
+  (stats || []).forEach(s => {
     const m = s.hit_map || {};
     Object.entries(m).forEach(([k, v]) => {
-      hitMap[k] = (hitMap[k] || 0) + v;
+      hitMap[k] = (hitMap[k] || 0) + (v || 0);
     });
   });
 
-  const labels = Array.from({length:20},(_,i)=>`${i+1}`).concat(['25','Bull','Miss']);
-  const singles = labels.map(l => l === 'Miss' ? (hitMap['smiss']||0) : hitMap[`s${l}`]||0);
-  const doubles = labels.map(l => l === 'Miss' || l === 'Bull' ? 0 : hitMap[`d${l}`]||0);
-  const trebles = labels.map(l => ['25','Bull','Miss'].includes(l) ? 0 : hitMap[`t${l}`]||0);
+  const labels = Array.from({length:20}, (_, i) => String(i + 1)).concat(['25', 'Bull', 'Miss']);
+  const singles = labels.map(l => l === 'Miss' ? (hitMap['smiss'] || 0) : (hitMap[`s${l}`] || 0));
+  const doubles = labels.map(l => (['Miss','Bull'].includes(l)) ? 0 : (hitMap[`d${l}`] || 0));
+  const trebles = labels.map(l => (['25','Bull','Miss'].includes(l)) ? 0 : (hitMap[`t${l}`] || 0));
+
+  const hasData = singles.some(v => v > 0) || doubles.some(v => v > 0) || trebles.some(v => v > 0);
+
+  const noDataEl = document.getElementById('hit-chart-empty');
+
+  if (!hasData) {
+    canvas.style.display = 'none';
+    if (noDataEl) noDataEl.style.display = 'block';
+    if (window._hitChart) { window._hitChart.destroy(); window._hitChart = null; }
+    return;
+  }
+
+  canvas.style.display = '';
+  if (noDataEl) noDataEl.style.display = 'none';
 
   if (window._hitChart) window._hitChart.destroy();
   window._hitChart = new Chart(canvas, {
@@ -1309,17 +1330,20 @@ function renderHitChart(stats) {
     data: {
       labels,
       datasets: [
-        { label: 'Single', data: singles, backgroundColor: 'rgba(245,158,11,.7)' },
-        { label: 'Double', data: doubles, backgroundColor: 'rgba(20,184,166,.7)' },
-        { label: 'Triple', data: trebles, backgroundColor: 'rgba(34,197,94,.7)' },
+        { label: 'Single', data: singles, backgroundColor: 'rgba(245,158,11,.75)', borderRadius: 2 },
+        { label: 'Double', data: doubles, backgroundColor: 'rgba(20,184,166,.75)', borderRadius: 2 },
+        { label: 'Triple', data: trebles, backgroundColor: 'rgba(34,197,94,.75)', borderRadius: 2 },
       ]
     },
     options: {
       responsive: true,
-      plugins: { legend: { labels: { color: '#f5f0e8', font: { family: 'Inter' } } } },
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#f5f0e8', font: { family: 'Inter', size: 11 }, boxWidth: 12 } }
+      },
       scales: {
-        x: { stacked: true, ticks: { color: '#9ca3af' }, grid: { color: 'rgba(255,255,255,.05)' } },
-        y: { stacked: true, ticks: { color: '#9ca3af' }, grid: { color: 'rgba(255,255,255,.05)' } },
+        x: { stacked: true, ticks: { color: '#9ca3af', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,.05)' } },
+        y: { stacked: true, ticks: { color: '#9ca3af', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,.05)' } },
       }
     }
   });

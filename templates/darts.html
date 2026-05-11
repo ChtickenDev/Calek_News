@@ -295,7 +295,12 @@
     <!-- Hit chart -->
     <div class="chart-wrap">
       <div style="font-size:13px;color:var(--text-muted);margin-bottom:10px">Frequence par segment</div>
-      <canvas id="hit-chart" height="200"></canvas>
+      <div id="hit-chart-empty" style="display:none;font-size:13px;color:var(--text-muted);padding:24px 0;text-align:center">
+        Aucune partie jouee pour le moment.
+      </div>
+      <div style="position:relative;height:200px">
+        <canvas id="hit-chart"></canvas>
+      </div>
     </div>
 
   </div>
