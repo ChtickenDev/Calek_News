@@ -45,15 +45,16 @@ const CHECKOUTS = {
 
 // ─────────────────────────────────────────────────────────────────
 // ADJACENCY MAP (for robot scatter)
-// weight: how often the robot hits neighbors instead of target
+// Board clockwise: 20,1,18,4,13,6,10,15,2,17,3,19,7,16,8,11,14,9,12,5
+// [left = counter-clockwise neighbor, right = clockwise neighbor]
 // ─────────────────────────────────────────────────────────────────
 const NEIGHBORS = {
-  20:[1,5],19:[7,3],18:[4,1],17:[3,2],16:[8,7],
-  15:[10,2],14:[9,11],13:[6,4],12:[9,5],11:[14,8],
-  10:[15,6],9:[12,14],8:[16,11],7:[19,16],6:[10,13],
-  5:[20,12],4:[13,18],3:[17,19],2:[15,17],1:[18,20],
-  25:[20,3,19,7,16,8,11,14,9,12,5,15,10,6,13,4,18,1,17,2],
-  50:[25]
+  20:[5,1],   1:[20,18], 18:[1,4],  4:[18,13], 13:[4,6],
+   6:[13,10],10:[6,15], 15:[10,2],  2:[15,17], 17:[2,3],
+   3:[17,19],19:[3,7],   7:[19,16], 16:[7,8],   8:[16,11],
+  11:[8,14], 14:[11,9],  9:[14,12], 12:[9,5],   5:[12,20],
+  25:[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20],
+  50:[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20],
 };
 
 // ─────────────────────────────────────────────────────────────────
@@ -107,48 +108,59 @@ function dartPoints(val, mult) {
 
 // ─────────────────────────────────────────────────────────────────
 // ROBOT AI
+// Calibration (targeting T20 = 60 pts, scatter E ≈ 6.7 pts/dart):
+//   t=0 (diff=20): hitProb=0.07, missBoardProb=0.63, scatter=0.30 → E(3)≈18.6
+//   t=1 (diff=120): hitProb=0.62, missBoardProb=0.00, scatter=0.38 → E(3)≈119
 // ─────────────────────────────────────────────────────────────────
-function robotThrow(player) {
-  const diff = player.difficulty; // 20-120, avg pts/turn
-  // accuracy: at diff=120, ~90% hit rate; at diff=20, ~20%
-  const accuracy = 0.15 + (diff - 20) / 100 * 0.78;
+function robotThrow(player, remainingScore, dartsLeft) {
+  const diff = player.difficulty; // 20–120
+  const t = (diff - 20) / 100;
+  const hitProb       = 0.07 + t * 0.55; // 0.07 → 0.62
+  const missBoardProb = 0.63 * (1 - t);  // 0.63 → 0.00
 
-  const target = robotTarget(player);
-  const hit = Math.random() < accuracy;
+  const target = robotTarget(player, remainingScore, dartsLeft);
 
-  if (hit) {
-    return { val: target.val, mult: target.mult };
+  const r = Math.random();
+  if (r < hitProb) return { val: target.val, mult: target.mult };
+  if (r < hitProb + missBoardProb) return { val: 0, mult: 1 }; // miss board
+
+  // scatter: hit a nearby segment instead
+  if (target.val === 25 || target.val === 50) {
+    // bull scatter → uniform across 1–20
+    return { val: Math.floor(Math.random() * 20) + 1, mult: 1 };
   }
-  // miss → neighbor or random
-  const neighbors = NEIGHBORS[target.val] || [target.val];
-  const scattered = neighbors[Math.floor(Math.random() * neighbors.length)];
-  const scMult = Math.random() < 0.7 ? 1 : (Math.random() < 0.5 ? 2 : 3);
-  const safeMult = (scattered === 25 || scattered === 50) ? Math.min(scMult, 2) : scMult;
-  return { val: scattered, mult: safeMult };
+  const [left, right] = NEIGHBORS[target.val] || [target.val, target.val];
+  const sr = Math.random();
+  if (sr < 0.35) return { val: left,       mult: 1 };
+  if (sr < 0.70) return { val: right,      mult: 1 };
+  if (sr < 0.85) return { val: target.val, mult: 1 }; // wire miss, same segment
+  return { val: Math.floor(Math.random() * 20) + 1, mult: 1 };
 }
 
-function robotTarget(player) {
+function robotTarget(player, remainingScore, dartsLeft) {
+  dartsLeft     = dartsLeft     !== undefined ? dartsLeft     : 3;
+  remainingScore = remainingScore !== undefined ? remainingScore : player.score;
+
   if (isCricket()) {
-    const open = [20,19,18,17,16,15,25].find(n => {
-      const marks = G.cricket[player.idx][n] || 0;
-      return marks < 3;
-    });
+    const open = [20,19,18,17,16,15,25].find(n => (G.cricket[player.idx][n] || 0) < 3);
     return open ? { val: open, mult: 3 } : { val: 20, mult: 3 };
   }
   if (isATC()) {
     const t = G.clockTargets[player.idx];
     return { val: t <= 20 ? t : 25, mult: 1 };
   }
-  const sc = player.score;
-  if (sc <= 170 && CHECKOUTS[sc]) {
-    const parts = CHECKOUTS[sc].split(' ');
-    const p = parts[0];
-    const mult = p[0] === 'T' ? 3 : p[0] === 'D' ? 2 : 1;
-    const valStr = p.replace(/^[TDS]/, '');
-    const val = valStr === 'Bull' ? 50 : parseInt(valStr);
-    return { val, mult };
+
+  const sc = remainingScore;
+  if (sc >= 2 && sc <= 170 && CHECKOUTS[sc]) {
+    const parts = CHECKOUTS[sc].trim().split(/\s+/);
+    if (parts.length <= dartsLeft) {
+      const first = parts[0];
+      const mult = first[0] === 'T' ? 3 : first[0] === 'D' ? 2 : 1;
+      const valStr = first.replace(/^[TDS]/, '');
+      const val = valStr === 'Bull' ? 50 : parseInt(valStr);
+      return { val, mult };
+    }
   }
-  // aim for 20, treble
   return { val: 20, mult: 3 };
 }
 
@@ -676,12 +688,33 @@ function renderDartSlots() {
   }
 }
 
+function getCheckout(score, dartsLeft) {
+  if (score < 2 || score > 170) return null;
+  const path = CHECKOUTS[score];
+  if (!path) return null;
+  const needed = path.trim().split(/\s+/).length;
+  return needed <= dartsLeft ? path : null;
+}
+
 function renderCheckoutHint() {
   const hint = document.getElementById('checkout-hint');
   if (!isNumeric() || !hint) return;
-  const sc = G.players[G.current].score;
-  if (sc <= 170 && sc >= 2 && CHECKOUTS[sc]) {
-    hint.textContent = `Checkout: ${CHECKOUTS[sc]}`;
+  const p = G.players[G.current];
+  const spent = G.turnDarts.reduce((s, d) => s + dartPoints(d.val, d.mult), 0);
+  const remaining = p.score - spent;
+  const dartsLeft = 3 - G.turnDarts.length;
+
+  if (remaining <= 0 || remaining > 170 || dartsLeft === 0) {
+    hint.classList.remove('visible');
+    return;
+  }
+
+  const path = getCheckout(remaining, dartsLeft);
+  if (path) {
+    hint.textContent = `Checkout: ${path}`;
+    hint.classList.add('visible');
+  } else if (remaining >= 2) {
+    hint.textContent = 'Pas de finish possible';
     hint.classList.add('visible');
   } else {
     hint.classList.remove('visible');
@@ -923,7 +956,6 @@ function scheduleRobotTurn() {
   showRobotOverlay(p);
 
   const darts = [];
-  let delay = 0;
 
   function throwNext() {
     if (darts.length >= 3 || G.winner) {
@@ -934,15 +966,18 @@ function scheduleRobotTurn() {
       }, 600);
       return;
     }
-    const result = robotThrow(p);
+
+    const spent = darts.reduce((s, d) => s + dartPoints(d.val, d.mult), 0);
+    const remainingScore = p.score - spent;
+    const dartsLeft = 3 - darts.length;
+
+    const result = robotThrow(p, remainingScore, dartsLeft);
     darts.push({ val: result.val, mult: result.mult });
     animateRobotDart(darts.length, dartLabel(result.val, result.mult));
 
-    // stop early if checkout achieved (numeric)
     if (isNumeric()) {
-      const pts = darts.reduce((s, d) => s + dartPoints(d.val, d.mult), 0);
-      const remaining = p.score - pts;
-      if (remaining === 0) {
+      const newSpent = darts.reduce((s, d) => s + dartPoints(d.val, d.mult), 0);
+      if (p.score - newSpent === 0) {
         setTimeout(() => {
           hideRobotOverlay();
           G.turnDarts = darts;
