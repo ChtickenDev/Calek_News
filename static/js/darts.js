@@ -180,6 +180,7 @@ function initSetup() {
   renderFinishButtons();
   renderDoubleIn();
   renderPlayerList();
+  updateAddMeButton();
   loadLocalPlayersFromServer();
   loadResumeGame();
 }
@@ -271,53 +272,105 @@ function renderPlayerList() {
 function removePlayer(i) {
   setupPlayers.splice(i, 1);
   renderPlayerList();
+  updateAddMeButton();
+  renderLocalPlayersList();
 }
 
 function showAddPlayerType(type) {
+  const panel = document.getElementById(`add-form-${type}`);
+  const isVisible = panel.classList.contains('visible');
   document.querySelectorAll('.add-player-form').forEach(f => f.classList.remove('visible'));
-  document.getElementById(`add-form-${type}`).classList.add('visible');
-  if (type === 'guest') populateLocalPlayerDropdown();
+  if (!isVisible) {
+    panel.classList.add('visible');
+    if (type === 'guest') renderLocalPlayersList();
+  }
 }
 
-function populateLocalPlayerDropdown() {
-  const sel = document.getElementById('local-player-select');
-  if (!sel) return;
-  sel.innerHTML = '<option value="">-- Choisir un invité existant --</option>';
+function renderLocalPlayersList() {
+  const el = document.getElementById('local-players-list');
+  if (!el) return;
+  if (localPlayers.length === 0) {
+    el.innerHTML = '<div style="font-size:13px;color:var(--text-muted);padding:4px 0 8px">Aucun joueur enregistre — creez-en un ci-dessous.</div>';
+    return;
+  }
+  el.innerHTML = '';
   localPlayers.forEach(lp => {
-    const o = document.createElement('option');
-    o.value = lp.id;
-    o.textContent = lp.name;
-    sel.appendChild(o);
+    const alreadyIn = setupPlayers.some(p => p.localPlayerId === lp.id);
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:var(--felt-light);margin-bottom:6px;border:1px solid var(--border)';
+    const av = document.createElement('div');
+    av.className = 'player-avatar guest-av';
+    av.style.cssText = 'width:28px;height:28px;font-size:12px;flex-shrink:0';
+    av.textContent = lp.name[0].toUpperCase();
+    const name = document.createElement('span');
+    name.style.cssText = 'flex:1;font-size:14px';
+    name.textContent = lp.name;
+    const btn = document.createElement('button');
+    btn.style.cssText = 'width:28px;height:28px;border-radius:50%;border:none;font-size:16px;line-height:1;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center';
+    if (alreadyIn) {
+      btn.textContent = '✓';
+      btn.style.background = 'var(--green)';
+      btn.style.color = '#fff';
+      btn.disabled = true;
+    } else {
+      btn.textContent = '+';
+      btn.style.background = 'var(--amber)';
+      btn.style.color = '#111';
+      btn.onclick = () => addGuestFromList(lp.id);
+    }
+    row.append(av, name, btn);
+    el.appendChild(row);
   });
 }
 
 function addPhysaraPlayer() {
   if (!loggedInUser) return;
   if (setupPlayers.find(p => p.type === 'user')) return;
+  if (setupPlayers.length >= 8) return;
   setupPlayers.push({ type: 'user', name: loggedInUser.name, userId: loggedInUser.id });
   renderPlayerList();
-  document.getElementById('add-form-user').classList.remove('visible');
+  updateAddMeButton();
 }
 
-function addGuestPlayer() {
-  const sel = document.getElementById('local-player-select');
-  const nameInput = document.getElementById('guest-name-input');
-  let name = nameInput ? nameInput.value.trim() : '';
-  let localPlayerId = null;
+function updateAddMeButton() {
+  const btn = document.getElementById('btn-add-me');
+  if (!btn) return;
+  const alreadyIn = setupPlayers.some(p => p.type === 'user');
+  btn.disabled = alreadyIn;
+  btn.style.opacity = alreadyIn ? '0.4' : '1';
+}
 
-  if (sel && sel.value) {
-    const lp = localPlayers.find(l => l.id == sel.value);
-    if (lp) { name = lp.name; localPlayerId = lp.id; }
-  }
+function addGuestFromList(localPlayerId) {
+  if (setupPlayers.length >= 8) return;
+  const lp = localPlayers.find(l => l.id === localPlayerId);
+  if (!lp) return;
+  if (setupPlayers.some(p => p.localPlayerId === localPlayerId)) return;
+  setupPlayers.push({ type: 'guest', name: lp.name, localPlayerId: lp.id });
+  renderPlayerList();
+  renderLocalPlayersList();
+}
+
+function addNewGuestPlayer() {
+  const nameInput = document.getElementById('guest-name-input');
+  const name = nameInput ? nameInput.value.trim() : '';
   if (!name) return;
   if (setupPlayers.length >= 8) return;
 
-  setupPlayers.push({ type: 'guest', name, localPlayerId });
-  if (nameInput) nameInput.value = '';
-  renderPlayerList();
-  document.getElementById('add-form-guest').classList.remove('visible');
+  // check if already exists in localPlayers
+  const existing = localPlayers.find(l => l.name.toLowerCase() === name.toLowerCase());
+  if (existing) {
+    addGuestFromList(existing.id);
+    if (nameInput) nameInput.value = '';
+    return;
+  }
 
-  if (!localPlayerId) saveNewLocalPlayer(name);
+  // create + add immediately (optimistic)
+  const tempId = 'tmp_' + Date.now();
+  setupPlayers.push({ type: 'guest', name, localPlayerId: null, _tempId: tempId });
+  renderPlayerList();
+  if (nameInput) nameInput.value = '';
+
+  saveNewLocalPlayer(name, tempId);
 }
 
 function addRobotPlayer() {
@@ -328,7 +381,7 @@ function addRobotPlayer() {
   document.getElementById('add-form-robot').classList.remove('visible');
 }
 
-function saveNewLocalPlayer(name) {
+function saveNewLocalPlayer(name, tempId) {
   fetch('/darts/local_players', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -337,7 +390,14 @@ function saveNewLocalPlayer(name) {
   .then(r => r.json())
   .then(d => {
     if (d.id) {
-      localPlayers.push({ id: d.id, name: d.name });
+      if (!localPlayers.find(l => l.id === d.id)) {
+        localPlayers.push({ id: d.id, name: d.name });
+      }
+      // patch tempId in setupPlayers
+      if (tempId) {
+        const p = setupPlayers.find(x => x._tempId === tempId);
+        if (p) { p.localPlayerId = d.id; delete p._tempId; }
+      }
     }
   }).catch(() => {});
 }

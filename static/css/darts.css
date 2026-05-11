@@ -251,6 +251,7 @@ html, body {
   transition: background .15s;
 }
 .btn-secondary-darts:hover { background: var(--felt-light); }
+.btn-secondary-darts:disabled { opacity: .4; cursor: not-allowed; }
 
 /* ── Game screen ────────────────────────────────────────────── */
 #game-page { flex-direction: column; }

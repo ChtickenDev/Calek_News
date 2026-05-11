@@ -73,36 +73,28 @@
       <div class="setup-label">Joueurs <span id="player-count-label" style="color:var(--text-muted)">(0/8)</span></div>
       <div class="player-list" id="player-list"></div>
 
-      <!-- Add player -->
+      <!-- Add player buttons -->
       <div class="add-player-type" style="margin-top:8px">
         {% if current_user.is_authenticated %}
-        <button class="btn-secondary-darts" onclick="showAddPlayerType('user')">+ Moi</button>
+        <button class="btn-secondary-darts" id="btn-add-me" onclick="addPhysaraPlayer()">+ Moi</button>
         {% endif %}
         <button class="btn-secondary-darts" onclick="showAddPlayerType('guest')">+ Invité</button>
         <button class="btn-secondary-darts" onclick="showAddPlayerType('robot')">+ Robot</button>
       </div>
 
-      <!-- Add Physara user form -->
-      <div class="add-player-form" id="add-form-user" style="margin-top:8px">
-        {% if current_user.is_authenticated %}
-        <button class="btn-primary-darts" style="font-size:15px;padding:10px" onclick="addPhysaraPlayer()">
-          Ajouter {{ current_user.name }}
-        </button>
-        {% endif %}
-      </div>
-
-      <!-- Add guest form -->
+      <!-- Guest panel -->
       <div class="add-player-form" id="add-form-guest" style="margin-top:8px">
-        {% if current_user.is_authenticated %}
-        <select class="darts-select" id="local-player-select" style="width:100%">
-          <option value="">-- Invites precedents --</option>
-        </select>
-        {% endif %}
-        <input type="text" id="guest-name-input" class="darts-input" placeholder="Nom de l'invite">
-        <button class="btn-primary-darts" style="font-size:15px;padding:10px" onclick="addGuestPlayer()">Ajouter</button>
+        <!-- Existing local players list (rendered by JS) -->
+        <div id="local-players-list"></div>
+        <!-- Create new guest -->
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <input type="text" id="guest-name-input" class="darts-input" placeholder="Nouveau prénom..." style="flex:1"
+            onkeydown="if(event.key==='Enter')addNewGuestPlayer()">
+          <button class="btn-secondary-darts" onclick="addNewGuestPlayer()" style="white-space:nowrap;padding:9px 14px">Créer</button>
+        </div>
       </div>
 
-      <!-- Add robot form -->
+      <!-- Robot form -->
       <div class="add-player-form" id="add-form-robot" style="margin-top:8px">
         <button class="btn-primary-darts" style="font-size:15px;padding:10px" onclick="addRobotPlayer()">Ajouter un robot</button>
       </div>
