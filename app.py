@@ -2325,7 +2325,7 @@ def send_2fa_email(to_email: str, code: str) -> bool:
     try:
         msg = MIMEMultipart('alternative')
         msg['Subject'] = 'Votre code de vérification Physara'
-        msg['From']    = MAIL_FROM
+        msg['From']    = f'Physara <{MAIL_FROM}>'
         msg['To']      = to_email
 
         text_body = (
